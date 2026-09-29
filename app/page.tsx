@@ -1,17 +1,17 @@
 import { getRosters, getUsers } from "../lib/sleeper";
 
-const OFFICIAL_TEAM_NAMES = [
-  "Mt Isa Ballbags",
-  "Isle of Wight Happy Endings",
-  "East Rutherford Shitlickers",
-  "Lincoln Nonces",
-  "Kalamata Dirty Vegans",
-  "Grays Town Fingerblasters",
-  "Grimsby Chode Chokers",
-  "Cambridge Cum Sluts",
-  "Weybiza BAB’s",
-  "Chad Moist Discharge",
-];
+const OFFICIAL_TEAM_NAMES: Record<number, string> = {
+  1: "Mt Isa Ballbags",
+  2: "Cambridge Cum Sluts",
+  3: "Grimsby Chode Chokers",
+  4: "Isle of Wight Happy Endings",
+  5: "Grays Town Fingerblasters",
+  6: "Lincoln Nonces",
+  7: "Kalamata Dirty Vegans",
+  8: "Weybiza BAB’s",
+  9: "East Rutherford Shitlickers",
+  10: "Chad Moist Discharge",
+};
 
 export default async function Home() {
   const [users, rosters] = await Promise.all([
@@ -37,12 +37,14 @@ export default async function Home() {
     <main>
       <header>
         <p>DYNASTY SLUTS</p>
+
         <h1>League Teams</h1>
+
         <p>Live data from Sleeper</p>
       </header>
 
       <section>
-        {teams.map((team, index) => (
+        {teams.map((team) => (
           <article
             key={team.rosterId}
             style={{
@@ -60,7 +62,7 @@ export default async function Home() {
                 fontSize: "12px",
               }}
             >
-              TEAM {index + 1}
+              TEAM {team.rosterId}
             </p>
 
             <h2
@@ -69,22 +71,12 @@ export default async function Home() {
                 fontSize: "20px",
               }}
             >
-              {OFFICIAL_TEAM_NAMES[index] ?? team.manager}
+              {OFFICIAL_TEAM_NAMES[team.rosterId] ?? team.manager}
             </h2>
 
-<p>
-  {team.manager}
-</p>
-
-<p
-  style={{
-    marginTop: "4px",
-    color: "#687384",
-    fontSize: "12px",
-  }}
->
-  Sleeper roster ID: {team.rosterId}
-</p>
+            <p>
+              {team.manager}
+            </p>
 
             <strong>
               {team.wins}-{team.losses}
