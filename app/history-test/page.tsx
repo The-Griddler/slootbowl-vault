@@ -1,46 +1,11 @@
-import {
-  getLeagueHistory,
-  getMatchups,
-} from "../../lib/sleeper";
+import { getHistoricalData } from "../../lib/sleeper";
 
 export default async function HistoryTestPage() {
-  const leagues = await getLeagueHistory();
-
-  const seasonData = await Promise.all(
-    leagues.map(async (league) => {
-      const weeklyData = await Promise.all(
-        Array.from({ length: 17 }, async (_, index) => {
-          const week = index + 1;
-          const matchups = await getMatchups(
-            week,
-            league.league_id
-          );
-
-          const completedMatchups = new Set<number>();
-
-          matchups.forEach((matchup) => {
-            if ((matchup.points ?? 0) > 0) {
-              completedMatchups.add(matchup.matchup_id);
-            }
-          });
-
-          return {
-            week,
-            completedMatchups: completedMatchups.size,
-          };
-        })
-      );
-
-      return {
-        league,
-        weeklyData,
-      };
-    })
-  );
+  const seasons = await getHistoricalData();
 
   return (
     <main>
-      <h1>Historical Matchup Test</h1>
+      <h1>Historical Data Test</h1>
 
       <p
         style={{
@@ -48,72 +13,184 @@ export default async function HistoryTestPage() {
           marginBottom: "24px",
         }}
       >
-        Checking Weeks 1–17 across all five seasons.
+        Checking how Sleeper games are classified across all
+        historical seasons.
       </p>
 
-      {seasonData.map(({ league, weeklyData }) => (
-        <article
-          key={league.league_id}
-          style={{
-            background: "#151b23",
-            border: "1px solid #27303b",
-            borderRadius: "18px",
-            padding: "18px",
-            marginBottom: "16px",
-          }}
-        >
-          <p
+      {seasons.map((season) => {
+        const regularSeason = season.matchups.filter(
+          (matchup) =>
+            matchup.phase === "Regular Season"
+        );
+
+        const mainPlayoffs = season.matchups.filter(
+          (matchup) =>
+            matchup.phase === "Main Playoffs"
+        );
+
+        const toiletBowl = season.matchups.filter(
+          (matchup) =>
+            matchup.phase === "Toilet Bowl"
+        );
+
+        const ignored = season.matchups.filter(
+          (matchup) =>
+            matchup.phase === "Ignored"
+        );
+
+        return (
+          <article
+            key={season.league.league_id}
             style={{
-              fontSize: "12px",
-              fontWeight: "700",
-              letterSpacing: "1px",
-              color: "#687384",
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "18px",
+              padding: "18px",
+              marginBottom: "20px",
             }}
           >
-            SEASON
-          </p>
-
-          <h2
-            style={{
-              margin: "6px 0 0",
-              fontSize: "22px",
-            }}
-          >
-            {league.season}
-          </h2>
-
-          <div
-            style={{
-              height: "1px",
-              background: "#27303b",
-              margin: "16px 0",
-            }}
-          />
-
-          {weeklyData.map((week) => (
-            <div
-              key={week.week}
+            <p
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "7px 0",
-                borderBottom:
-                  "1px solid #27303b",
+                fontSize: "12px",
+                fontWeight: "700",
+                letterSpacing: "1px",
+                color: "#687384",
               }}
             >
-              <span>Week {week.week}</span>
+              SEASON
+            </p>
 
-              <span
-                style={{
-                  color: "#9da7b3",
-                }}
-              >
-                {week.completedMatchups} matchups
-              </span>
+            <h2
+              style={{
+                margin: "6px 0 18px",
+                fontSize: "24px",
+              }}
+            >
+              {season.league.season}
+            </h2>
+
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              <StatRow
+                label="Regular Season"
+                value={regularSeason.length}
+              />
+
+              <StatRow
+                label="Main Playoffs"
+                value={mainPlayoffs.length}
+              />
+
+              <StatRow
+                label="Toilet Bowl"
+                value={toiletBowl.length}
+              />
+
+              <StatRow
+                label="Ignored"
+                value={ignored.length}
+              />
             </div>
-          ))}
-        </article>
-      ))}
+
+            <div
+              style={{
+                height: "1px",
+                background: "#27303b",
+                margin: "18px 0",
+              }}
+            />
+
+            <p
+              style={{
+                fontSize: "12px",
+                fontWeight: "700",
+                letterSpacing: "1px",
+                color: "#687384",
+                marginBottom: "10px",
+              }}
+            >
+              PLAYOFF CLASSIFICATION
+            </p>
+
+            {season.matchups
+              .filter(
+                (matchup) => matchup.week >= 15
+              )
+              .map((matchup, index) => (
+                <div
+                  key={`${matchup.week}-${matchup.rosterA}-${matchup.rosterB}-${index}`}
+                  style={{
+                    padding: "10px 0",
+                    borderBottom:
+                      "1px solid #27303b",
+                    fontSize: "13px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <span>
+                      Week {matchup.week}:{" "}
+                      {matchup.rosterA} vs{" "}
+                      {matchup.rosterB}
+                    </span>
+
+                    <span
+                      style={{
+                        color:
+                          matchup.phase ===
+                          "Main Playoffs"
+                            ? "#ffffff"
+                            : matchup.phase ===
+                              "Toilet Bowl"
+                            ? "#9da7b3"
+                            : "#687384",
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {matchup.phase}
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </article>
+        );
+      })}
     </main>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "10px 12px",
+        background: "#0f141b",
+        borderRadius: "10px",
+      }}
+    >
+      <span>{label}</span>
+
+      <strong>{value}</strong>
+    </div>
   );
 }
