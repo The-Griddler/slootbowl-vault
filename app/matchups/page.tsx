@@ -42,7 +42,7 @@ export default async function MatchupsPage({
   const currentWeek =
     Number.isInteger(requestedWeek) &&
     requestedWeek >= 1 &&
-    requestedWeek <= 18
+    requestedWeek <= 17
       ? requestedWeek
       : 3;
 
@@ -171,7 +171,7 @@ export default async function MatchupsPage({
             </div>
           </div>
 
-          {currentWeek < 18 ? (
+          {currentWeek < 17 ? (
             <a
               href={`/matchups?week=${currentWeek + 1}`}
               style={{
@@ -201,17 +201,18 @@ export default async function MatchupsPage({
             marginBottom: "10px",
           }}
         >
-          JUMP TO WEEK
+          REGULAR SEASON
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(6, 1fr)",
+            gridTemplateColumns: "repeat(7, 1fr)",
             gap: "8px",
+            marginBottom: "20px",
           }}
         >
-          {Array.from({ length: 18 }, (_, index) => {
+          {Array.from({ length: 14 }, (_, index) => {
             const week = index + 1;
             const selected = week === currentWeek;
 
@@ -238,6 +239,57 @@ export default async function MatchupsPage({
                 }}
               >
                 {week}
+              </a>
+            );
+          })}
+        </div>
+
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: "700",
+            letterSpacing: "1.5px",
+            color: "#687384",
+            marginBottom: "10px",
+          }}
+        >
+          PLAYOFFS
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "8px",
+          }}
+        >
+          {Array.from({ length: 3 }, (_, index) => {
+            const week = index + 15;
+            const selected = week === currentWeek;
+
+            return (
+              <a
+                key={week}
+                href={`/matchups?week=${week}`}
+                style={{
+                  textDecoration: "none",
+                  color: selected ? "#ffffff" : "#9da7b3",
+                  background: selected
+                    ? "#27303b"
+                    : "#0b0f14",
+                  border: selected
+                    ? "1px solid #687384"
+                    : "1px solid #27303b",
+                  borderRadius: "10px",
+                  height: "42px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                  fontWeight: selected ? "700" : "500",
+                }}
+              >
+                Week {week}
               </a>
             );
           })}
