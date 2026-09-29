@@ -1,6 +1,6 @@
 import {
   getLeagueHistory,
-  getRosters,
+  getMatchups,
 } from "../../lib/sleeper";
 
 export default async function HistoryTestPage() {
@@ -8,18 +8,39 @@ export default async function HistoryTestPage() {
 
   const seasonData = await Promise.all(
     leagues.map(async (league) => {
-      const rosters = await getRosters(league.league_id);
+      const weeklyData = await Promise.all(
+        Array.from({ length: 17 }, async (_, index) => {
+          const week = index + 1;
+          const matchups = await getMatchups(
+            week,
+            league.league_id
+          );
+
+          const completedMatchups = new Set<number>();
+
+          matchups.forEach((matchup) => {
+            if ((matchup.points ?? 0) > 0) {
+              completedMatchups.add(matchup.matchup_id);
+            }
+          });
+
+          return {
+            week,
+            completedMatchups: completedMatchups.size,
+          };
+        })
+      );
 
       return {
         league,
-        rosterCount: rosters.length,
+        weeklyData,
       };
     })
   );
 
   return (
     <main>
-      <h1>Historical Season Test</h1>
+      <h1>Historical Matchup Test</h1>
 
       <p
         style={{
@@ -27,10 +48,10 @@ export default async function HistoryTestPage() {
           marginBottom: "24px",
         }}
       >
-        Successfully loaded {seasonData.length} seasons.
+        Checking Weeks 1–17 across all five seasons.
       </p>
 
-      {seasonData.map(({ league, rosterCount }) => (
+      {seasonData.map(({ league, weeklyData }) => (
         <article
           key={league.league_id}
           style={{
@@ -38,7 +59,7 @@ export default async function HistoryTestPage() {
             border: "1px solid #27303b",
             borderRadius: "18px",
             padding: "18px",
-            marginBottom: "10px",
+            marginBottom: "16px",
           }}
         >
           <p
@@ -61,14 +82,6 @@ export default async function HistoryTestPage() {
             {league.season}
           </h2>
 
-          <p
-            style={{
-              marginTop: "6px",
-            }}
-          >
-            {league.name}
-          </p>
-
           <div
             style={{
               height: "1px",
@@ -77,21 +90,28 @@ export default async function HistoryTestPage() {
             }}
           />
 
-          <p>
-            Franchises found:{" "}
-            <strong>{rosterCount}</strong>
-          </p>
+          {weeklyData.map((week) => (
+            <div
+              key={week.week}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "7px 0",
+                borderBottom:
+                  "1px solid #27303b",
+              }}
+            >
+              <span>Week {week.week}</span>
 
-          <p
-            style={{
-              marginTop: "6px",
-              fontSize: "12px",
-              color: "#687384",
-              wordBreak: "break-all",
-            }}
-          >
-            League ID: {league.league_id}
-          </p>
+              <span
+                style={{
+                  color: "#9da7b3",
+                }}
+              >
+                {week.completedMatchups} matchups
+              </span>
+            </div>
+          ))}
         </article>
       ))}
     </main>
