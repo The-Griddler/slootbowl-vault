@@ -107,79 +107,142 @@ export default async function MatchupsPage({
         </p>
       </header>
 
-      <div
+      <section
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "24px",
           background: "#151b23",
           border: "1px solid #27303b",
-          borderRadius: "16px",
-          padding: "10px",
+          borderRadius: "18px",
+          padding: "16px",
+          marginBottom: "24px",
         }}
       >
-        {currentWeek > 1 ? (
-          <a
-            href={`/matchups?week=${currentWeek - 1}`}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "16px",
+          }}
+        >
+          {currentWeek > 1 ? (
+            <a
+              href={`/matchups?week=${currentWeek - 1}`}
+              style={{
+                textDecoration: "none",
+                color: "#ffffff",
+                fontSize: "24px",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ←
+            </a>
+          ) : (
+            <div style={{ width: "44px" }} />
+          )}
+
+          <div
             style={{
-              textDecoration: "none",
-              color: "#ffffff",
-              fontSize: "14px",
-              fontWeight: "600",
-              padding: "8px",
+              textAlign: "center",
             }}
           >
-            ←
-          </a>
-        ) : (
-          <div style={{ width: "30px" }} />
-        )}
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "700",
+                letterSpacing: "1.5px",
+                color: "#687384",
+              }}
+            >
+              SELECTED WEEK
+            </div>
+
+            <div
+              style={{
+                fontSize: "22px",
+                fontWeight: "700",
+                marginTop: "2px",
+              }}
+            >
+              Week {currentWeek}
+            </div>
+          </div>
+
+          {currentWeek < 18 ? (
+            <a
+              href={`/matchups?week=${currentWeek + 1}`}
+              style={{
+                textDecoration: "none",
+                color: "#ffffff",
+                fontSize: "24px",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              →
+            </a>
+          ) : (
+            <div style={{ width: "44px" }} />
+          )}
+        </div>
 
         <div
           style={{
-            textAlign: "center",
+            fontSize: "11px",
+            fontWeight: "700",
+            letterSpacing: "1.5px",
+            color: "#687384",
+            marginBottom: "10px",
           }}
         >
-          <div
-            style={{
-              fontSize: "11px",
-              fontWeight: "700",
-              letterSpacing: "1.5px",
-              color: "#687384",
-            }}
-          >
-            WEEK
-          </div>
-
-          <div
-            style={{
-              fontSize: "22px",
-              fontWeight: "700",
-              marginTop: "2px",
-            }}
-          >
-            {currentWeek}
-          </div>
+          JUMP TO WEEK
         </div>
 
-        {currentWeek < 18 ? (
-          <a
-            href={`/matchups?week=${currentWeek + 1}`}
-            style={{
-              textDecoration: "none",
-              color: "#ffffff",
-              fontSize: "14px",
-              fontWeight: "600",
-              padding: "8px",
-            }}
-          >
-            →
-          </a>
-        ) : (
-          <div style={{ width: "30px" }} />
-        )}
-      </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(6, 1fr)",
+            gap: "8px",
+          }}
+        >
+          {Array.from({ length: 18 }, (_, index) => {
+            const week = index + 1;
+            const selected = week === currentWeek;
+
+            return (
+              <a
+                key={week}
+                href={`/matchups?week=${week}`}
+                style={{
+                  textDecoration: "none",
+                  color: selected ? "#ffffff" : "#9da7b3",
+                  background: selected
+                    ? "#27303b"
+                    : "#0b0f14",
+                  border: selected
+                    ? "1px solid #687384"
+                    : "1px solid #27303b",
+                  borderRadius: "10px",
+                  height: "42px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                  fontWeight: selected ? "700" : "500",
+                }}
+              >
+                {week}
+              </a>
+            );
+          })}
+        </div>
+      </section>
 
       {matchupsList.length === 0 ? (
         <div
@@ -191,7 +254,9 @@ export default async function MatchupsPage({
             textAlign: "center",
           }}
         >
-          <p>No matchup data available for Week {currentWeek}.</p>
+          <p>
+            No matchup data available for Week {currentWeek}.
+          </p>
         </div>
       ) : (
         matchupsList.map((matchup, index) => {
