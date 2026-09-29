@@ -26,8 +26,25 @@ const TEAM_DIVISIONS: Record<number, "OBFC" | "GPFC"> = {
   10: "GPFC",
 };
 
-export default async function MatchupsPage() {
-  const currentWeek = 4;
+type MatchupsPageProps = {
+  searchParams: Promise<{
+    week?: string;
+  }>;
+};
+
+export default async function MatchupsPage({
+  searchParams,
+}: MatchupsPageProps) {
+  const params = await searchParams;
+
+  const requestedWeek = Number(params.week);
+
+  const currentWeek =
+    Number.isInteger(requestedWeek) &&
+    requestedWeek >= 1 &&
+    requestedWeek <= 18
+      ? requestedWeek
+      : 3;
 
   const [matchups, rosters] = await Promise.all([
     getMatchups(currentWeek),
@@ -57,7 +74,7 @@ export default async function MatchupsPage() {
     <main>
       <header
         style={{
-          marginBottom: "28px",
+          marginBottom: "24px",
         }}
       >
         <p
@@ -86,169 +103,257 @@ export default async function MatchupsPage() {
             marginTop: "6px",
           }}
         >
-          Week {currentWeek}
+          2026 Season
         </p>
       </header>
 
-      {matchupsList.map((matchup, index) => {
-        const first = matchup[0];
-        const second = matchup[1];
-
-        if (!first || !second) {
-          return null;
-        }
-
-        const firstRoster = rosterMap.get(first.roster_id);
-        const secondRoster = rosterMap.get(second.roster_id);
-
-        const firstPoints = first.points ?? 0;
-        const secondPoints = second.points ?? 0;
-
-        const firstWon = firstPoints > secondPoints;
-        const secondWon = secondPoints > firstPoints;
-
-        const division =
-          TEAM_DIVISIONS[first.roster_id] ?? "GPFC";
-
-        return (
-          <article
-            key={first.matchup_id ?? index}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "24px",
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "16px",
+          padding: "10px",
+        }}
+      >
+        {currentWeek > 1 ? (
+          <a
+            href={`/matchups?week=${currentWeek - 1}`}
             style={{
-              background: "#151b23",
-              border: "1px solid #27303b",
-              borderRadius: "20px",
-              padding: "18px",
-              marginBottom: "14px",
+              textDecoration: "none",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: "600",
+              padding: "8px",
             }}
           >
-            <div
-              style={{
-                fontSize: "11px",
-                fontWeight: "700",
-                letterSpacing: "1.5px",
-                color: "#687384",
-                marginBottom: "16px",
-              }}
-            >
-              {division}
-            </div>
+            ←
+          </a>
+        ) : (
+          <div style={{ width: "30px" }} />
+        )}
 
-            <div
+        <div
+          style={{
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              color: "#687384",
+            }}
+          >
+            WEEK
+          </div>
+
+          <div
+            style={{
+              fontSize: "22px",
+              fontWeight: "700",
+              marginTop: "2px",
+            }}
+          >
+            {currentWeek}
+          </div>
+        </div>
+
+        {currentWeek < 18 ? (
+          <a
+            href={`/matchups?week=${currentWeek + 1}`}
+            style={{
+              textDecoration: "none",
+              color: "#ffffff",
+              fontSize: "14px",
+              fontWeight: "600",
+              padding: "8px",
+            }}
+          >
+            →
+          </a>
+        ) : (
+          <div style={{ width: "30px" }} />
+        )}
+      </div>
+
+      {matchupsList.length === 0 ? (
+        <div
+          style={{
+            background: "#151b23",
+            border: "1px solid #27303b",
+            borderRadius: "18px",
+            padding: "24px",
+            textAlign: "center",
+          }}
+        >
+          <p>No matchup data available for Week {currentWeek}.</p>
+        </div>
+      ) : (
+        matchupsList.map((matchup, index) => {
+          const first = matchup[0];
+          const second = matchup[1];
+
+          if (!first || !second) {
+            return null;
+          }
+
+          const firstRoster = rosterMap.get(first.roster_id);
+          const secondRoster = rosterMap.get(second.roster_id);
+
+          const firstPoints = first.points ?? 0;
+          const secondPoints = second.points ?? 0;
+
+          const firstWon = firstPoints > secondPoints;
+          const secondWon = secondPoints > firstPoints;
+
+          const division =
+            TEAM_DIVISIONS[first.roster_id] ?? "GPFC";
+
+          return (
+            <article
+              key={first.matchup_id ?? index}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
+                background: "#151b23",
+                border: "1px solid #27303b",
+                borderRadius: "20px",
+                padding: "18px",
+                marginBottom: "14px",
               }}
             >
               <div
                 style={{
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: firstWon ? "700" : "500",
-                    lineHeight: 1.25,
-                  }}
-                >
-                  {OFFICIAL_TEAM_NAMES[first.roster_id] ??
-                    firstRoster?.roster_id ??
-                    "Unknown Team"}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "#687384",
-                    marginTop: "5px",
-                  }}
-                >
-                  {firstWon
-                    ? "WIN"
-                    : secondWon
-                    ? "LOSS"
-                    : "TIE"}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  fontSize: "24px",
+                  fontSize: "11px",
                   fontWeight: "700",
-                  minWidth: "65px",
-                  textAlign: "right",
+                  letterSpacing: "1.5px",
+                  color: "#687384",
+                  marginBottom: "16px",
                 }}
               >
-                {firstPoints.toFixed(1)}
-              </div>
-            </div>
-
-            <div
-              style={{
-                height: "1px",
-                background: "#27303b",
-                margin: "16px 0",
-              }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: secondWon ? "700" : "500",
-                    lineHeight: 1.25,
-                  }}
-                >
-                  {OFFICIAL_TEAM_NAMES[second.roster_id] ??
-                    secondRoster?.roster_id ??
-                    "Unknown Team"}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "#687384",
-                    marginTop: "5px",
-                  }}
-                >
-                  {secondWon
-                    ? "WIN"
-                    : firstWon
-                    ? "LOSS"
-                    : "TIE"}
-                </div>
+                {division}
               </div>
 
               <div
                 style={{
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  minWidth: "65px",
-                  textAlign: "right",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
                 }}
               >
-                {secondPoints.toFixed(1)}
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: firstWon ? "700" : "500",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {OFFICIAL_TEAM_NAMES[first.roster_id] ??
+                      firstRoster?.roster_id ??
+                      "Unknown Team"}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#687384",
+                      marginTop: "5px",
+                    }}
+                  >
+                    {firstWon
+                      ? "WIN"
+                      : secondWon
+                      ? "LOSS"
+                      : "TIE"}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    minWidth: "65px",
+                    textAlign: "right",
+                  }}
+                >
+                  {firstPoints.toFixed(1)}
+                </div>
               </div>
-            </div>
-          </article>
-        );
-      })}
+
+              <div
+                style={{
+                  height: "1px",
+                  background: "#27303b",
+                  margin: "16px 0",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: secondWon ? "700" : "500",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {OFFICIAL_TEAM_NAMES[second.roster_id] ??
+                      secondRoster?.roster_id ??
+                      "Unknown Team"}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#687384",
+                      marginTop: "5px",
+                    }}
+                  >
+                    {secondWon
+                      ? "WIN"
+                      : firstWon
+                      ? "LOSS"
+                      : "TIE"}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "24px",
+                    fontWeight: "700",
+                    minWidth: "65px",
+                    textAlign: "right",
+                  }}
+                >
+                  {secondPoints.toFixed(1)}
+                </div>
+              </div>
+            </article>
+          );
+        })
+      )}
     </main>
   );
 }
