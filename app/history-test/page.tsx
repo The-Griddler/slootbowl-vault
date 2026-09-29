@@ -1,11 +1,25 @@
-import { getLeagueHistory } from "../../lib/sleeper";
+import {
+  getLeagueHistory,
+  getRosters,
+} from "../../lib/sleeper";
 
 export default async function HistoryTestPage() {
   const leagues = await getLeagueHistory();
 
+  const seasonData = await Promise.all(
+    leagues.map(async (league) => {
+      const rosters = await getRosters(league.league_id);
+
+      return {
+        league,
+        rosterCount: rosters.length,
+      };
+    })
+  );
+
   return (
     <main>
-      <h1>League History Test</h1>
+      <h1>Historical Season Test</h1>
 
       <p
         style={{
@@ -13,10 +27,10 @@ export default async function HistoryTestPage() {
           marginBottom: "24px",
         }}
       >
-        Found {leagues.length} seasons.
+        Successfully loaded {seasonData.length} seasons.
       </p>
 
-      {leagues.map((league, index) => (
+      {seasonData.map(({ league, rosterCount }) => (
         <article
           key={league.league_id}
           style={{
@@ -35,7 +49,7 @@ export default async function HistoryTestPage() {
               color: "#687384",
             }}
           >
-            SEASON {index + 1}
+            SEASON
           </p>
 
           <h2
@@ -55,15 +69,17 @@ export default async function HistoryTestPage() {
             {league.name}
           </p>
 
-          <p
+          <div
             style={{
-              marginTop: "6px",
-              fontSize: "12px",
-              color: "#687384",
-              wordBreak: "break-all",
+              height: "1px",
+              background: "#27303b",
+              margin: "16px 0",
             }}
-          >
-            League ID: {league.league_id}
+          />
+
+          <p>
+            Franchises found:{" "}
+            <strong>{rosterCount}</strong>
           </p>
 
           <p
@@ -74,7 +90,7 @@ export default async function HistoryTestPage() {
               wordBreak: "break-all",
             }}
           >
-            Previous: {league.previous_league_id ?? "None"}
+            League ID: {league.league_id}
           </p>
         </article>
       ))}
