@@ -1,4 +1,5 @@
 import "./globals.css";
+import BottomNav from "./components/BottomNav";
 
 export const metadata = {
   title: "Dynasty Sluts",
@@ -12,7 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <BottomNav />
+      </body>
     </html>
   );
 }
