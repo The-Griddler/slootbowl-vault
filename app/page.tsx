@@ -72,9 +72,19 @@ export default async function Home() {
               {OFFICIAL_TEAM_NAMES[index] ?? team.manager}
             </h2>
 
-            <p>
-              {team.manager}
-            </p>
+<p>
+  {team.manager}
+</p>
+
+<p
+  style={{
+    marginTop: "4px",
+    color: "#687384",
+    fontSize: "12px",
+  }}
+>
+  Sleeper roster ID: {team.rosterId}
+</p>
 
             <strong>
               {team.wins}-{team.losses}
