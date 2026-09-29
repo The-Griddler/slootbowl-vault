@@ -1,5 +1,12 @@
 const LEAGUE_ID = "1326512818865868800";
 
+export type SleeperLeague = {
+  league_id: string;
+  name: string;
+  season: string;
+  previous_league_id: string | null;
+};
+
 export type SleeperUser = {
   user_id: string;
   display_name: string;
@@ -26,6 +33,21 @@ export type SleeperMatchup = {
   points: number;
   custom_points: number | null;
 };
+
+export async function getLeague(): Promise<SleeperLeague> {
+  const response = await fetch(
+    `https://api.sleeper.app/v1/league/${LEAGUE_ID}`,
+    {
+      next: { revalidate: 300 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to load Sleeper league");
+  }
+
+  return response.json();
+}
 
 export async function getUsers(): Promise<SleeperUser[]> {
   const response = await fetch(
