@@ -1,56 +1,62 @@
-import {
-  getPlayerRecords,
-} from "../../lib/playerRecords";
+"use client";
 
-import {
-  getPlayers,
-  getPlayerName,
-  getPlayerPosition,
-  SleeperPlayer,
-} from "../../lib/players";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 
-export default async function PlayerRecordsPage() {
-  const [
-    records,
-    players,
-  ] = await Promise.all([
-    getPlayerRecords(),
-    getPlayers(),
-  ]);
+type PlayerDirectoryRecord = {
+  playerId: string;
+  name: string;
+  position: string;
+  points: number;
+  starts: number;
+  seasons: number;
+};
 
-  const highestGame =
-    [...records.games]
-      .sort(
-        (a, b) =>
-          b.points - a.points
-      )[0] ?? null;
+export default function PlayerDirectory({
+  players,
+}: {
+  players: PlayerDirectoryRecord[];
+}) {
+  const [search, setSearch] =
+    useState("");
 
-  const highestSeason =
-    [...records.seasons]
-      .sort(
-        (a, b) =>
-          b.points - a.points
-      )[0] ?? null;
+  const [position, setPosition] =
+    useState("ALL");
 
-  const highestCareer =
-    [...records.careers]
-      .sort(
-        (a, b) =>
-          b.points - a.points
-      )[0] ?? null;
+  const filteredPlayers =
+    useMemo(() => {
+      const searchTerm =
+        search
+          .trim()
+          .toLowerCase();
 
-  const mostStarts =
-    [...records.careers]
-      .sort(
-        (a, b) =>
-          b.starts - a.starts
-      )[0] ?? null;
+      return players
+        .filter((player) => {
+          const matchesSearch =
+            !searchTerm ||
+            player.name
+              .toLowerCase()
+              .includes(searchTerm);
 
-  const positionalRecords =
-    getPositionalRecords(
-      records,
-      players
-    );
+          const matchesPosition =
+            position === "ALL" ||
+            player.position ===
+              position;
+
+          return (
+            matchesSearch &&
+            matchesPosition
+          );
+        })
+        .sort(
+          (a, b) =>
+            b.points - a.points
+        );
+    }, [
+      players,
+      search,
+      position,
+    ]);
 
   return (
     <main>
@@ -67,420 +73,259 @@ export default async function PlayerRecordsPage() {
       </p>
 
       <h1>
-        Player Records
+        Players
       </h1>
 
       <p
         style={{
           marginTop: "8px",
-          marginBottom: "30px",
+          marginBottom: "24px",
         }}
       >
-        The biggest player performances
-        in Slootbowl history.
+        Every player to have been
+        started in Slootbowl.
       </p>
 
-      <section>
-        <h2 style={sectionHeadingStyle}>
-          All-Time
-        </h2>
-
-        <RecordCard
-          label="Highest single-game score"
-          record={
-            highestGame
-              ? {
-                  playerId:
-                    highestGame.playerId,
-                  points:
-                    highestGame.points,
-                  detail:
-                    `${highestGame.season} · Week ${highestGame.week}`,
-                }
-              : null
-          }
-          players={players}
-        />
-
-        <RecordCard
-          label="Highest single-season total"
-          record={
-            highestSeason
-              ? {
-                  playerId:
-                    highestSeason.playerId,
-                  points:
-                    highestSeason.points,
-                  detail:
-                    `${highestSeason.season} · ${highestSeason.starts} starts`,
-                }
-              : null
-          }
-          players={players}
-        />
-
-        <RecordCard
-          label="Highest career total"
-          record={
-            highestCareer
-              ? {
-                  playerId:
-                    highestCareer.playerId,
-                  points:
-                    highestCareer.points,
-                  detail:
-                    `${highestCareer.seasons.length} seasons · ${highestCareer.starts} starts`,
-                }
-              : null
-          }
-          players={players}
-        />
-
-        <RecordCard
-          label="Most career starts"
-          record={
-            mostStarts
-              ? {
-                  playerId:
-                    mostStarts.playerId,
-                  points:
-                    mostStarts.points,
-                  detail:
-                    `${mostStarts.starts} starts · ${mostStarts.seasons.length} seasons`,
-                  secondaryValue:
-                    mostStarts.starts.toString(),
-                  secondaryLabel:
-                    "starts",
-                }
-              : null
-          }
-          players={players}
-        />
-      </section>
-
-      <section
-        style={{
-          marginTop: "40px",
-        }}
-      >
-        <h2 style={sectionHeadingStyle}>
-          Positional Records
-        </h2>
-
-        {positionalRecords.map(
-          (record) => (
-            <RecordCard
-              key={record.position}
-              label={`Highest career ${record.position} score`}
-              record={record.record}
-              players={players}
-            />
+      <input
+        type="search"
+        placeholder="Search players..."
+        value={search}
+        onChange={(event) =>
+          setSearch(
+            event.target.value
           )
-        )}
-      </section>
-
-      <section
-        style={{
-          marginTop: "40px",
-        }}
-      >
-        <h2 style={sectionHeadingStyle}>
-          Top 10 Career Players
-        </h2>
-
-        {[...records.careers]
-          .sort(
-            (a, b) =>
-              b.points - a.points
-          )
-          .slice(0, 10)
-          .map(
-            (record, index) => {
-              const player =
-                players[
-                  record.playerId
-                ];
-
-              return (
-                <article
-                  key={record.playerId}
-                  style={listCardStyle}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems:
-                        "center",
-                      gap: "14px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "32px",
-                        color:
-                          "#687384",
-                        fontSize:
-                          "13px",
-                        fontWeight:
-                          "700",
-                      }}
-                    >
-                      #{index + 1}
-                    </div>
-
-                    <div
-                      style={{
-                        flex: 1,
-                      }}
-                    >
-                      <h3
-                        style={{
-                          margin: 0,
-                          fontSize:
-                            "17px",
-                        }}
-                      >
-                        {getPlayerName(
-                          player
-                        )}
-                      </h3>
-
-                      <p
-                        style={{
-                          marginTop:
-                            "4px",
-                          fontSize:
-                            "12px",
-                        }}
-                      >
-                        {getPlayerPosition(
-                          player
-                        )}{" "}
-                        ·{" "}
-                        {record.starts}{" "}
-                        starts
-                      </p>
-                    </div>
-
-                    <strong
-                      style={{
-                        fontSize:
-                          "17px",
-                      }}
-                    >
-                      {record.points.toFixed(
-                        2
-                      )}
-                    </strong>
-                  </div>
-                </article>
-              );
-            }
-          )}
-      </section>
-    </main>
-  );
-}
-
-function getPositionalRecords(
-  records: Awaited<
-    ReturnType<
-      typeof getPlayerRecords
-    >
-  >,
-  players: Record<
-    string,
-    SleeperPlayer
-  >
-) {
-  const positions = [
-    "QB",
-    "RB",
-    "WR",
-    "TE",
-  ];
-
-  return positions.map(
-    (position) => {
-      const eligible =
-        records.careers.filter(
-          (record) =>
-            players[
-              record.playerId
-            ]?.position ===
-            position
-        );
-
-      const winner =
-        [...eligible].sort(
-          (a, b) =>
-            b.points - a.points
-        )[0] ?? null;
-
-      return {
-        position,
-        record: winner
-          ? {
-              playerId:
-                winner.playerId,
-              points:
-                winner.points,
-              detail:
-                `${winner.seasons.length} seasons · ${winner.starts} starts`,
-            }
-          : null,
-      };
-    }
-  );
-}
-
-function RecordCard({
-  label,
-  record,
-  players,
-}: {
-  label: string;
-  record: {
-    playerId: string;
-    points: number;
-    detail: string;
-    secondaryValue?: string;
-    secondaryLabel?: string;
-  } | null;
-  players: Record<
-    string,
-    SleeperPlayer
-  >;
-}) {
-  if (!record) {
-    return (
-      <article
-        style={cardStyle}
-      >
-        <p style={labelStyle}>
-          {label}
-        </p>
-
-        <p
-          style={{
-            marginTop: "10px",
-          }}
-        >
-          No record available
-        </p>
-      </article>
-    );
-  }
-
-  const player =
-    players[record.playerId];
-
-  return (
-    <article
-      style={cardStyle}
-    >
-      <p style={labelStyle}>
-        {label}
-      </p>
+        }
+        style={searchStyle}
+      />
 
       <div
         style={{
           display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems:
-            "flex-end",
-          gap: "16px",
-          marginTop: "10px",
+          gap: "8px",
+          overflowX:
+            "auto",
+          paddingBottom: "4px",
+          marginBottom: "20px",
         }}
       >
-        <div
-          style={{
-            minWidth: 0,
-          }}
+        {[
+          "ALL",
+          "QB",
+          "RB",
+          "WR",
+          "TE",
+        ].map(
+          (item) => {
+            const active =
+              position ===
+              item;
+
+            return (
+              <button
+                key={item}
+                type="button"
+                onClick={() =>
+                  setPosition(
+                    item
+                  )
+                }
+                style={{
+                  border:
+                    "1px solid #27303b",
+                  borderRadius:
+                    "999px",
+                  padding:
+                    "9px 15px",
+                  background:
+                    active
+                      ? "#f5f7fa"
+                      : "#151b23",
+                  color:
+                    active
+                      ? "#0b0f14"
+                      : "#9da7b3",
+                  fontWeight:
+                    "700",
+                  fontSize:
+                    "12px",
+                  flexShrink: 0,
+                }}
+              >
+                {item}
+              </button>
+            );
+          }
+        )}
+      </div>
+
+      <p
+        style={{
+          fontSize: "12px",
+          color: "#687384",
+          marginBottom: "10px",
+        }}
+      >
+        {filteredPlayers.length}{" "}
+        players
+      </p>
+
+      {filteredPlayers.map(
+        (player) => (
+          <Link
+            key={
+              player.playerId
+            }
+            href={`/player/${player.playerId}`}
+            style={{
+              textDecoration:
+                "none",
+              color:
+                "inherit",
+            }}
+          >
+            <article
+              style={
+                playerCardStyle
+              }
+            >
+              <div
+                style={{
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize:
+                      "17px",
+                  }}
+                >
+                  {player.name}
+                </h2>
+
+                <p
+                  style={{
+                    marginTop:
+                      "5px",
+                    fontSize:
+                      "12px",
+                  }}
+                >
+                  {player.position}
+                  {" · "}
+                  {player.starts}{" "}
+                  starts
+                  {" · "}
+                  {player.seasons}{" "}
+                  seasons
+                </p>
+              </div>
+
+              <div
+                style={{
+                  textAlign:
+                    "right",
+                  flexShrink: 0,
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize:
+                      "17px",
+                  }}
+                >
+                  {player.points.toFixed(
+                    2
+                  )}
+                </strong>
+
+                <p
+                  style={{
+                    marginTop:
+                      "2px",
+                    fontSize:
+                      "10px",
+                    color:
+                      "#687384",
+                  }}
+                >
+                  pts
+                </p>
+              </div>
+
+              <span
+                style={{
+                  color:
+                    "#687384",
+                  fontSize:
+                    "18px",
+                }}
+              >
+                ›
+              </span>
+            </article>
+          </Link>
+        )
+      )}
+
+      {filteredPlayers.length ===
+        0 && (
+        <article
+          style={emptyStyle}
         >
-          <h3
+          <h2
             style={{
               margin: 0,
-              fontSize: "22px",
+              fontSize: "18px",
             }}
           >
-            {getPlayerName(
-              player
-            )}
-          </h3>
+            No players found
+          </h2>
 
           <p
             style={{
-              marginTop: "5px",
-              fontSize: "12px",
+              marginTop:
+                "6px",
+              fontSize: "13px",
             }}
           >
-            {getPlayerPosition(
-              player
-            )}
-            {" · "}
-            {record.detail}
+            Try a different name
+            or position.
           </p>
-        </div>
-
-        <div
-          style={{
-            textAlign:
-              "right",
-            flexShrink: 0,
-          }}
-        >
-          <strong
-            style={{
-              fontSize: "26px",
-            }}
-          >
-            {record.secondaryValue ??
-              record.points.toFixed(
-                2
-              )}
-          </strong>
-
-          <p
-            style={{
-              marginTop: "2px",
-              fontSize: "11px",
-            }}
-          >
-            {record.secondaryLabel ??
-              "pts"}
-          </p>
-        </div>
-      </div>
-    </article>
+        </article>
+      )}
+    </main>
   );
 }
 
-const cardStyle = {
+const searchStyle = {
+  width: "100%",
+  padding: "14px 16px",
+  marginBottom: "12px",
   background: "#151b23",
   border: "1px solid #27303b",
-  borderRadius: "18px",
-  padding: "18px",
-  marginBottom: "12px",
+  borderRadius: "14px",
+  color: "#f5f7fa",
+  fontSize: "16px",
+  outline: "none",
 };
 
-const listCardStyle = {
+const playerCardStyle = {
   background: "#151b23",
   border: "1px solid #27303b",
   borderRadius: "16px",
-  padding: "15px 16px",
+  padding: "15px 14px",
   marginBottom: "8px",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
 };
 
-const labelStyle = {
-  fontSize: "11px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  color: "#687384",
-};
-
-const sectionHeadingStyle = {
-  fontSize: "22px",
-  marginBottom: "14px",
+const emptyStyle = {
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "16px",
+  padding: "20px",
+  textAlign: "center" as const,
 };
