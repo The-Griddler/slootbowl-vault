@@ -10,7 +10,7 @@ export default async function DiagnosticPage() {
   );
 
   const response = await fetch(
-    `https://api.sleeper.app/v1/stats/nfl/2026/${WEEK}?season_type=regular`,
+    `https://api.sleeper.com/stats/nfl/regular/2026/${WEEK}`,
     {
       cache: "no-store",
     }
@@ -24,19 +24,6 @@ export default async function DiagnosticPage() {
 
   const stats = await response.json();
 
-  const playerWithStats =
-    Object.keys(stats).find(
-      (playerId) =>
-        Object.keys(
-          stats[playerId] ?? {}
-        ).length > 0
-    );
-
-  const playerStats =
-    playerWithStats
-      ? stats[playerWithStats]
-      : null;
-
   const starterIds = Array.from(
     new Set(
       matchups.flatMap(
@@ -49,10 +36,16 @@ export default async function DiagnosticPage() {
   const startersWithStats =
     starterIds.filter(
       (playerId) =>
-        Object.keys(
-          stats[playerId] ?? {}
-        ).length > 0
+        stats[playerId] !== undefined
     );
+
+  const firstStarter =
+    startersWithStats[0] ?? null;
+
+  const firstStarterStats =
+    firstStarter
+      ? stats[firstStarter]
+      : null;
 
   return (
     <main>
@@ -101,7 +94,7 @@ export default async function DiagnosticPage() {
 
       <article style={cardStyle}>
         <p style={labelStyle}>
-          EXAMPLE PLAYER WITH STATS
+          FIRST STARTER WITH STATS
         </p>
 
         <p
@@ -112,12 +105,12 @@ export default async function DiagnosticPage() {
           }}
         >
           Player ID:{" "}
-          {playerWithStats ?? "None"}
+          {firstStarter ?? "None"}
         </p>
 
         <pre style={preStyle}>
           {JSON.stringify(
-            playerStats,
+            firstStarterStats,
             null,
             2
           )}
