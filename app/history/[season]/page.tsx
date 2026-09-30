@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   getHistoricalData,
   getLeagueHistory,
+  fetchBracketForPage,
   SleeperBracketMatch,
   HistoricalSeason,
 } from "../../../lib/sleeper";
@@ -43,19 +44,23 @@ function getRegularSeasonStandings(
   season: HistoricalSeason,
   rosterIds: number[]
 ): StandingRow[] {
-  const standings = new Map<
-    number,
-    StandingRow
-  >();
+  const standings =
+    new Map<
+      number,
+      StandingRow
+    >();
 
   for (const rosterId of rosterIds) {
-    standings.set(rosterId, {
+    standings.set(
       rosterId,
-      wins: 0,
-      losses: 0,
-      ties: 0,
-      pointsFor: 0,
-    });
+      {
+        rosterId,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+      }
+    );
   }
 
   for (const matchup of season.matchups) {
@@ -86,6 +91,15 @@ function getRegularSeasonStandings(
         matchup.scoreB;
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * Every team's record is their
+     * COMPLETE regular-season record.
+     *
+     * Cross-conference games count.
+     */
+
     if (
       !teamA ||
       !teamB
@@ -114,12 +128,24 @@ function getRegularSeasonStandings(
   return Array.from(
     standings.values()
   ).sort((a, b) => {
-    if (b.wins !== a.wins) {
-      return b.wins - a.wins;
+    if (
+      b.wins !==
+      a.wins
+    ) {
+      return (
+        b.wins -
+        a.wins
+      );
     }
 
-    if (b.ties !== a.ties) {
-      return b.ties - a.ties;
+    if (
+      b.ties !==
+      a.ties
+    ) {
+      return (
+        b.ties -
+        a.ties
+      );
     }
 
     return (
@@ -133,7 +159,7 @@ function findPostseasonMatchup(
   season: HistoricalSeason,
   rosterA: number,
   rosterB: number
-) {
+): HistoricalSeason["matchups"][number] | null {
   return (
     season.matchups.find(
       (matchup) =>
@@ -168,11 +194,9 @@ function getFinalStandings(
   }[] = [];
 
   /*
-   * Championship / main playoff positions
+   * 1st / 2nd
    *
-   * R3 M6 = Slootbowl
-   * R3 M7 = 3rd/4th
-   * R2 M5 = 5th/6th
+   * Winners bracket R3 M6
    */
 
   const championship =
@@ -180,20 +204,6 @@ function getFinalStandings(
       winnersBracket,
       3,
       6
-    );
-
-  const thirdPlace =
-    getBracketMatch(
-      winnersBracket,
-      3,
-      7
-    );
-
-  const fifthSixth =
-    getBracketMatch(
-      winnersBracket,
-      2,
-      5
     );
 
   if (
@@ -220,6 +230,19 @@ function getFinalStandings(
     });
   }
 
+  /*
+   * 3rd / 4th
+   *
+   * Winners bracket R3 M7
+   */
+
+  const thirdPlace =
+    getBracketMatch(
+      winnersBracket,
+      3,
+      7
+    );
+
   if (
     thirdPlace?.w
   ) {
@@ -243,6 +266,19 @@ function getFinalStandings(
         "4th Place",
     });
   }
+
+  /*
+   * 5th / 6th
+   *
+   * Winners bracket R2 M5
+   */
+
+  const fifthSixth =
+    getBracketMatch(
+      winnersBracket,
+      2,
+      5
+    );
 
   if (
     fifthSixth?.w
@@ -269,16 +305,10 @@ function getFinalStandings(
   }
 
   /*
-   * Losers bracket
+   * 7th / 8th
    *
-   * R2 M3 determines 7th.
-   * R2 M4 determines 8th.
-   *
-   * The losers of those two games
-   * then meet in the actual Toilet Bowl.
-   *
-   * The Toilet Bowl winner = 9th.
-   * The Toilet Bowl loser = 10th.
+   * Winners of the two final
+   * losers-bracket games.
    */
 
   const losersMatchThree =
@@ -320,8 +350,19 @@ function getFinalStandings(
   }
 
   /*
-   * Find the two teams that lost
-   * the final losers-bracket games.
+   * 9th / 10th
+   *
+   * The LOSERS of R2 M3 and R2 M4
+   * play the actual Toilet Bowl.
+   *
+   * We deliberately do NOT require
+   * phase === "Toilet Bowl" here.
+   *
+   * The matchup can currently be
+   * classified as "Ignored" by the
+   * historical stats system because
+   * it isn't represented directly in
+   * the losers bracket.
    */
 
   const toiletBowlTeamA =
@@ -336,19 +377,6 @@ function getFinalStandings(
     toiletBowlTeamA !== null &&
     toiletBowlTeamB !== null
   ) {
-    /*
-     * IMPORTANT:
-     * Do not require phase === "Toilet Bowl".
-     *
-     * The actual Toilet Bowl is not necessarily
-     * labelled as Toilet Bowl by our matchup
-     * classification because it isn't represented
-     * as a losers-bracket match.
-     *
-     * Instead, find these exact two teams playing
-     * against each other during Weeks 15-17.
-     */
-
     const toiletBowl =
       findPostseasonMatchup(
         season,
@@ -357,15 +385,10 @@ function getFinalStandings(
       );
 
     if (toiletBowl) {
-      const teamAIsWinner =
+      if (
         toiletBowl.scoreA >
-        toiletBowl.scoreB;
-
-      const teamBIsWinner =
-        toiletBowl.scoreB >
-        toiletBowl.scoreA;
-
-      if (teamAIsWinner) {
+        toiletBowl.scoreB
+      ) {
         finalRows.push({
           place: 9,
           rosterId:
@@ -382,7 +405,8 @@ function getFinalStandings(
             "Toilet Bowl Loser",
         });
       } else if (
-        teamBIsWinner
+        toiletBowl.scoreB >
+        toiletBowl.scoreA
       ) {
         finalRows.push({
           place: 9,
@@ -405,7 +429,8 @@ function getFinalStandings(
 
   return finalRows.sort(
     (a, b) =>
-      a.place - b.place
+      a.place -
+      b.place
   );
 }
 
@@ -426,7 +451,10 @@ function StandingTable({
 
       <div className="divide-y divide-zinc-800">
         {standings.map(
-          (team, index) => (
+          (
+            team,
+            index
+          ) => (
             <div
               key={
                 team.rosterId
@@ -488,9 +516,7 @@ function FinalStandings({
         {standings.map(
           (team) => (
             <div
-              key={
-                `${team.place}-${team.rosterId}`
-              }
+              key={`${team.place}-${team.rosterId}`}
               className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 px-4 py-4"
             >
               <div className="text-xl font-black text-zinc-500">
@@ -573,53 +599,47 @@ export default async function SeasonHistoryPage({
     winnersBracket,
     losersBracket,
   ] = await Promise.all([
-    import("../../../lib/sleeper").then(
-      (module) =>
-        module
-          .fetchBracketForPage?.(
-            league.league_id,
-            "winners_bracket"
-          ) ?? []
+    fetchBracketForPage(
+      league.league_id,
+      "winners_bracket"
     ),
-    import("../../../lib/sleeper").then(
-      (module) =>
-        module
-          .fetchBracketForPage?.(
-            league.league_id,
-            "losers_bracket"
-          ) ?? []
+    fetchBracketForPage(
+      league.league_id,
+      "losers_bracket"
     ),
   ]);
 
-  const fallbackWinnersBracket =
-    winnersBracket as SleeperBracketMatch[];
+  /*
+   * Permanent franchise IDs.
+   *
+   * OBFC:
+   * 4, 6, 7, 8, 9
+   *
+   * GPFC:
+   * 1, 2, 3, 5, 10
+   *
+   * These are used only to decide which
+   * conference table the franchise belongs in.
+   *
+   * Their records are still calculated from
+   * ALL regular-season games.
+   */
 
-  const fallbackLosersBracket =
-    losersBracket as SleeperBracketMatch[];
+  const obfcRosterIds = [
+    4,
+    6,
+    7,
+    8,
+    9,
+  ];
 
-  const allRosterIds =
-    Array.from(
-      new Set(
-        seasonData.matchups.flatMap(
-          (matchup) => [
-            matchup.rosterA,
-            matchup.rosterB,
-          ]
-        )
-      )
-    );
-
-  const obfcRosterIds =
-    [4, 6, 7, 8, 9].filter(
-      (id) =>
-        allRosterIds.includes(id)
-    );
-
-  const gpfcRosterIds =
-    [1, 2, 3, 5, 10].filter(
-      (id) =>
-        allRosterIds.includes(id)
-    );
+  const gpfcRosterIds = [
+    1,
+    2,
+    3,
+    5,
+    10,
+  ];
 
   const obfcStandings =
     getRegularSeasonStandings(
@@ -636,8 +656,8 @@ export default async function SeasonHistoryPage({
   const finalStandings =
     getFinalStandings(
       seasonData,
-      fallbackWinnersBracket,
-      fallbackLosersBracket
+      winnersBracket,
+      losersBracket
     );
 
   return (
