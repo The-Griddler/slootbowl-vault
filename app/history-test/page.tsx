@@ -10,57 +10,110 @@ export default async function HistoryTestPage() {
       <p
         style={{
           marginTop: "10px",
-          marginBottom: "24px",
+          marginBottom: "28px",
         }}
       >
-        Official records from Regular Season + Main
-        Playoffs only.
+        Official records from 2022–2026. Toilet Bowl and
+        consolation games are excluded.
       </p>
+
+      <RecordSection
+        title="Regular Season"
+        records={records.regularSeason}
+      />
+
+      <RecordSection
+        title="Main Playoffs"
+        records={records.mainPlayoffs}
+      />
+    </main>
+  );
+}
+
+function RecordSection({
+  title,
+  records,
+}: {
+  title: string;
+  records: {
+    highestTeamScore: LeagueRecord | null;
+    lowestTeamScore: LeagueRecord | null;
+    biggestWinningMargin: LeagueRecord | null;
+    closestGame: LeagueRecord | null;
+  };
+}) {
+  return (
+    <section style={{ marginBottom: "32px" }}>
+      <p
+        style={{
+          fontSize: "12px",
+          fontWeight: "700",
+          letterSpacing: "1px",
+          color: "#687384",
+          marginBottom: "8px",
+        }}
+      >
+        RECORD CATEGORY
+      </p>
+
+      <h2
+        style={{
+          fontSize: "24px",
+          margin: "0 0 16px",
+        }}
+      >
+        {title}
+      </h2>
 
       <RecordCard
         title="Highest Team Score"
         record={records.highestTeamScore}
-        valueLabel="points"
+        value={(record) =>
+          record.score.toFixed(2)
+        }
+        suffix="pts"
       />
 
       <RecordCard
         title="Lowest Team Score"
         record={records.lowestTeamScore}
-        valueLabel="points"
+        value={(record) =>
+          record.score.toFixed(2)
+        }
+        suffix="pts"
       />
 
       <RecordCard
         title="Biggest Winning Margin"
         record={records.biggestWinningMargin}
-        valueLabel="points"
+        value={(record) =>
+          record.margin.toFixed(2)
+        }
+        suffix="pts"
       />
 
       <RecordCard
         title="Closest Game"
         record={records.closestGame}
-        valueLabel="points"
+        value={(record) =>
+          record.margin.toFixed(2)
+        }
+        suffix="pts"
       />
-    </main>
+    </section>
   );
 }
 
 function RecordCard({
   title,
   record,
-  valueLabel,
+  value,
+  suffix,
 }: {
   title: string;
-  record: {
-    season: string;
-    week: number;
-    phase: string;
-    rosterId: number;
-    score: number;
-    opponentRosterId: number;
-    opponentScore: number;
-    margin: number;
-  } | null;
-  valueLabel: string;
+  record: LeagueRecord | null;
+  value: (record: LeagueRecord) => string;
+  suffix: string;
 }) {
   if (!record) {
     return null;
@@ -73,7 +126,7 @@ function RecordCard({
         border: "1px solid #27303b",
         borderRadius: "18px",
         padding: "18px",
-        marginBottom: "16px",
+        marginBottom: "12px",
       }}
     >
       <p
@@ -87,23 +140,13 @@ function RecordCard({
         {title.toUpperCase()}
       </p>
 
-      <h2
+      <h3
         style={{
           margin: "8px 0",
           fontSize: "30px",
         }}
       >
-        {title === "Highest Team Score" &&
-          record.score.toFixed(2)}
-
-        {title === "Lowest Team Score" &&
-          record.score.toFixed(2)}
-
-        {title === "Biggest Winning Margin" &&
-          record.margin.toFixed(2)}
-
-        {title === "Closest Game" &&
-          record.margin.toFixed(2)}
+        {value(record)}
 
         <span
           style={{
@@ -112,13 +155,12 @@ function RecordCard({
             marginLeft: "6px",
           }}
         >
-          {valueLabel}
+          {suffix}
         </span>
-      </h2>
+      </h3>
 
       <p>
-        {record.season} · Week {record.week} ·{" "}
-        {record.phase}
+        {record.season} · Week {record.week}
       </p>
 
       <p
@@ -139,3 +181,14 @@ function RecordCard({
     </article>
   );
 }
+
+type LeagueRecord = {
+  season: string;
+  week: number;
+  phase: string;
+  rosterId: number;
+  score: number;
+  opponentRosterId: number;
+  opponentScore: number;
+  margin: number;
+};
