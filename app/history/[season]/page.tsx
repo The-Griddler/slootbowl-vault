@@ -46,86 +46,82 @@ function getBracketMatch(
   );
 }
 
-/*
- * Resolve a bracket slot into an actual
- * roster ID.
- *
- * A slot can either contain a roster ID
- * directly or point to the winner/loser
- * of an earlier bracket match.
- */
-function resolveBracketSlot(
-  bracket: SleeperBracketMatch[],
-  match: SleeperBracketMatch,
-  slot: "t1" | "t2"
-): number | null {
-  const direct =
-    match[slot];
+function getRegularSeasonStandings(
+  season: HistoricalSeason
+): StandingRow[] {
+  const standings =
+    new Map<number, StandingRow>();
 
-  if (
-    typeof direct ===
-    "number"
-  ) {
-    return direct;
+  for (const matchup of season.matchups) {
+    if (
+      matchup.phase !==
+      "Regular Season"
+    ) {
+      continue;
+    }
+
+    if (!standings.has(matchup.rosterA)) {
+      standings.set(matchup.rosterA, {
+        rosterId: matchup.rosterA,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+      });
+    }
+
+    if (!standings.has(matchup.rosterB)) {
+      standings.set(matchup.rosterB, {
+        rosterId: matchup.rosterB,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+      });
+    }
+
+    const teamA =
+      standings.get(matchup.rosterA)!;
+
+    const teamB =
+      standings.get(matchup.rosterB)!;
+
+    teamA.pointsFor += matchup.scoreA;
+    teamB.pointsFor += matchup.scoreB;
+
+    if (matchup.scoreA > matchup.scoreB) {
+      teamA.wins += 1;
+      teamB.losses += 1;
+    } else if (
+      matchup.scoreB >
+      matchup.scoreA
+    ) {
+      teamB.wins += 1;
+      teamA.losses += 1;
+    } else {
+      teamA.ties += 1;
+      teamB.ties += 1;
+    }
   }
 
-  const from =
-    slot === "t1"
-      ? match.t1_from
-      : match.t2_from;
+  return Array.from(
+    standings.values()
+  ).sort((a, b) => {
+    if (b.wins !== a.wins) {
+      return b.wins - a.wins;
+    }
 
-  if (!from) {
-    return null;
-  }
+    if (b.ties !== a.ties) {
+      return b.ties - a.ties;
+    }
 
-  const sourceMatchId =
-    from.w ?? from.l;
-
-  if (
-    typeof sourceMatchId !==
-    "number"
-  ) {
-    return null;
-  }
-
-  const sourceMatch =
-    bracket.find(
-      (game) =>
-        game.m ===
-        sourceMatchId
-    );
-
-  if (!sourceMatch) {
-    return null;
-  }
-
-  if (
-    typeof from.w ===
-    "number"
-  ) {
-    return (
-      sourceMatch.w ??
-      null
-    );
-  }
-
-  if (
-    typeof from.l ===
-    "number"
-  ) {
-    return (
-      sourceMatch.l ??
-      null
-    );
-  }
-
-  return null;
+    return b.pointsFor - a.pointsFor;
+  });
 }
 
 /*
- * Find the actual historical matchup
- * between two franchises during the
- * postseason.
+ * Find the postseason game between two
+ * specific franchises.
  */
 function findPostseasonMatchup(
   season: HistoricalSeason,
@@ -138,26 +134,18 @@ function findPostseasonMatchup(
         matchup.week > 14 &&
         (
           (
-            matchup.rosterA ===
-              rosterA &&
-            matchup.rosterB ===
-              rosterB
+            matchup.rosterA === rosterA &&
+            matchup.rosterB === rosterB
           ) ||
           (
-            matchup.rosterA ===
-              rosterB &&
-            matchup.rosterB ===
-              rosterA
+            matchup.rosterA === rosterB &&
+            matchup.rosterB === rosterA
           )
         )
     ) ?? null
   );
 }
 
-/*
- * Determine the winner and loser of an
- * actual postseason matchup.
- */
 function getMatchResult(
   season: HistoricalSeason,
   rosterA: number,
@@ -182,10 +170,8 @@ function getMatchResult(
     matchup.scoreB
   ) {
     return {
-      winner:
-        matchup.rosterA,
-      loser:
-        matchup.rosterB,
+      winner: matchup.rosterA,
+      loser: matchup.rosterB,
     };
   }
 
@@ -194,149 +180,38 @@ function getMatchResult(
     matchup.scoreA
   ) {
     return {
-      winner:
-        matchup.rosterB,
-      loser:
-        matchup.rosterA,
+      winner: matchup.rosterB,
+      loser: matchup.rosterA,
     };
   }
 
   return null;
 }
 
-function getRegularSeasonStandings(
-  season: HistoricalSeason,
-  rosterIds: number[]
-): StandingRow[] {
-  const standings =
-    new Map<
-      number,
-      StandingRow
-    >();
-
-  for (const rosterId of rosterIds) {
-    standings.set(
-      rosterId,
-      {
-        rosterId,
-        wins: 0,
-        losses: 0,
-        ties: 0,
-        pointsFor: 0,
-      }
-    );
-  }
-
-  for (const matchup of season.matchups) {
-    if (
-      matchup.phase !==
-      "Regular Season"
-    ) {
-      continue;
-    }
-
-    const teamA =
-      standings.get(
-        matchup.rosterA
-      );
-
-    const teamB =
-      standings.get(
-        matchup.rosterB
-      );
-
-    if (teamA) {
-      teamA.pointsFor +=
-        matchup.scoreA;
-    }
-
-    if (teamB) {
-      teamB.pointsFor +=
-        matchup.scoreB;
-    }
-
-    /*
-     * The conference determines where
-     * the team is displayed.
-     *
-     * The record is ALWAYS the team's
-     * complete 14-game regular-season
-     * record, including cross-conference
-     * games.
-     */
-
-    if (
-      !teamA ||
-      !teamB
-    ) {
-      continue;
-    }
-
-    if (
-      matchup.scoreA >
-      matchup.scoreB
-    ) {
-      teamA.wins += 1;
-      teamB.losses += 1;
-    } else if (
-      matchup.scoreB >
-      matchup.scoreA
-    ) {
-      teamB.wins += 1;
-      teamA.losses += 1;
-    } else {
-      teamA.ties += 1;
-      teamB.ties += 1;
-    }
-  }
-
-  return Array.from(
-    standings.values()
-  ).sort((a, b) => {
-    if (
-      b.wins !==
-      a.wins
-    ) {
-      return (
-        b.wins -
-        a.wins
-      );
-    }
-
-    if (
-      b.ties !==
-      a.ties
-    ) {
-      return (
-        b.ties -
-        a.ties
-      );
-    }
-
-    return (
-      b.pointsFor -
-      a.pointsFor
-    );
-  });
-}
-
+/*
+ * Determine final positions.
+ *
+ * The winners bracket directly determines
+ * positions 1–6.
+ *
+ * Positions 7–10 are determined from the
+ * four teams occupying the bottom four
+ * places after the regular season.
+ *
+ * We deliberately do NOT try to reconstruct
+ * Sleeper's losers-bracket tree.
+ */
 function getFinalStandings(
   season: HistoricalSeason,
-  winnersBracket: SleeperBracketMatch[],
-  losersBracket: SleeperBracketMatch[]
+  regularSeasonStandings: StandingRow[],
+  winnersBracket: SleeperBracketMatch[]
 ): FinalStanding[] {
-  const finalRows: FinalStanding[] =
-    [];
+  const finalRows: FinalStanding[] = [];
 
   /*
    * =====================================
-   * MAIN PLAYOFFS
+   * POSITIONS 1–6
    * =====================================
-   */
-
-  /*
-   * R3 M6
-   * Slootbowl
    */
 
   const championship =
@@ -346,34 +221,23 @@ function getFinalStandings(
       6
     );
 
-  if (
-    championship?.w
-  ) {
+  if (championship?.w !== null &&
+      championship?.w !== undefined) {
     finalRows.push({
       place: 1,
-      rosterId:
-        championship.w,
-      label:
-        "Slootbowl Champion",
+      rosterId: championship.w,
+      label: "Slootbowl Champion",
     });
   }
 
-  if (
-    championship?.l
-  ) {
+  if (championship?.l !== null &&
+      championship?.l !== undefined) {
     finalRows.push({
       place: 2,
-      rosterId:
-        championship.l,
-      label:
-        "Runner-up",
+      rosterId: championship.l,
+      label: "Runner-up",
     });
   }
-
-  /*
-   * R3 M7
-   * 3rd / 4th
-   */
 
   const thirdPlace =
     getBracketMatch(
@@ -382,34 +246,23 @@ function getFinalStandings(
       7
     );
 
-  if (
-    thirdPlace?.w
-  ) {
+  if (thirdPlace?.w !== null &&
+      thirdPlace?.w !== undefined) {
     finalRows.push({
       place: 3,
-      rosterId:
-        thirdPlace.w,
-      label:
-        "3rd Place",
+      rosterId: thirdPlace.w,
+      label: "3rd Place",
     });
   }
 
-  if (
-    thirdPlace?.l
-  ) {
+  if (thirdPlace?.l !== null &&
+      thirdPlace?.l !== undefined) {
     finalRows.push({
       place: 4,
-      rosterId:
-        thirdPlace.l,
-      label:
-        "4th Place",
+      rosterId: thirdPlace.l,
+      label: "4th Place",
     });
   }
-
-  /*
-   * R2 M5
-   * 5th / 6th
-   */
 
   const fifthSixth =
     getBracketMatch(
@@ -418,205 +271,166 @@ function getFinalStandings(
       5
     );
 
-  if (
-    fifthSixth?.w
-  ) {
+  if (fifthSixth?.w !== null &&
+      fifthSixth?.w !== undefined) {
     finalRows.push({
       place: 5,
-      rosterId:
-        fifthSixth.w,
-      label:
-        "5th Place",
+      rosterId: fifthSixth.w,
+      label: "5th Place",
     });
   }
 
-  if (
-    fifthSixth?.l
-  ) {
+  if (fifthSixth?.l !== null &&
+      fifthSixth?.l !== undefined) {
     finalRows.push({
       place: 6,
-      rosterId:
-        fifthSixth.l,
-      label:
-        "6th Place",
+      rosterId: fifthSixth.l,
+      label: "6th Place",
     });
   }
 
   /*
    * =====================================
-   * LOSERS BRACKET
+   * POSITIONS 7–10
    * =====================================
    *
-   * R2 M3 determines 7th / one Toilet
-   * Bowl participant.
-   *
-   * R2 M4 determines 8th / the other
-   * Toilet Bowl participant.
-   *
-   * We reconstruct the participants,
-   * then look at the actual postseason
-   * matchup score to determine the winner.
+   * The bottom four teams are simply the
+   * bottom four teams in the final regular
+   * season standings.
    */
 
-  const losersMatchThree =
-    getBracketMatch(
-      losersBracket,
-      2,
-      3
-    );
-
-  const losersMatchFour =
-    getBracketMatch(
-      losersBracket,
-      2,
-      4
-    );
-
-  let seventh:
-    | number
-    | null = null;
-
-  let eighth:
-    | number
-    | null = null;
-
-  let toiletBowlTeamA:
-    | number
-    | null = null;
-
-  let toiletBowlTeamB:
-    | number
-    | null = null;
+  const bottomFour =
+    regularSeasonStandings
+      .slice(-4)
+      .map(
+        (team) =>
+          team.rosterId
+      );
 
   /*
-   * R2 M3
+   * Find postseason games involving only
+   * those four teams.
+   *
+   * The first round creates two winners
+   * and two losers.
    */
-
-  if (losersMatchThree) {
-    const teamA =
-      resolveBracketSlot(
-        losersBracket,
-        losersMatchThree,
-        "t1"
+  const bottomFourGames =
+    season.matchups
+      .filter(
+        (matchup) =>
+          matchup.week > 14 &&
+          bottomFour.includes(
+            matchup.rosterA
+          ) &&
+          bottomFour.includes(
+            matchup.rosterB
+          )
+      )
+      .sort(
+        (a, b) =>
+          a.week - b.week
       );
 
-    const teamB =
-      resolveBracketSlot(
-        losersBracket,
-        losersMatchThree,
-        "t2"
-      );
+  /*
+   * Track the results of games involving
+   * the bottom four.
+   */
+  const eliminated: number[] = [];
+  const winners: number[] = [];
+
+  for (const matchup of bottomFourGames) {
+    if (
+      matchup.scoreA ===
+      matchup.scoreB
+    ) {
+      continue;
+    }
+
+    const winner =
+      matchup.scoreA >
+      matchup.scoreB
+        ? matchup.rosterA
+        : matchup.rosterB;
+
+    const loser =
+      matchup.scoreA >
+      matchup.scoreB
+        ? matchup.rosterB
+        : matchup.rosterA;
+
+    /*
+     * A team can appear in more than one
+     * postseason game. The first game
+     * involving a team establishes its
+     * first-round result.
+     */
+    if (
+      !winners.includes(winner) &&
+      !eliminated.includes(winner)
+    ) {
+      winners.push(winner);
+    }
 
     if (
-      teamA !== null &&
-      teamB !== null
+      !eliminated.includes(loser)
     ) {
-      const result =
-        getMatchResult(
-          season,
-          teamA,
-          teamB
-        );
-
-      if (result) {
-        seventh =
-          result.winner;
-
-        toiletBowlTeamA =
-          result.loser;
-      }
+      eliminated.push(loser);
     }
   }
 
   /*
-   * R2 M4
+   * The first two bottom-four teams to
+   * lose their opening game become the
+   * Toilet Bowl participants.
    */
+  const toiletTeams =
+    eliminated.slice(0, 2);
 
-  if (losersMatchFour) {
-    const teamA =
-      resolveBracketSlot(
-        losersBracket,
-        losersMatchFour,
-        "t1"
+  /*
+   * The two teams that won their opening
+   * bottom-four game play for 7th/8th.
+   *
+   * Find their later matchup.
+   */
+  if (
+    winners.length >= 2
+  ) {
+    const seventhEighth =
+      getMatchResult(
+        season,
+        winners[0],
+        winners[1]
       );
 
-    const teamB =
-      resolveBracketSlot(
-        losersBracket,
-        losersMatchFour,
-        "t2"
-      );
+    if (seventhEighth) {
+      finalRows.push({
+        place: 7,
+        rosterId:
+          seventhEighth.winner,
+        label: "7th Place",
+      });
 
-    if (
-      teamA !== null &&
-      teamB !== null
-    ) {
-      const result =
-        getMatchResult(
-          season,
-          teamA,
-          teamB
-        );
-
-      if (result) {
-        eighth =
-          result.winner;
-
-        toiletBowlTeamB =
-          result.loser;
-      }
+      finalRows.push({
+        place: 8,
+        rosterId:
+          seventhEighth.loser,
+        label: "8th Place",
+      });
     }
   }
 
   /*
-   * Add 7th / 8th.
+   * Toilet Bowl winner = 9th
+   * Toilet Bowl loser = 10th
    */
-
   if (
-    seventh !== null
-  ) {
-    finalRows.push({
-      place: 7,
-      rosterId: seventh,
-      label:
-        "7th Place",
-    });
-  }
-
-  if (
-    eighth !== null
-  ) {
-    finalRows.push({
-      place: 8,
-      rosterId: eighth,
-      label:
-        "8th Place",
-    });
-  }
-
-  /*
-   * =====================================
-   * TOILET BOWL
-   * =====================================
-   *
-   * The losers of the two R2 losers'
-   * bracket games play each other.
-   *
-   * Winner = 9th
-   * Loser = 10th
-   */
-
-  if (
-    toiletBowlTeamA !==
-      null &&
-    toiletBowlTeamB !==
-      null
+    toiletTeams.length >= 2
   ) {
     const toiletBowl =
       getMatchResult(
         season,
-        toiletBowlTeamA,
-        toiletBowlTeamB
+        toiletTeams[0],
+        toiletTeams[1]
       );
 
     if (toiletBowl) {
@@ -640,23 +454,20 @@ function getFinalStandings(
 
   return finalRows.sort(
     (a, b) =>
-      a.place -
-      b.place
+      a.place - b.place
   );
 }
 
 function StandingTable({
-  title,
   standings,
 }: {
-  title: string;
   standings: StandingRow[];
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
       <div className="border-b border-zinc-800 px-4 py-4">
         <h2 className="text-lg font-bold text-white">
-          {title}
+          Regular Season Standings
         </h2>
       </div>
 
@@ -802,63 +613,22 @@ export default async function SeasonHistoryPage({
     );
   }
 
-  const [
-    winnersBracket,
-    losersBracket,
-  ] = await Promise.all([
-    fetchBracketForPage(
+  const winnersBracket =
+    await fetchBracketForPage(
       league.league_id,
       "winners_bracket"
-    ),
-    fetchBracketForPage(
-      league.league_id,
-      "losers_bracket"
-    ),
-  ]);
-
-  /*
-   * Permanent franchise IDs.
-   *
-   * OBFC:
-   * 4, 6, 7, 8, 9
-   *
-   * GPFC:
-   * 1, 2, 3, 5, 10
-   */
-
-  const obfcRosterIds = [
-    4,
-    6,
-    7,
-    8,
-    9,
-  ];
-
-  const gpfcRosterIds = [
-    1,
-    2,
-    3,
-    5,
-    10,
-  ];
-
-  const obfcStandings =
-    getRegularSeasonStandings(
-      seasonData,
-      obfcRosterIds
     );
 
-  const gpfcStandings =
+  const regularSeasonStandings =
     getRegularSeasonStandings(
-      seasonData,
-      gpfcRosterIds
+      seasonData
     );
 
   const finalStandings =
     getFinalStandings(
       seasonData,
-      winnersBracket,
-      losersBracket
+      regularSeasonStandings,
+      winnersBracket
     );
 
   return (
@@ -886,27 +656,11 @@ export default async function SeasonHistoryPage({
         </div>
 
         <div className="mt-8 space-y-6">
-          <div>
-            <h2 className="mb-4 text-2xl font-black">
-              Regular Season
-            </h2>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <StandingTable
-                title="OBFC"
-                standings={
-                  obfcStandings
-                }
-              />
-
-              <StandingTable
-                title="GPFC"
-                standings={
-                  gpfcStandings
-                }
-              />
-            </div>
-          </div>
+          <StandingTable
+            standings={
+              regularSeasonStandings
+            }
+          />
 
           <FinalStandings
             standings={
