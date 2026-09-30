@@ -24,17 +24,17 @@ export default async function DiagnosticPage() {
 
   const stats = await response.json();
 
-  const statKeys = Object.keys(stats);
-
-  const firstTenKeys =
-    statKeys.slice(0, 10);
-
   const firstStarter =
     matchups.find(
       (matchup) =>
         matchup.starters &&
         matchup.starters.length > 0
     )?.starters?.[0];
+
+  const playerStats =
+    firstStarter
+      ? stats[firstStarter]
+      : null;
 
   return (
     <main>
@@ -63,7 +63,7 @@ export default async function DiagnosticPage() {
 
       <article style={cardStyle}>
         <p style={labelStyle}>
-          FIRST STARTER
+          PLAYER ID
         </p>
 
         <h2 style={valueStyle}>
@@ -73,26 +73,12 @@ export default async function DiagnosticPage() {
 
       <article style={cardStyle}>
         <p style={labelStyle}>
-          STATS OBJECT
-        </p>
-
-        <p style={{ marginTop: "10px" }}>
-          Number of players returned:
-        </p>
-
-        <h2 style={valueStyle}>
-          {statKeys.length}
-        </h2>
-      </article>
-
-      <article style={cardStyle}>
-        <p style={labelStyle}>
-          FIRST 10 PLAYER IDS RETURNED
+          PLAYER STATS
         </p>
 
         <pre style={preStyle}>
           {JSON.stringify(
-            firstTenKeys,
+            playerStats,
             null,
             2
           )}
@@ -101,15 +87,32 @@ export default async function DiagnosticPage() {
 
       <article style={cardStyle}>
         <p style={labelStyle}>
-          DOES SLEEPER RETURN OUR STARTER?
+          POSSIBLE FANTASY POINT FIELDS
         </p>
 
-        <h2 style={valueStyle}>
-          {firstStarter &&
-          stats[firstStarter]
-            ? "YES"
-            : "NO"}
-        </h2>
+        <p style={rowStyle}>
+          fantasy_points:{" "}
+          {playerStats?.fantasy_points ??
+            "not present"}
+        </p>
+
+        <p style={rowStyle}>
+          pts_ppr:{" "}
+          {playerStats?.pts_ppr ??
+            "not present"}
+        </p>
+
+        <p style={rowStyle}>
+          pts_half_ppr:{" "}
+          {playerStats?.pts_half_ppr ??
+            "not present"}
+        </p>
+
+        <p style={rowStyle}>
+          pts_std:{" "}
+          {playerStats?.pts_std ??
+            "not present"}
+        </p>
       </article>
     </main>
   );
@@ -133,6 +136,11 @@ const labelStyle = {
 const valueStyle = {
   margin: "8px 0 0",
   fontSize: "24px",
+};
+
+const rowStyle = {
+  marginTop: "10px",
+  color: "#ffffff",
 };
 
 const preStyle = {
