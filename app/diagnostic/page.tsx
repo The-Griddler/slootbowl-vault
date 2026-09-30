@@ -24,17 +24,35 @@ export default async function DiagnosticPage() {
 
   const stats = await response.json();
 
-  const firstStarter =
-    matchups.find(
-      (matchup) =>
-        matchup.starters &&
-        matchup.starters.length > 0
-    )?.starters?.[0];
+  const playerWithStats =
+    Object.keys(stats).find(
+      (playerId) =>
+        Object.keys(
+          stats[playerId] ?? {}
+        ).length > 0
+    );
 
   const playerStats =
-    firstStarter
-      ? stats[firstStarter]
+    playerWithStats
+      ? stats[playerWithStats]
       : null;
+
+  const starterIds = Array.from(
+    new Set(
+      matchups.flatMap(
+        (matchup) =>
+          matchup.starters ?? []
+      )
+    )
+  );
+
+  const startersWithStats =
+    starterIds.filter(
+      (playerId) =>
+        Object.keys(
+          stats[playerId] ?? {}
+        ).length > 0
+    );
 
   return (
     <main>
@@ -61,35 +79,43 @@ export default async function DiagnosticPage() {
         2026 · Week {WEEK}
       </p>
 
-      <article
-        style={{
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "18px",
-          padding: "18px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "11px",
-            fontWeight: "700",
-            letterSpacing: "1px",
-            color: "#687384",
-          }}
-        >
-          COMPLETE PLAYER OBJECT
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          TOTAL STARTERS
         </p>
 
-        <pre
+        <h2 style={valueStyle}>
+          {starterIds.length}
+        </h2>
+      </article>
+
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          STARTERS WITH STATS
+        </p>
+
+        <h2 style={valueStyle}>
+          {startersWithStats.length}
+        </h2>
+      </article>
+
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          EXAMPLE PLAYER WITH STATS
+        </p>
+
+        <p
           style={{
-            marginTop: "14px",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontSize: "12px",
-            lineHeight: "1.5",
+            marginTop: "10px",
             color: "#ffffff",
+            fontWeight: "600",
           }}
         >
+          Player ID:{" "}
+          {playerWithStats ?? "None"}
+        </p>
+
+        <pre style={preStyle}>
           {JSON.stringify(
             playerStats,
             null,
@@ -100,3 +126,32 @@ export default async function DiagnosticPage() {
     </main>
   );
 }
+
+const cardStyle = {
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "18px",
+  padding: "18px",
+  marginBottom: "12px",
+};
+
+const labelStyle = {
+  fontSize: "11px",
+  fontWeight: "700",
+  letterSpacing: "1px",
+  color: "#687384",
+};
+
+const valueStyle = {
+  margin: "8px 0 0",
+  fontSize: "24px",
+};
+
+const preStyle = {
+  marginTop: "14px",
+  whiteSpace: "pre-wrap" as const,
+  wordBreak: "break-word" as const,
+  fontSize: "12px",
+  lineHeight: "1.5",
+  color: "#ffffff",
+};
