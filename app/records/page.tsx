@@ -12,17 +12,22 @@ export default async function RecordsPage() {
       getUsers(),
     ]);
 
-  const rosterNames = new Map<number, string>();
+  const teamNames = new Map<number, string>();
 
   rosters.forEach((roster) => {
     const user = users.find(
-      (user) => user.user_id === roster.owner_id
+      (user) =>
+        user.user_id === roster.owner_id
     );
 
-    rosterNames.set(
+    const teamName =
+      user?.metadata?.team_name ||
+      user?.display_name ||
+      `Roster ${roster.roster_id}`;
+
+    teamNames.set(
       roster.roster_id,
-      user?.display_name ??
-        `Roster ${roster.roster_id}`
+      teamName
     );
   });
 
@@ -54,13 +59,13 @@ export default async function RecordsPage() {
       <RecordSection
         title="Regular Season"
         records={records.regularSeason}
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
 
       <RecordSection
         title="Main Playoffs"
         records={records.mainPlayoffs}
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
     </main>
   );
@@ -69,7 +74,7 @@ export default async function RecordsPage() {
 function RecordSection({
   title,
   records,
-  rosterNames,
+  teamNames,
 }: {
   title: string;
   records: {
@@ -78,7 +83,7 @@ function RecordSection({
     biggestWinningMargin: LeagueRecord | null;
     closestGame: LeagueRecord | null;
   };
-  rosterNames: Map<number, string>;
+  teamNames: Map<number, string>;
 }) {
   return (
     <section style={{ marginBottom: "36px" }}>
@@ -116,7 +121,7 @@ function RecordSection({
           record.score.toFixed(2)
         }
         suffix="pts"
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
 
       <RecordCard
@@ -126,7 +131,7 @@ function RecordSection({
           record.score.toFixed(2)
         }
         suffix="pts"
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
 
       <RecordCard
@@ -136,7 +141,7 @@ function RecordSection({
           record.margin.toFixed(2)
         }
         suffix="pts"
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
 
       <RecordCard
@@ -146,7 +151,7 @@ function RecordSection({
           record.margin.toFixed(2)
         }
         suffix="pts"
-        rosterNames={rosterNames}
+        teamNames={teamNames}
       />
     </section>
   );
@@ -157,24 +162,26 @@ function RecordCard({
   record,
   value,
   suffix,
-  rosterNames,
+  teamNames,
 }: {
   title: string;
   record: LeagueRecord | null;
   value: (record: LeagueRecord) => string;
   suffix: string;
-  rosterNames: Map<number, string>;
+  teamNames: Map<number, string>;
 }) {
   if (!record) {
     return null;
   }
 
   const teamName =
-    rosterNames.get(record.rosterId) ??
+    teamNames.get(record.rosterId) ??
     `Roster ${record.rosterId}`;
 
   const opponentName =
-    rosterNames.get(record.opponentRosterId) ??
+    teamNames.get(
+      record.opponentRosterId
+    ) ??
     `Roster ${record.opponentRosterId}`;
 
   return (
@@ -241,9 +248,14 @@ function RecordCard({
           fontSize: "13px",
         }}
       >
-        {teamName} {record.score.toFixed(2)}
+        {teamName}{" "}
+        {record.score.toFixed(2)}
         {"  "}
-        <span style={{ color: "#687384" }}>
+        <span
+          style={{
+            color: "#687384",
+          }}
+        >
           vs
         </span>
         {"  "}
@@ -258,7 +270,8 @@ function RecordCard({
           color: "#687384",
         }}
       >
-        {record.season} · Week {record.week}
+        {record.season} · Week{" "}
+        {record.week}
       </p>
     </article>
   );
