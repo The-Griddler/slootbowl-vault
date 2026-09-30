@@ -6,6 +6,7 @@ import {
   getPlayers,
   getPlayerName,
   getPlayerPosition,
+  SleeperPlayer,
 } from "../../lib/players";
 
 export default async function PlayerRecordsPage() {
@@ -289,11 +290,7 @@ function getPositionalRecords(
   >,
   players: Record<
     string,
-    {
-      position:
-        | string
-        | null;
-    }
+    SleeperPlayer
   >
 ) {
   const positions = [
@@ -352,20 +349,7 @@ function RecordCard({
   } | null;
   players: Record<
     string,
-    {
-      first_name:
-        | string
-        | null;
-      last_name:
-        | string
-        | null;
-      full_name:
-        | string
-        | null;
-      position:
-        | string
-        | null;
-    }
+    SleeperPlayer
   >;
 }) {
   if (!record) {
