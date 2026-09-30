@@ -3,10 +3,14 @@ import {
   HistoricalMatchup,
 } from "./sleeper";
 
+export type RecordPhase =
+  | "Regular Season"
+  | "Main Playoffs";
+
 export type TeamPerformance = {
   season: string;
   week: number;
-  phase: "Regular Season" | "Main Playoffs";
+  phase: RecordPhase;
   rosterId: number;
   score: number;
   opponentRosterId: number;
@@ -16,7 +20,7 @@ export type TeamPerformance = {
 export type LeagueRecord = {
   season: string;
   week: number;
-  phase: "Regular Season" | "Main Playoffs";
+  phase: RecordPhase;
   rosterId: number;
   score: number;
   opponentRosterId: number;
@@ -24,11 +28,16 @@ export type LeagueRecord = {
   margin: number;
 };
 
-export type AllTimeRecords = {
+export type RecordSet = {
   highestTeamScore: LeagueRecord | null;
   lowestTeamScore: LeagueRecord | null;
   biggestWinningMargin: LeagueRecord | null;
   closestGame: LeagueRecord | null;
+};
+
+export type AllTimeRecords = {
+  regularSeason: RecordSet;
+  mainPlayoffs: RecordSet;
 };
 
 function buildPerformances(
@@ -80,16 +89,11 @@ function toLeagueRecord(
   };
 }
 
-export async function getAllTimeRecords(): Promise<AllTimeRecords> {
-  const seasons = await getHistoricalData();
-
-  const allPerformances = seasons.flatMap(
-    (season) =>
-      buildPerformances(season.matchups)
-  );
-
+function calculateRecordSet(
+  performances: TeamPerformance[]
+): RecordSet {
   const records =
-    allPerformances.map(toLeagueRecord);
+    performances.map(toLeagueRecord);
 
   const highestTeamScore =
     records.reduce<LeagueRecord | null>(
@@ -141,5 +145,34 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
     lowestTeamScore,
     biggestWinningMargin,
     closestGame,
+  };
+}
+
+export async function getAllTimeRecords(): Promise<AllTimeRecords> {
+  const seasons = await getHistoricalData();
+
+  const allPerformances = seasons.flatMap(
+    (season) =>
+      buildPerformances(season.matchups)
+  );
+
+  const regularSeason =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase === "Regular Season"
+    );
+
+  const mainPlayoffs =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase === "Main Playoffs"
+    );
+
+  return {
+    regularSeason:
+      calculateRecordSet(regularSeason),
+
+    mainPlayoffs:
+      calculateRecordSet(mainPlayoffs),
   };
 }
