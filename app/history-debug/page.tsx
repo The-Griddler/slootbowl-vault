@@ -1,7 +1,7 @@
 import {
   fetchBracketForPage,
   getMatchups,
-} from "@/lib/sleeper";
+} from "../../lib/sleeper";
 const LEAGUE_ID = "1194916402053423104";
 export default async function HistoryDebugPage() {
   const [losersBracket, winnersBracket, week15, week16, week17] =
@@ -24,48 +24,23 @@ export default async function HistoryDebugPage() {
     >
       <h1>2025 History Debug</h1>
       <h2>Losers Bracket</h2>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
         {JSON.stringify(losersBracket, null, 2)}
       </pre>
       <h2>Winners Bracket</h2>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
         {JSON.stringify(winnersBracket, null, 2)}
       </pre>
       <h2>Week 15 Matchups</h2>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
         {JSON.stringify(week15, null, 2)}
       </pre>
       <h2>Week 16 Matchups</h2>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
         {JSON.stringify(week16, null, 2)}
       </pre>
       <h2>Week 17 Matchups</h2>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
         {JSON.stringify(week17, null, 2)}
       </pre>
     </main>
