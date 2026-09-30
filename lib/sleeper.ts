@@ -1,10 +1,12 @@
 const LEAGUE_ID = "1326512818865868800";
+
 export type SleeperLeague = {
   league_id: string;
   name: string;
   season: string;
   previous_league_id: string | null;
 };
+
 export type SleeperUser = {
   user_id: string;
   display_name: string;
@@ -13,6 +15,7 @@ export type SleeperUser = {
     team_name?: string;
   } | null;
 };
+
 export type SleeperRoster = {
   roster_id: number;
   owner_id: string;
@@ -26,35 +29,17 @@ export type SleeperRoster = {
     fpts_against: number;
   };
 };
+
 export type SleeperMatchup = {
   roster_id: number;
   matchup_id: number | null;
   points: number;
   custom_points: number | null;
-  /*
-   * Players actually started in the matchup.
-   */
   starters?: string[] | null;
-  /*
-   * Fantasy points scored by the players
-   * in the starters array.
-   *
-   * The indexes line up:
-   *
-   * starters[0] -> starters_points[0]
-   * starters[1] -> starters_points[1]
-   * etc.
-   */
   starters_points?: number[] | null;
-  /*
-   * Fantasy points for every player on the roster.
-   * The key is the Sleeper player ID.
-   */
-  players_points?: Record<
-    string,
-    number
-  > | null;
+  players_points?: Record<string, number> | null;
 };
+
 export type SleeperBracketMatch = {
   m: number;
   r: number;
@@ -72,11 +57,13 @@ export type SleeperBracketMatch = {
     l?: number;
   };
 };
+
 export type HistoricalMatchupPhase =
   | "Regular Season"
   | "Main Playoffs"
   | "Toilet Bowl"
   | "Ignored";
+
 export type HistoricalMatchup = {
   season: string;
   week: number;
@@ -90,10 +77,12 @@ export type HistoricalMatchup = {
   startersPointsA: number[];
   startersPointsB: number[];
 };
+
 export type HistoricalSeason = {
   league: SleeperLeague;
   matchups: HistoricalMatchup[];
 };
+
 async function fetchLeague(
   leagueId: string
 ): Promise<SleeperLeague> {
@@ -105,13 +94,16 @@ async function fetchLeague(
       },
     }
   );
+
   if (!response.ok) {
     throw new Error(
       `Failed to load Sleeper league ${leagueId}`
     );
   }
+
   return response.json();
 }
+
 async function fetchBracket(
   leagueId: string,
   bracket:
@@ -126,30 +118,58 @@ async function fetchBracket(
       },
     }
   );
+
   if (!response.ok) {
     throw new Error(
       `Failed to load ${bracket} for league ${leagueId}`
     );
   }
+
   return response.json();
 }
+
+/*
+ * Public bracket accessor used by historical
+ * season pages.
+ */
+export async function fetchBracketForPage(
+  leagueId: string,
+  bracket:
+    | "winners_bracket"
+    | "losers_bracket"
+): Promise<SleeperBracketMatch[]> {
+  return fetchBracket(
+    leagueId,
+    bracket
+  );
+}
+
 export async function getLeague(): Promise<SleeperLeague> {
   return fetchLeague(LEAGUE_ID);
 }
+
 export async function getLeagueHistory(): Promise<
   SleeperLeague[]
 > {
   const history: SleeperLeague[] = [];
-  let leagueId: string | null = LEAGUE_ID;
+
+  let leagueId:
+    | string
+    | null = LEAGUE_ID;
+
   while (leagueId) {
     const league =
       await fetchLeague(leagueId);
+
     history.push(league);
+
     leagueId =
       league.previous_league_id;
   }
+
   return history;
 }
+
 export async function getUsers(
   leagueId: string = LEAGUE_ID
 ): Promise<SleeperUser[]> {
@@ -161,13 +181,16 @@ export async function getUsers(
       },
     }
   );
+
   if (!response.ok) {
     throw new Error(
       `Failed to load Sleeper users for league ${leagueId}`
     );
   }
+
   return response.json();
 }
+
 export async function getRosters(
   leagueId: string = LEAGUE_ID
 ): Promise<SleeperRoster[]> {
@@ -179,13 +202,16 @@ export async function getRosters(
       },
     }
   );
+
   if (!response.ok) {
     throw new Error(
       `Failed to load Sleeper rosters for league ${leagueId}`
     );
   }
+
   return response.json();
 }
+
 export async function getMatchups(
   week: number,
   leagueId: string = LEAGUE_ID
@@ -198,21 +224,28 @@ export async function getMatchups(
       },
     }
   );
+
   if (!response.ok) {
     throw new Error(
       `Failed to load Sleeper matchups for league ${leagueId}, week ${week}`
     );
   }
+
   return response.json();
 }
+
 function rosterPairKey(
   rosterA: number,
   rosterB: number
 ): string {
-  return [rosterA, rosterB]
+  return [
+    rosterA,
+    rosterB,
+  ]
     .sort((a, b) => a - b)
     .join("-");
 }
+
 function buildBracketMap(
   bracket: SleeperBracketMatch[]
 ): Map<
@@ -223,6 +256,7 @@ function buildBracketMap(
     string,
     SleeperBracketMatch
   >();
+
   for (const match of bracket) {
     if (
       match.t1 !== null &&
@@ -237,8 +271,10 @@ function buildBracketMap(
       );
     }
   }
+
   return map;
 }
+
 function classifyPlayoffMatchup(
   rosterA: number,
   rosterB: number,
@@ -251,34 +287,34 @@ function classifyPlayoffMatchup(
     SleeperBracketMatch
   >
 ): HistoricalMatchupPhase {
-  const key = rosterPairKey(
-    rosterA,
-    rosterB
-  );
+  const key =
+    rosterPairKey(
+      rosterA,
+      rosterB
+    );
+
   const winnersMatch =
     winnersMap.get(key);
+
   if (winnersMatch) {
-    /*
-     * p = 1 represents the championship.
-     *
-     * Other placement values such as
-     * p = 3 or p = 5 are consolation /
-     * placement games and are excluded
-     * from official playoff statistics.
-     */
     if (
-      winnersMatch.p === undefined ||
+      winnersMatch.p ===
+        undefined ||
       winnersMatch.p === 1
     ) {
       return "Main Playoffs";
     }
+
     return "Ignored";
   }
+
   if (losersMap.has(key)) {
     return "Toilet Bowl";
   }
+
   return "Ignored";
 }
+
 export async function getHistoricalSeason(
   league: SleeperLeague
 ): Promise<HistoricalSeason> {
@@ -295,15 +331,20 @@ export async function getHistoricalSeason(
       "losers_bracket"
     ),
   ]);
+
   const winnersMap =
     buildBracketMap(
       winnersBracket
     );
+
   const losersMap =
     buildBracketMap(
       losersBracket
     );
-  const matchups: HistoricalMatchup[] = [];
+
+  const matchups: HistoricalMatchup[] =
+    [];
+
   for (
     let week = 1;
     week <= 17;
@@ -314,19 +355,21 @@ export async function getHistoricalSeason(
         week,
         league.league_id
       );
+
     const grouped =
       new Map<
         number,
         SleeperMatchup[]
       >();
-    for (
-      const matchup of weeklyMatchups
-    ) {
+
+    for (const matchup of weeklyMatchups) {
       if (
-        matchup.matchup_id === null
+        matchup.matchup_id ===
+        null
       ) {
         continue;
       }
+
       if (
         !grouped.has(
           matchup.matchup_id
@@ -337,34 +380,35 @@ export async function getHistoricalSeason(
           []
         );
       }
+
       grouped
         .get(
           matchup.matchup_id
         )!
         .push(matchup);
     }
-    for (
-      const [, teams] of grouped
-    ) {
+
+    for (const [, teams] of grouped) {
       if (teams.length !== 2) {
         continue;
       }
+
       const teamA = teams[0];
       const teamB = teams[1];
+
       const scoreA =
         teamA.points ?? 0;
+
       const scoreB =
         teamB.points ?? 0;
-      /*
-       * Unplayed / future games should
-       * never enter historical statistics.
-       */
+
       if (
         scoreA === 0 &&
         scoreB === 0
       ) {
         continue;
       }
+
       const phase =
         week <= 14
           ? "Regular Season"
@@ -374,21 +418,22 @@ export async function getHistoricalSeason(
               winnersMap,
               losersMap
             );
-      /*
-       * Copy the starter arrays into
-       * guaranteed arrays so historical
-       * data always has a predictable shape.
-       */
+
       const startersA =
         teamA.starters ?? [];
+
       const startersB =
         teamB.starters ?? [];
+
       const startersPointsA =
         teamA.starters_points ?? [];
+
       const startersPointsB =
         teamB.starters_points ?? [];
+
       matchups.push({
-        season: league.season,
+        season:
+          league.season,
         week,
         phase,
         rosterA:
@@ -404,16 +449,19 @@ export async function getHistoricalSeason(
       });
     }
   }
+
   return {
     league,
     matchups,
   };
 }
+
 export async function getHistoricalData(): Promise<
   HistoricalSeason[]
 > {
   const leagues =
     await getLeagueHistory();
+
   const seasons =
     await Promise.all(
       leagues.map(
@@ -423,5 +471,6 @@ export async function getHistoricalData(): Promise<
           )
       )
     );
+
   return seasons;
 }
