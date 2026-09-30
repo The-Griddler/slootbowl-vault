@@ -3,11 +3,6 @@ import { getMatchups } from "../../lib/sleeper";
 const LEAGUE_ID = "1326512818865868800";
 const WEEK = 1;
 
-type PlayerStats = {
-  fantasy_points?: number;
-  pts_ppr?: number;
-};
-
 export default async function DiagnosticPage() {
   const matchups = await getMatchups(
     WEEK,
@@ -27,10 +22,19 @@ export default async function DiagnosticPage() {
     );
   }
 
-  const stats: Record<
-    string,
-    PlayerStats
-  > = await response.json();
+  const stats = await response.json();
+
+  const firstStarter =
+    matchups.find(
+      (matchup) =>
+        matchup.starters &&
+        matchup.starters.length > 0
+    )?.starters?.[0];
+
+  const firstStarterStats =
+    firstStarter
+      ? stats[firstStarter]
+      : null;
 
   return (
     <main>
@@ -57,102 +61,82 @@ export default async function DiagnosticPage() {
         2026 · Week {WEEK}
       </p>
 
-      {matchups.map((matchup, index) => {
-        let calculatedScore = 0;
+      <article
+        style={{
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "18px",
+          padding: "18px",
+          marginBottom: "12px",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "11px",
+            fontWeight: "700",
+            letterSpacing: "1px",
+            color: "#687384",
+          }}
+        >
+          FIRST STARTER FOUND
+        </p>
 
-        const starters =
-          matchup.starters ?? [];
+        <p
+          style={{
+            marginTop: "10px",
+          }}
+        >
+          Player ID:
+        </p>
 
-        for (const playerId of starters) {
-          const playerStats =
-            stats[playerId];
+        <p
+          style={{
+            marginTop: "4px",
+            color: "#ffffff",
+            fontWeight: "600",
+          }}
+        >
+          {firstStarter ?? "None"}
+        </p>
+      </article>
 
-          if (!playerStats) {
-            continue;
-          }
+      <article
+        style={{
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "18px",
+          padding: "18px",
+          marginBottom: "12px",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "11px",
+            fontWeight: "700",
+            letterSpacing: "1px",
+            color: "#687384",
+          }}
+        >
+          RAW SLEEPER PLAYER STATS
+        </p>
 
-          calculatedScore +=
-            playerStats.fantasy_points ??
-            playerStats.pts_ppr ??
-            0;
-        }
-
-        return (
-          <article
-            key={`${matchup.roster_id}-${index}`}
-            style={{
-              background: "#151b23",
-              border: "1px solid #27303b",
-              borderRadius: "18px",
-              padding: "18px",
-              marginBottom: "12px",
-            }}
-          >
-            <p
-              style={{
-                fontSize: "11px",
-                fontWeight: "700",
-                letterSpacing: "1px",
-                color: "#687384",
-              }}
-            >
-              ROSTER {matchup.roster_id}
-            </p>
-
-            <h2
-              style={{
-                margin: "6px 0 18px",
-                fontSize: "20px",
-              }}
-            >
-              Score comparison
-            </h2>
-
-            <p>
-              <strong>
-                Sleeper official score:
-              </strong>{" "}
-              {matchup.points.toFixed(2)}
-            </p>
-
-            <p
-              style={{
-                marginTop: "8px",
-              }}
-            >
-              <strong>
-                Calculated starter total:
-              </strong>{" "}
-              {calculatedScore.toFixed(2)}
-            </p>
-
-            <p
-              style={{
-                marginTop: "8px",
-              }}
-            >
-              <strong>
-                Difference:
-              </strong>{" "}
-              {(
-                calculatedScore -
-                matchup.points
-              ).toFixed(2)}
-            </p>
-
-            <p
-              style={{
-                marginTop: "14px",
-                fontSize: "12px",
-                color: "#687384",
-              }}
-            >
-              Starters found:{" "}
-              {starters.length}
-            </p>
-          </article>
-        );
-      })}
+        <pre
+          style={{
+            marginTop: "14px",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            fontSize: "12px",
+            lineHeight: "1.5",
+            color: "#ffffff",
+          }}
+        >
+          {JSON.stringify(
+            firstStarterStats,
+            null,
+            2
+          )}
+        </pre>
+      </article>
     </main>
   );
 }
