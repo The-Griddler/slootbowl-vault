@@ -128,22 +128,6 @@ async function fetchBracket(
   return response.json();
 }
 
-/*
- * Public bracket accessor used by historical
- * season pages.
- */
-export async function fetchBracketForPage(
-  leagueId: string,
-  bracket:
-    | "winners_bracket"
-    | "losers_bracket"
-): Promise<SleeperBracketMatch[]> {
-  return fetchBracket(
-    leagueId,
-    bracket
-  );
-}
-
 export async function getLeague(): Promise<SleeperLeague> {
   return fetchLeague(LEAGUE_ID);
 }
