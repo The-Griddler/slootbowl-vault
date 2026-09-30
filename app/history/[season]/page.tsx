@@ -1,254 +1,462 @@
 import {
-  getLeagueHistory,
+  getHistoricalData,
 } from "../../../lib/sleeper";
 
 import {
   getFranchiseName,
 } from "../../../lib/franchises";
 
-type PageProps = {
+type SeasonPageProps = {
   params: Promise<{
     season: string;
   }>;
 };
 
-export default async function SeasonHistoryPage({
+export default async function SeasonPage({
   params,
-}: PageProps) {
+}: SeasonPageProps) {
   const { season } = await params;
 
-  const seasons =
-    await getLeagueHistory();
+  const historicalData =
+    await getHistoricalData();
 
   const selectedSeason =
-    seasons.find(
-      (league) =>
-        league.season === season
+    historicalData.find(
+      (item) =>
+        item.league.season === season
     );
 
   if (!selectedSeason) {
     return (
       <main>
+        <p
+          style={{
+            fontSize: "12px",
+            fontWeight: 700,
+            letterSpacing: "1.5px",
+            color: "#687384",
+            marginBottom: "6px",
+          }}
+        >
+          SLOOTBOWL VAULT
+        </p>
+
         <h1>Season Not Found</h1>
 
         <p
           style={{
             marginTop: "8px",
+            lineHeight: 1.5,
           }}
         >
-          We couldn't find that Dynasty Sluts
-          season.
+          We couldn't find that SFL season.
         </p>
       </main>
     );
   }
+
+  const regularSeason =
+    selectedSeason.matchups.filter(
+      (matchup) =>
+        matchup.phase ===
+        "Regular Season"
+    );
+
+  const teamStats = new Map<
+    number,
+    {
+      wins: number;
+      losses: number;
+      ties: number;
+      pointsFor: number;
+      pointsAgainst: number;
+    }
+  >();
+
+  for (const matchup of regularSeason) {
+    if (!teamStats.has(matchup.rosterA)) {
+      teamStats.set(matchup.rosterA, {
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      });
+    }
+
+    if (!teamStats.has(matchup.rosterB)) {
+      teamStats.set(matchup.rosterB, {
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      });
+    }
+
+    const teamA =
+      teamStats.get(matchup.rosterA)!;
+
+    const teamB =
+      teamStats.get(matchup.rosterB)!;
+
+    teamA.pointsFor += matchup.scoreA;
+    teamA.pointsAgainst += matchup.scoreB;
+
+    teamB.pointsFor += matchup.scoreB;
+    teamB.pointsAgainst += matchup.scoreA;
+
+    if (
+      matchup.scoreA >
+      matchup.scoreB
+    ) {
+      teamA.wins += 1;
+      teamB.losses += 1;
+    } else if (
+      matchup.scoreB >
+      matchup.scoreA
+    ) {
+      teamB.wins += 1;
+      teamA.losses += 1;
+    } else {
+      teamA.ties += 1;
+      teamB.ties += 1;
+    }
+  }
+
+  const standings = Array.from(
+    teamStats.entries()
+  )
+    .map(
+      ([
+        rosterId,
+        stats,
+      ]) => ({
+        rosterId,
+        ...stats,
+      })
+    )
+    .sort((a, b) => {
+      if (b.wins !== a.wins) {
+        return b.wins - a.wins;
+      }
+
+      if (
+        b.pointsFor !==
+        a.pointsFor
+      ) {
+        return (
+          b.pointsFor -
+          a.pointsFor
+        );
+      }
+
+      return (
+        b.pointsAgainst -
+        a.pointsAgainst
+      );
+    });
+
+  const playoffGames =
+    selectedSeason.matchups.filter(
+      (matchup) =>
+        matchup.phase ===
+        "Main Playoffs"
+    );
+
+  const final =
+    playoffGames
+      .filter(
+        (matchup) =>
+          matchup.week >= 17
+      )
+      .sort(
+        (a, b) =>
+          b.week - a.week
+      )[0] ?? null;
 
   return (
     <main>
       <p
         style={{
           fontSize: "12px",
-          fontWeight: "700",
+          fontWeight: 700,
           letterSpacing: "1.5px",
           color: "#687384",
-          marginBottom: "8px",
+          marginBottom: "6px",
         }}
       >
         DYNASTY SLUTS
       </p>
 
-      <h1>{selectedSeason.season}</h1>
+      <h1>{season} Season</h1>
 
       <p
         style={{
-          marginTop: "8px",
-          marginBottom: "28px",
+          marginBottom: "24px",
+          lineHeight: 1.5,
         }}
       >
-        Season history and league archive.
+        Sluts Football League
       </p>
 
-      <section>
-        <SectionHeading title="Season Overview" />
-
-        <div
+      <section
+        style={{
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "18px",
+          padding: "18px",
+          marginBottom: "24px",
+        }}
+      >
+        <p
           style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(2, minmax(0, 1fr))",
-            gap: "12px",
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "1px",
+            color: "#687384",
+            marginBottom: "8px",
           }}
         >
-          <StatCard
-            label="SLOOTBOWL CHAMPION"
-            value="TBC"
-          />
+          SLOOTBOWL
+        </p>
 
-          <StatCard
-            label="SFL MVP"
-            value="TBC"
-          />
-        </div>
+        {final ? (
+          <>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "16px",
+                fontWeight: 700,
+              }}
+            >
+              {getFranchiseName(
+                final.rosterA
+              )}{" "}
+              vs{" "}
+              {getFranchiseName(
+                final.rosterB
+              )}
+            </p>
+
+            <p
+              style={{
+                marginTop: "8px",
+                fontSize: "14px",
+                color: "#9da7b3",
+              }}
+            >
+              {final.scoreA.toFixed(
+                2
+              )}{" "}
+              –{" "}
+              {final.scoreB.toFixed(
+                2
+              )}
+            </p>
+
+            <p
+              style={{
+                marginTop: "8px",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              🏆{" "}
+              {getFranchiseName(
+                final.scoreA >
+                  final.scoreB
+                  ? final.rosterA
+                  : final.rosterB
+              )}
+            </p>
+          </>
+        ) : (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "14px",
+              color: "#9da7b3",
+            }}
+          >
+            Slootbowl not yet played.
+          </p>
+        )}
+      </section>
+
+      <h2
+        style={{
+          fontSize: "20px",
+          margin: "0 0 12px",
+        }}
+      >
+        Final Standings
+      </h2>
+
+      {standings.map(
+        (team, index) => (
+          <article
+            key={team.rosterId}
+            style={{
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "16px",
+              padding: "14px",
+              marginBottom: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <strong
+              style={{
+                width: "24px",
+                fontSize: "14px",
+                color: "#687384",
+              }}
+            >
+              {index + 1}
+            </strong>
+
+            <div
+              style={{
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "15px",
+                }}
+              >
+                {getFranchiseName(
+                  team.rosterId
+                )}
+              </h3>
+
+              <p
+                style={{
+                  marginTop: "4px",
+                  fontSize: "12px",
+                  color: "#687384",
+                }}
+              >
+                {team.wins}-
+                {team.losses}-
+                {team.ties}
+              </p>
+            </div>
+
+            <div
+              style={{
+                textAlign: "right",
+              }}
+            >
+              <strong
+                style={{
+                  fontSize: "14px",
+                }}
+              >
+                {team.pointsFor.toFixed(
+                  2
+                )}
+              </strong>
+
+              <p
+                style={{
+                  marginTop: "3px",
+                  fontSize: "10px",
+                  color: "#687384",
+                }}
+              >
+                PF
+              </p>
+            </div>
+          </article>
+        )
+      )}
+
+      <h2
+        style={{
+          fontSize: "20px",
+          margin:
+            "28px 0 12px",
+        }}
+      >
+        Season Stats
+      </h2>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(2, 1fr)",
+          gap: "8px",
+        }}
+      >
+        <article
+          style={statCardStyle}
+        >
+          <strong>
+            {regularSeason.length}
+          </strong>
+
+          <p>
+            Regular-season games
+          </p>
+        </article>
+
+        <article
+          style={statCardStyle}
+        >
+          <strong>
+            {playoffGames.length}
+          </strong>
+
+          <p>
+            Playoff games
+          </p>
+        </article>
       </section>
 
       <section
         style={{
-          marginTop: "40px",
+          marginTop: "24px",
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "18px",
+          padding: "18px",
         }}
       >
-        <SectionHeading title="Season Details" />
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "18px",
+          }}
+        >
+          Coming Soon
+        </h2>
 
-        <DetailCard
-          label="SEASON"
-          value={selectedSeason.season}
-        />
-
-        <DetailCard
-          label="LEAGUE"
-          value={selectedSeason.name}
-        />
-
-        <DetailCard
-          label="LEAGUE ID"
-          value={selectedSeason.league_id}
-        />
-      </section>
-
-      <section
-        style={{
-          marginTop: "40px",
-        }}
-      >
-        <SectionHeading title="Coming Soon" />
-
-        <DetailCard
-          label="FINAL STANDINGS"
-          value="Coming soon"
-        />
-
-        <DetailCard
-          label="PLAYOFF BRACKET"
-          value="Coming soon"
-        />
-
-        <DetailCard
-          label="BIGGEST GAMES"
-          value="Coming soon"
-        />
-
-        <DetailCard
-          label="SEASON RECORDS"
-          value="Coming soon"
-        />
+        <p
+          style={{
+            marginTop: "8px",
+            fontSize: "13px",
+            lineHeight: 1.5,
+          }}
+        >
+          Biggest games, season records,
+          playoff bracket and award winners
+          will appear here.
+        </p>
       </section>
     </main>
   );
 }
 
-function SectionHeading({
-  title,
-}: {
-  title: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        marginBottom: "16px",
-      }}
-    >
-      <div
-        style={{
-          width: "4px",
-          height: "26px",
-          background: "#ffffff",
-          borderRadius: "4px",
-        }}
-      />
-
-      <h2
-        style={{
-          margin: 0,
-          fontSize: "24px",
-        }}
-      >
-        {title}
-      </h2>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <article
-      style={{
-        background: "#151b23",
-        border: "1px solid #27303b",
-        borderRadius: "18px",
-        padding: "18px",
-      }}
-    >
-      <p style={eyebrowStyle}>
-        {label}
-      </p>
-
-      <h3
-        style={{
-          margin: "8px 0 0",
-          fontSize: "20px",
-        }}
-      >
-        {value}
-      </h3>
-    </article>
-  );
-}
-
-function DetailCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <article
-      style={{
-        background: "#151b23",
-        border: "1px solid #27303b",
-        borderRadius: "18px",
-        padding: "18px",
-        marginBottom: "12px",
-      }}
-    >
-      <p style={eyebrowStyle}>
-        {label}
-      </p>
-
-      <p
-        style={{
-          marginTop: "7px",
-          color: "#ffffff",
-          fontWeight: "600",
-        }}
-      >
-        {value}
-      </p>
-    </article>
-  );
-}
-
-const eyebrowStyle = {
-  fontSize: "11px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  color: "#687384",
+const statCardStyle = {
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "16px",
+  padding: "16px",
 };
