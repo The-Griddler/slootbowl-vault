@@ -106,11 +106,20 @@ export default async function HistoryPage() {
         <SectionHeading title="Season Archive" />
 
         {seasons.map((season, index) => (
-          <SeasonCard
+          <a
             key={season.league_id}
-            season={season.season}
-            current={index === 0}
-          />
+            href={`/history/${season.season}`}
+            style={{
+              textDecoration: "none",
+              color: "inherit",
+              display: "block",
+            }}
+          >
+            <SeasonCard
+              season={season.season}
+              current={index === 0}
+            />
+          </a>
         ))}
       </section>
     </main>
