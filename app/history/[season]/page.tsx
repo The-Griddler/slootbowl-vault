@@ -26,6 +26,12 @@ type StandingRow = {
   pointsFor: number;
 };
 
+type FinalStanding = {
+  place: number;
+  rosterId: number;
+  label: string;
+};
+
 function getBracketMatch(
   bracket: SleeperBracketMatch[],
   round: number,
@@ -38,6 +44,164 @@ function getBracketMatch(
         game.m === match
     ) ?? null
   );
+}
+
+/*
+ * Resolve a bracket slot into an actual
+ * roster ID.
+ *
+ * A slot can either contain a roster ID
+ * directly or point to the winner/loser
+ * of an earlier bracket match.
+ */
+function resolveBracketSlot(
+  bracket: SleeperBracketMatch[],
+  match: SleeperBracketMatch,
+  slot: "t1" | "t2"
+): number | null {
+  const direct =
+    match[slot];
+
+  if (
+    typeof direct ===
+    "number"
+  ) {
+    return direct;
+  }
+
+  const from =
+    slot === "t1"
+      ? match.t1_from
+      : match.t2_from;
+
+  if (!from) {
+    return null;
+  }
+
+  const sourceMatchId =
+    from.w ?? from.l;
+
+  if (
+    typeof sourceMatchId !==
+    "number"
+  ) {
+    return null;
+  }
+
+  const sourceMatch =
+    bracket.find(
+      (game) =>
+        game.m ===
+        sourceMatchId
+    );
+
+  if (!sourceMatch) {
+    return null;
+  }
+
+  if (
+    typeof from.w ===
+    "number"
+  ) {
+    return (
+      sourceMatch.w ??
+      null
+    );
+  }
+
+  if (
+    typeof from.l ===
+    "number"
+  ) {
+    return (
+      sourceMatch.l ??
+      null
+    );
+  }
+
+  return null;
+}
+
+/*
+ * Find the actual historical matchup
+ * between two franchises during the
+ * postseason.
+ */
+function findPostseasonMatchup(
+  season: HistoricalSeason,
+  rosterA: number,
+  rosterB: number
+) {
+  return (
+    season.matchups.find(
+      (matchup) =>
+        matchup.week > 14 &&
+        (
+          (
+            matchup.rosterA ===
+              rosterA &&
+            matchup.rosterB ===
+              rosterB
+          ) ||
+          (
+            matchup.rosterA ===
+              rosterB &&
+            matchup.rosterB ===
+              rosterA
+          )
+        )
+    ) ?? null
+  );
+}
+
+/*
+ * Determine the winner and loser of an
+ * actual postseason matchup.
+ */
+function getMatchResult(
+  season: HistoricalSeason,
+  rosterA: number,
+  rosterB: number
+): {
+  winner: number;
+  loser: number;
+} | null {
+  const matchup =
+    findPostseasonMatchup(
+      season,
+      rosterA,
+      rosterB
+    );
+
+  if (!matchup) {
+    return null;
+  }
+
+  if (
+    matchup.scoreA >
+    matchup.scoreB
+  ) {
+    return {
+      winner:
+        matchup.rosterA,
+      loser:
+        matchup.rosterB,
+    };
+  }
+
+  if (
+    matchup.scoreB >
+    matchup.scoreA
+  ) {
+    return {
+      winner:
+        matchup.rosterB,
+      loser:
+        matchup.rosterA,
+    };
+  }
+
+  return null;
 }
 
 function getRegularSeasonStandings(
@@ -92,12 +256,13 @@ function getRegularSeasonStandings(
     }
 
     /*
-     * IMPORTANT:
+     * The conference determines where
+     * the team is displayed.
      *
-     * Every team's record is their
-     * COMPLETE regular-season record.
-     *
-     * Cross-conference games count.
+     * The record is ALWAYS the team's
+     * complete 14-game regular-season
+     * record, including cross-conference
+     * games.
      */
 
     if (
@@ -155,48 +320,23 @@ function getRegularSeasonStandings(
   });
 }
 
-function findPostseasonMatchup(
-  season: HistoricalSeason,
-  rosterA: number,
-  rosterB: number
-): HistoricalSeason["matchups"][number] | null {
-  return (
-    season.matchups.find(
-      (matchup) =>
-        matchup.week > 14 &&
-        (
-          (
-            matchup.rosterA ===
-              rosterA &&
-            matchup.rosterB ===
-              rosterB
-          ) ||
-          (
-            matchup.rosterA ===
-              rosterB &&
-            matchup.rosterB ===
-              rosterA
-          )
-        )
-    ) ?? null
-  );
-}
-
 function getFinalStandings(
   season: HistoricalSeason,
   winnersBracket: SleeperBracketMatch[],
   losersBracket: SleeperBracketMatch[]
-) {
-  const finalRows: {
-    place: number;
-    rosterId: number;
-    label: string;
-  }[] = [];
+): FinalStanding[] {
+  const finalRows: FinalStanding[] =
+    [];
 
   /*
-   * 1st / 2nd
-   *
-   * Winners bracket R3 M6
+   * =====================================
+   * MAIN PLAYOFFS
+   * =====================================
+   */
+
+  /*
+   * R3 M6
+   * Slootbowl
    */
 
   const championship =
@@ -231,9 +371,8 @@ function getFinalStandings(
   }
 
   /*
+   * R3 M7
    * 3rd / 4th
-   *
-   * Winners bracket R3 M7
    */
 
   const thirdPlace =
@@ -268,9 +407,8 @@ function getFinalStandings(
   }
 
   /*
+   * R2 M5
    * 5th / 6th
-   *
-   * Winners bracket R2 M5
    */
 
   const fifthSixth =
@@ -305,10 +443,19 @@ function getFinalStandings(
   }
 
   /*
-   * 7th / 8th
+   * =====================================
+   * LOSERS BRACKET
+   * =====================================
    *
-   * Winners of the two final
-   * losers-bracket games.
+   * R2 M3 determines 7th / one Toilet
+   * Bowl participant.
+   *
+   * R2 M4 determines 8th / the other
+   * Toilet Bowl participant.
+   *
+   * We reconstruct the participants,
+   * then look at the actual postseason
+   * matchup score to determine the winner.
    */
 
   const losersMatchThree =
@@ -325,105 +472,169 @@ function getFinalStandings(
       4
     );
 
+  let seventh:
+    | number
+    | null = null;
+
+  let eighth:
+    | number
+    | null = null;
+
+  let toiletBowlTeamA:
+    | number
+    | null = null;
+
+  let toiletBowlTeamB:
+    | number
+    | null = null;
+
+  /*
+   * R2 M3
+   */
+
+  if (losersMatchThree) {
+    const teamA =
+      resolveBracketSlot(
+        losersBracket,
+        losersMatchThree,
+        "t1"
+      );
+
+    const teamB =
+      resolveBracketSlot(
+        losersBracket,
+        losersMatchThree,
+        "t2"
+      );
+
+    if (
+      teamA !== null &&
+      teamB !== null
+    ) {
+      const result =
+        getMatchResult(
+          season,
+          teamA,
+          teamB
+        );
+
+      if (result) {
+        seventh =
+          result.winner;
+
+        toiletBowlTeamA =
+          result.loser;
+      }
+    }
+  }
+
+  /*
+   * R2 M4
+   */
+
+  if (losersMatchFour) {
+    const teamA =
+      resolveBracketSlot(
+        losersBracket,
+        losersMatchFour,
+        "t1"
+      );
+
+    const teamB =
+      resolveBracketSlot(
+        losersBracket,
+        losersMatchFour,
+        "t2"
+      );
+
+    if (
+      teamA !== null &&
+      teamB !== null
+    ) {
+      const result =
+        getMatchResult(
+          season,
+          teamA,
+          teamB
+        );
+
+      if (result) {
+        eighth =
+          result.winner;
+
+        toiletBowlTeamB =
+          result.loser;
+      }
+    }
+  }
+
+  /*
+   * Add 7th / 8th.
+   */
+
   if (
-    losersMatchThree?.w
+    seventh !== null
   ) {
     finalRows.push({
       place: 7,
-      rosterId:
-        losersMatchThree.w,
+      rosterId: seventh,
       label:
         "7th Place",
     });
   }
 
   if (
-    losersMatchFour?.w
+    eighth !== null
   ) {
     finalRows.push({
       place: 8,
-      rosterId:
-        losersMatchFour.w,
+      rosterId: eighth,
       label:
         "8th Place",
     });
   }
 
   /*
-   * 9th / 10th
+   * =====================================
+   * TOILET BOWL
+   * =====================================
    *
-   * The LOSERS of R2 M3 and R2 M4
-   * play the actual Toilet Bowl.
+   * The losers of the two R2 losers'
+   * bracket games play each other.
    *
-   * We deliberately do NOT require
-   * phase === "Toilet Bowl" here.
-   *
-   * The matchup can currently be
-   * classified as "Ignored" by the
-   * historical stats system because
-   * it isn't represented directly in
-   * the losers bracket.
+   * Winner = 9th
+   * Loser = 10th
    */
 
-  const toiletBowlTeamA =
-    losersMatchThree?.l ??
-    null;
-
-  const toiletBowlTeamB =
-    losersMatchFour?.l ??
-    null;
-
   if (
-    toiletBowlTeamA !== null &&
-    toiletBowlTeamB !== null
+    toiletBowlTeamA !==
+      null &&
+    toiletBowlTeamB !==
+      null
   ) {
     const toiletBowl =
-      findPostseasonMatchup(
+      getMatchResult(
         season,
         toiletBowlTeamA,
         toiletBowlTeamB
       );
 
     if (toiletBowl) {
-      if (
-        toiletBowl.scoreA >
-        toiletBowl.scoreB
-      ) {
-        finalRows.push({
-          place: 9,
-          rosterId:
-            toiletBowl.rosterA,
-          label:
-            "Toilet Bowl Winner",
-        });
+      finalRows.push({
+        place: 9,
+        rosterId:
+          toiletBowl.winner,
+        label:
+          "Toilet Bowl Winner",
+      });
 
-        finalRows.push({
-          place: 10,
-          rosterId:
-            toiletBowl.rosterB,
-          label:
-            "Toilet Bowl Loser",
-        });
-      } else if (
-        toiletBowl.scoreB >
-        toiletBowl.scoreA
-      ) {
-        finalRows.push({
-          place: 9,
-          rosterId:
-            toiletBowl.rosterB,
-          label:
-            "Toilet Bowl Winner",
-        });
-
-        finalRows.push({
-          place: 10,
-          rosterId:
-            toiletBowl.rosterA,
-          label:
-            "Toilet Bowl Loser",
-        });
-      }
+      finalRows.push({
+        place: 10,
+        rosterId:
+          toiletBowl.loser,
+        label:
+          "Toilet Bowl Loser",
+      });
     }
   }
 
@@ -498,11 +709,7 @@ function StandingTable({
 function FinalStandings({
   standings,
 }: {
-  standings: {
-    place: number;
-    rosterId: number;
-    label: string;
-  }[];
+  standings: FinalStanding[];
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
@@ -524,7 +731,7 @@ function FinalStandings({
               </div>
 
               <div className="min-w-0">
-                <div className="truncate font-bold text-white">
+                <div className="font-bold text-white">
                   {getFranchiseName(
                     team.rosterId
                   )}
@@ -617,12 +824,6 @@ export default async function SeasonHistoryPage({
    *
    * GPFC:
    * 1, 2, 3, 5, 10
-   *
-   * These are used only to decide which
-   * conference table the franchise belongs in.
-   *
-   * Their records are still calculated from
-   * ALL regular-season games.
    */
 
   const obfcRosterIds = [
