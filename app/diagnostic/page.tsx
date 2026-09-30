@@ -61,22 +61,35 @@ export default async function DiagnosticPage() {
         2026 · Week {WEEK}
       </p>
 
-      <article style={cardStyle}>
-        <p style={labelStyle}>
-          PLAYER ID
+      <article
+        style={{
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "18px",
+          padding: "18px",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "11px",
+            fontWeight: "700",
+            letterSpacing: "1px",
+            color: "#687384",
+          }}
+        >
+          COMPLETE PLAYER OBJECT
         </p>
 
-        <h2 style={valueStyle}>
-          {firstStarter ?? "None"}
-        </h2>
-      </article>
-
-      <article style={cardStyle}>
-        <p style={labelStyle}>
-          PLAYER STATS
-        </p>
-
-        <pre style={preStyle}>
+        <pre
+          style={{
+            marginTop: "14px",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            fontSize: "12px",
+            lineHeight: "1.5",
+            color: "#ffffff",
+          }}
+        >
           {JSON.stringify(
             playerStats,
             null,
@@ -84,70 +97,6 @@ export default async function DiagnosticPage() {
           )}
         </pre>
       </article>
-
-      <article style={cardStyle}>
-        <p style={labelStyle}>
-          POSSIBLE FANTASY POINT FIELDS
-        </p>
-
-        <p style={rowStyle}>
-          fantasy_points:{" "}
-          {playerStats?.fantasy_points ??
-            "not present"}
-        </p>
-
-        <p style={rowStyle}>
-          pts_ppr:{" "}
-          {playerStats?.pts_ppr ??
-            "not present"}
-        </p>
-
-        <p style={rowStyle}>
-          pts_half_ppr:{" "}
-          {playerStats?.pts_half_ppr ??
-            "not present"}
-        </p>
-
-        <p style={rowStyle}>
-          pts_std:{" "}
-          {playerStats?.pts_std ??
-            "not present"}
-        </p>
-      </article>
     </main>
   );
 }
-
-const cardStyle = {
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: "18px",
-  padding: "18px",
-  marginBottom: "12px",
-};
-
-const labelStyle = {
-  fontSize: "11px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  color: "#687384",
-};
-
-const valueStyle = {
-  margin: "8px 0 0",
-  fontSize: "24px",
-};
-
-const rowStyle = {
-  marginTop: "10px",
-  color: "#ffffff",
-};
-
-const preStyle = {
-  marginTop: "12px",
-  whiteSpace: "pre-wrap" as const,
-  wordBreak: "break-word" as const,
-  fontSize: "12px",
-  lineHeight: "1.5",
-  color: "#ffffff",
-};
