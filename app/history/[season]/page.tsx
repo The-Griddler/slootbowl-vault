@@ -1,104 +1,107 @@
+import Link from "next/link";
+
 import {
   getHistoricalData,
-  HistoricalMatchup,
+  getLeagueHistory,
+  SleeperBracketMatch,
+  HistoricalSeason,
 } from "../../../lib/sleeper";
+
 import {
-  FRANCHISES,
   getFranchiseName,
 } from "../../../lib/franchises";
-type BracketMatch = {
-  m: number;
-  r: number;
-  t1: number | null;
-  t2: number | null;
-  w: number | null;
-  l: number | null;
-  p?: number;
-  t1_from?: {
-    w?: number;
-    l?: number;
-  };
-  t2_from?: {
-    w?: number;
-    l?: number;
-  };
+
+type SeasonPageProps = {
+  params: Promise<{
+    season: string;
+  }>;
 };
-type TeamStanding = {
+
+type StandingRow = {
   rosterId: number;
   wins: number;
   losses: number;
   ties: number;
   pointsFor: number;
-  pointsAgainst: number;
 };
-type FinalStanding = {
-  placement: number;
-  rosterId: number;
-};
-function getDivision(rosterId: number): "OBFC" | "GPFC" {
-  const obfc = [4, 6, 7, 8, 9];
-  return obfc.includes(rosterId)
-    ? "OBFC"
-    : "GPFC";
-}
-async function getBracket(
-  leagueId: string,
-  bracket: "winners_bracket" | "losers_bracket"
-): Promise<BracketMatch[]> {
-  const response = await fetch(
-    `https://api.sleeper.app/v1/league/${leagueId}/${bracket}`,
-    {
-      next: {
-        revalidate: 300,
-      },
-    }
+
+function getBracketMatch(
+  bracket: SleeperBracketMatch[],
+  round: number,
+  match: number
+): SleeperBracketMatch | null {
+  return (
+    bracket.find(
+      (game) =>
+        game.r === round &&
+        game.m === match
+    ) ?? null
   );
-  if (!response.ok) {
-    return [];
-  }
-  return response.json();
 }
-function buildRegularSeasonStandings(
-  matchups: HistoricalMatchup[]
-): TeamStanding[] {
+
+function getRegularSeasonStandings(
+  season: HistoricalSeason,
+  rosterIds: number[]
+): StandingRow[] {
   const standings = new Map<
     number,
-    TeamStanding
+    StandingRow
   >();
-  for (const franchise of FRANCHISES) {
-    standings.set(franchise.rosterId, {
-      rosterId: franchise.rosterId,
+
+  for (const rosterId of rosterIds) {
+    standings.set(rosterId, {
+      rosterId,
       wins: 0,
       losses: 0,
       ties: 0,
       pointsFor: 0,
-      pointsAgainst: 0,
     });
   }
-  for (const matchup of matchups) {
+
+  for (const matchup of season.matchups) {
     if (
-      matchup.phase !== "Regular Season"
+      matchup.phase !==
+      "Regular Season"
     ) {
       continue;
     }
-    const teamA = standings.get(
-      matchup.rosterA
-    );
-    const teamB = standings.get(
-      matchup.rosterB
-    );
-    if (!teamA || !teamB) {
+
+    const teamA =
+      standings.get(
+        matchup.rosterA
+      );
+
+    const teamB =
+      standings.get(
+        matchup.rosterB
+      );
+
+    if (teamA) {
+      teamA.pointsFor +=
+        matchup.scoreA;
+    }
+
+    if (teamB) {
+      teamB.pointsFor +=
+        matchup.scoreB;
+    }
+
+    if (
+      !teamA ||
+      !teamB
+    ) {
       continue;
     }
-    teamA.pointsFor += matchup.scoreA;
-    teamA.pointsAgainst += matchup.scoreB;
-    teamB.pointsFor += matchup.scoreB;
-    teamB.pointsAgainst += matchup.scoreA;
-    if (matchup.scoreA > matchup.scoreB) {
+
+    if (
+      matchup.scoreA >
+      matchup.scoreB
+    ) {
       teamA.wins += 1;
       teamB.losses += 1;
     } else if (
-      matchup.scoreB > matchup.scoreA
+      matchup.scoreB >
+      matchup.scoreA
     ) {
       teamB.wins += 1;
       teamA.losses += 1;
@@ -107,567 +110,590 @@ function buildRegularSeasonStandings(
       teamB.ties += 1;
     }
   }
-  return Array.from(standings.values()).sort(
-    (a, b) => {
-      if (b.wins !== a.wins) {
-        return b.wins - a.wins;
-      }
-      if (a.losses !== b.losses) {
-        return a.losses - b.losses;
-      }
-      return b.pointsFor - a.pointsFor;
+
+  return Array.from(
+    standings.values()
+  ).sort((a, b) => {
+    if (b.wins !== a.wins) {
+      return b.wins - a.wins;
     }
-  );
-}
-function getBracketMatch(
-  bracket: BracketMatch[],
-  round: number,
-  match: number
-): BracketMatch | null {
-  return (
-    bracket.find(
-      (item) =>
-        item.r === round &&
-        item.m === match
-    ) ?? null
-  );
-}
-function findToiletBowl(
-  seasonMatchups: HistoricalMatchup[],
-  losersBracket: BracketMatch[]
-): HistoricalMatchup | null {
-  const losersGameOne = getBracketMatch(
-    losersBracket,
-    2,
-    3
-  );
-  const losersGameTwo = getBracketMatch(
-    losersBracket,
-    2,
-    4
-  );
-  if (
-    !losersGameOne ||
-    !losersGameTwo ||
-    losersGameOne.l === null ||
-    losersGameTwo.l === null
-  ) {
-    return null;
-  }
-  const toiletTeamA = losersGameOne.l;
-  const toiletTeamB = losersGameTwo.l;
-  return (
-    seasonMatchups.find(
-      (matchup) => {
-        if (
-          matchup.phase !== "Toilet Bowl"
-        ) {
-          return false;
-        }
-        return (
-          (matchup.rosterA === toiletTeamA &&
-            matchup.rosterB === toiletTeamB) ||
-          (matchup.rosterA === toiletTeamB &&
-            matchup.rosterB === toiletTeamA)
-        );
-      }
-    ) ?? null
-  );
-}
-function buildFinalStandings(
-  seasonMatchups: HistoricalMatchup[],
-  winnersBracket: BracketMatch[],
-  losersBracket: BracketMatch[]
-): FinalStanding[] {
-  const standings: FinalStanding[] = [];
-  /*
-   * 1st / 2nd
-   * Winners bracket Round 3 Match 6
-   */
-  const championship = getBracketMatch(
-    winnersBracket,
-    3,
-    6
-  );
-  if (
-    championship &&
-    championship.w !== null &&
-    championship.l !== null
-  ) {
-    standings.push({
-      placement: 1,
-      rosterId: championship.w,
-    });
-    standings.push({
-      placement: 2,
-      rosterId: championship.l,
-    });
-  }
-  /*
-   * 3rd / 4th
-   * Winners bracket Round 3 Match 7
-   */
-  const thirdPlace = getBracketMatch(
-    winnersBracket,
-    3,
-    7
-  );
-  if (
-    thirdPlace &&
-    thirdPlace.w !== null &&
-    thirdPlace.l !== null
-  ) {
-    standings.push({
-      placement: 3,
-      rosterId: thirdPlace.w,
-    });
-    standings.push({
-      placement: 4,
-      rosterId: thirdPlace.l,
-    });
-  }
-  /*
-   * 5th / 6th
-   * Winners bracket Round 2 Match 5
-   */
-  const fifthPlace = getBracketMatch(
-    winnersBracket,
-    2,
-    5
-  );
-  if (
-    fifthPlace &&
-    fifthPlace.w !== null &&
-    fifthPlace.l !== null
-  ) {
-    standings.push({
-      placement: 5,
-      rosterId: fifthPlace.w,
-    });
-    standings.push({
-      placement: 6,
-      rosterId: fifthPlace.l,
-    });
-  }
-  /*
-   * 7th / 8th
-   *
-   * Winners of the two losers-bracket
-   * placement games.
-   */
-  const seventhGame = getBracketMatch(
-    losersBracket,
-    2,
-    3
-  );
-  if (
-    seventhGame &&
-    seventhGame.w !== null
-  ) {
-    standings.push({
-      placement: 7,
-      rosterId: seventhGame.w,
-    });
-  }
-  const eighthGame = getBracketMatch(
-    losersBracket,
-    2,
-    4
-  );
-  if (
-    eighthGame &&
-    eighthGame.w !== null
-  ) {
-    standings.push({
-      placement: 8,
-      rosterId: eighthGame.w,
-    });
-  }
-  /*
-   * 9th / 10th
-   *
-   * The LOSERS of the two games above
-   * play the actual Toilet Bowl.
-   *
-   * Toilet Bowl winner = 9th.
-   * Toilet Bowl loser = 10th.
-   */
-  const toiletBowl = findToiletBowl(
-    seasonMatchups,
-    losersBracket
-  );
-  if (
-    toiletBowl &&
-    toiletBowl.scoreA !== toiletBowl.scoreB
-  ) {
-    const winner =
-      toiletBowl.scoreA >
-      toiletBowl.scoreB
-        ? toiletBowl.rosterA
-        : toiletBowl.rosterB;
-    const loser =
-      toiletBowl.scoreA >
-      toiletBowl.scoreB
-        ? toiletBowl.rosterB
-        : toiletBowl.rosterA;
-    standings.push({
-      placement: 9,
-      rosterId: winner,
-    });
-    standings.push({
-      placement: 10,
-      rosterId: loser,
-    });
-  }
-  return standings.sort(
-    (a, b) =>
-      a.placement - b.placement
-  );
-}
-function formatRecord(
-  team: TeamStanding
-): string {
-  return `${team.wins}-${team.losses}-${team.ties}`;
-}
-function getPlacementLabel(
-  placement: number
-): string {
-  if (placement === 1) {
-    return "Slootbowl Champion";
-  }
-  if (placement === 2) {
-    return "Runner-up";
-  }
-  if (placement === 9) {
-    return "Toilet Bowl Winner";
-  }
-  if (placement === 10) {
-    return "Toilet Bowl Loser";
-  }
-  if (placement === 3) {
-    return "3rd Place";
-  }
-  if (placement === 4) {
-    return "4th Place";
-  }
-  if (placement === 5) {
-    return "5th Place";
-  }
-  if (placement === 6) {
-    return "6th Place";
-  }
-  if (placement === 7) {
-    return "7th Place";
-  }
-  return "8th Place";
-}
-export default async function SeasonHistoryPage({
-  params,
-}: {
-  params: Promise<{
-    season: string;
-  }>;
-}) {
-  const { season } = await params;
-  const historicalData =
-    await getHistoricalData();
-  const seasonData =
-    historicalData.find(
-      (item) =>
-        item.league.season === season
-    );
-  if (!seasonData) {
+
+    if (b.ties !== a.ties) {
+      return b.ties - a.ties;
+    }
+
     return (
-      <main className="px-4 py-8">
-        <div className="mx-auto max-w-5xl">
-          <h1 className="text-2xl font-bold">
-            Season not found
-          </h1>
-          <p className="mt-2 text-zinc-400">
-            We couldn't find SFL season{" "}
-            {season}.
-          </p>
-        </div>
-      </main>
+      b.pointsFor -
+      a.pointsFor
     );
-  }
-  const [
-    winnersBracket,
-    losersBracket,
-  ] = await Promise.all([
-    getBracket(
-      seasonData.league.league_id,
-      "winners_bracket"
-    ),
-    getBracket(
-      seasonData.league.league_id,
-      "losers_bracket"
-    ),
-  ]);
-  const regularSeasonStandings =
-    buildRegularSeasonStandings(
-      seasonData.matchups
-    );
-  const obfcStandings =
-    regularSeasonStandings.filter(
-      (team) =>
-        getDivision(team.rosterId) ===
-        "OBFC"
-    );
-  const gpfcStandings =
-    regularSeasonStandings.filter(
-      (team) =>
-        getDivision(team.rosterId) ===
-        "GPFC"
-    );
-  const finalStandings =
-    buildFinalStandings(
-      seasonData.matchups,
-      winnersBracket,
-      losersBracket
-    );
+  });
+}
+
+function findPostseasonMatchup(
+  season: HistoricalSeason,
+  rosterA: number,
+  rosterB: number
+) {
+  return (
+    season.matchups.find(
+      (matchup) =>
+        matchup.week > 14 &&
+        (
+          (
+            matchup.rosterA ===
+              rosterA &&
+            matchup.rosterB ===
+              rosterB
+          ) ||
+          (
+            matchup.rosterA ===
+              rosterB &&
+            matchup.rosterB ===
+              rosterA
+          )
+        )
+    ) ?? null
+  );
+}
+
+function getFinalStandings(
+  season: HistoricalSeason,
+  winnersBracket: SleeperBracketMatch[],
+  losersBracket: SleeperBracketMatch[]
+) {
+  const finalRows: {
+    place: number;
+    rosterId: number;
+    label: string;
+  }[] = [];
+
+  /*
+   * Championship / main playoff positions
+   *
+   * R3 M6 = Slootbowl
+   * R3 M7 = 3rd/4th
+   * R2 M5 = 5th/6th
+   */
+
   const championship =
     getBracketMatch(
       winnersBracket,
       3,
       6
     );
-  const regularSeasonGames =
-    seasonData.matchups.filter(
-      (matchup) =>
-        matchup.phase ===
-        "Regular Season"
-    ).length;
-  const mainPlayoffGames =
-    seasonData.matchups.filter(
-      (matchup) =>
-        matchup.phase ===
-        "Main Playoffs"
-    ).length;
+
+  const thirdPlace =
+    getBracketMatch(
+      winnersBracket,
+      3,
+      7
+    );
+
+  const fifthSixth =
+    getBracketMatch(
+      winnersBracket,
+      2,
+      5
+    );
+
+  if (
+    championship?.w
+  ) {
+    finalRows.push({
+      place: 1,
+      rosterId:
+        championship.w,
+      label:
+        "Slootbowl Champion",
+    });
+  }
+
+  if (
+    championship?.l
+  ) {
+    finalRows.push({
+      place: 2,
+      rosterId:
+        championship.l,
+      label:
+        "Runner-up",
+    });
+  }
+
+  if (
+    thirdPlace?.w
+  ) {
+    finalRows.push({
+      place: 3,
+      rosterId:
+        thirdPlace.w,
+      label:
+        "3rd Place",
+    });
+  }
+
+  if (
+    thirdPlace?.l
+  ) {
+    finalRows.push({
+      place: 4,
+      rosterId:
+        thirdPlace.l,
+      label:
+        "4th Place",
+    });
+  }
+
+  if (
+    fifthSixth?.w
+  ) {
+    finalRows.push({
+      place: 5,
+      rosterId:
+        fifthSixth.w,
+      label:
+        "5th Place",
+    });
+  }
+
+  if (
+    fifthSixth?.l
+  ) {
+    finalRows.push({
+      place: 6,
+      rosterId:
+        fifthSixth.l,
+      label:
+        "6th Place",
+    });
+  }
+
+  /*
+   * Losers bracket
+   *
+   * R2 M3 determines 7th.
+   * R2 M4 determines 8th.
+   *
+   * The losers of those two games
+   * then meet in the actual Toilet Bowl.
+   *
+   * The Toilet Bowl winner = 9th.
+   * The Toilet Bowl loser = 10th.
+   */
+
+  const losersMatchThree =
+    getBracketMatch(
+      losersBracket,
+      2,
+      3
+    );
+
+  const losersMatchFour =
+    getBracketMatch(
+      losersBracket,
+      2,
+      4
+    );
+
+  if (
+    losersMatchThree?.w
+  ) {
+    finalRows.push({
+      place: 7,
+      rosterId:
+        losersMatchThree.w,
+      label:
+        "7th Place",
+    });
+  }
+
+  if (
+    losersMatchFour?.w
+  ) {
+    finalRows.push({
+      place: 8,
+      rosterId:
+        losersMatchFour.w,
+      label:
+        "8th Place",
+    });
+  }
+
+  /*
+   * Find the two teams that lost
+   * the final losers-bracket games.
+   */
+
+  const toiletBowlTeamA =
+    losersMatchThree?.l ??
+    null;
+
+  const toiletBowlTeamB =
+    losersMatchFour?.l ??
+    null;
+
+  if (
+    toiletBowlTeamA !== null &&
+    toiletBowlTeamB !== null
+  ) {
+    /*
+     * IMPORTANT:
+     * Do not require phase === "Toilet Bowl".
+     *
+     * The actual Toilet Bowl is not necessarily
+     * labelled as Toilet Bowl by our matchup
+     * classification because it isn't represented
+     * as a losers-bracket match.
+     *
+     * Instead, find these exact two teams playing
+     * against each other during Weeks 15-17.
+     */
+
+    const toiletBowl =
+      findPostseasonMatchup(
+        season,
+        toiletBowlTeamA,
+        toiletBowlTeamB
+      );
+
+    if (toiletBowl) {
+      const teamAIsWinner =
+        toiletBowl.scoreA >
+        toiletBowl.scoreB;
+
+      const teamBIsWinner =
+        toiletBowl.scoreB >
+        toiletBowl.scoreA;
+
+      if (teamAIsWinner) {
+        finalRows.push({
+          place: 9,
+          rosterId:
+            toiletBowl.rosterA,
+          label:
+            "Toilet Bowl Winner",
+        });
+
+        finalRows.push({
+          place: 10,
+          rosterId:
+            toiletBowl.rosterB,
+          label:
+            "Toilet Bowl Loser",
+        });
+      } else if (
+        teamBIsWinner
+      ) {
+        finalRows.push({
+          place: 9,
+          rosterId:
+            toiletBowl.rosterB,
+          label:
+            "Toilet Bowl Winner",
+        });
+
+        finalRows.push({
+          place: 10,
+          rosterId:
+            toiletBowl.rosterA,
+          label:
+            "Toilet Bowl Loser",
+        });
+      }
+    }
+  }
+
+  return finalRows.sort(
+    (a, b) =>
+      a.place - b.place
+  );
+}
+
+function StandingTable({
+  title,
+  standings,
+}: {
+  title: string;
+  standings: StandingRow[];
+}) {
   return (
-    <main className="px-4 py-8">
+    <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+      <div className="border-b border-zinc-800 px-4 py-4">
+        <h2 className="text-lg font-bold text-white">
+          {title}
+        </h2>
+      </div>
+
+      <div className="divide-y divide-zinc-800">
+        {standings.map(
+          (team, index) => (
+            <div
+              key={
+                team.rosterId
+              }
+              className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4"
+            >
+              <div className="text-sm font-semibold text-zinc-500">
+                {index + 1}
+              </div>
+
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-white">
+                  {getFranchiseName(
+                    team.rosterId
+                  )}
+                </div>
+
+                <div className="mt-1 text-xs text-zinc-500">
+                  PF{" "}
+                  {team.pointsFor.toFixed(
+                    2
+                  )}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="font-bold text-white">
+                  {team.wins}-
+                  {team.losses}-
+                  {team.ties}
+                </div>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </section>
+  );
+}
+
+function FinalStandings({
+  standings,
+}: {
+  standings: {
+    place: number;
+    rosterId: number;
+    label: string;
+  }[];
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+      <div className="border-b border-zinc-800 px-4 py-4">
+        <h2 className="text-lg font-bold text-white">
+          Final Standings
+        </h2>
+      </div>
+
+      <div className="divide-y divide-zinc-800">
+        {standings.map(
+          (team) => (
+            <div
+              key={
+                `${team.place}-${team.rosterId}`
+              }
+              className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 px-4 py-4"
+            >
+              <div className="text-xl font-black text-zinc-500">
+                {team.place}
+              </div>
+
+              <div className="min-w-0">
+                <div className="truncate font-bold text-white">
+                  {getFranchiseName(
+                    team.rosterId
+                  )}
+                </div>
+
+                <div className="mt-1 text-xs font-medium text-zinc-500">
+                  {team.label}
+                </div>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default async function SeasonHistoryPage({
+  params,
+}: SeasonPageProps) {
+  const {
+    season,
+  } = await params;
+
+  const [
+    leagues,
+    historicalData,
+  ] = await Promise.all([
+    getLeagueHistory(),
+    getHistoricalData(),
+  ]);
+
+  const league =
+    leagues.find(
+      (item) =>
+        item.season ===
+        season
+    );
+
+  const seasonData =
+    historicalData.find(
+      (item) =>
+        item.league.season ===
+        season
+    );
+
+  if (
+    !league ||
+    !seasonData
+  ) {
+    return (
+      <main className="min-h-screen bg-black px-4 py-8 text-white">
+        <div className="mx-auto max-w-5xl">
+          <Link
+            href="/history"
+            className="text-sm text-zinc-400 hover:text-white"
+          >
+            ← Back to History
+          </Link>
+
+          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+            <h1 className="text-2xl font-bold">
+              Season not found
+            </h1>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const [
+    winnersBracket,
+    losersBracket,
+  ] = await Promise.all([
+    import("../../../lib/sleeper").then(
+      (module) =>
+        module
+          .fetchBracketForPage?.(
+            league.league_id,
+            "winners_bracket"
+          ) ?? []
+    ),
+    import("../../../lib/sleeper").then(
+      (module) =>
+        module
+          .fetchBracketForPage?.(
+            league.league_id,
+            "losers_bracket"
+          ) ?? []
+    ),
+  ]);
+
+  const fallbackWinnersBracket =
+    winnersBracket as SleeperBracketMatch[];
+
+  const fallbackLosersBracket =
+    losersBracket as SleeperBracketMatch[];
+
+  const allRosterIds =
+    Array.from(
+      new Set(
+        seasonData.matchups.flatMap(
+          (matchup) => [
+            matchup.rosterA,
+            matchup.rosterB,
+          ]
+        )
+      )
+    );
+
+  const obfcRosterIds =
+    [4, 6, 7, 8, 9].filter(
+      (id) =>
+        allRosterIds.includes(id)
+    );
+
+  const gpfcRosterIds =
+    [1, 2, 3, 5, 10].filter(
+      (id) =>
+        allRosterIds.includes(id)
+    );
+
+  const obfcStandings =
+    getRegularSeasonStandings(
+      seasonData,
+      obfcRosterIds
+    );
+
+  const gpfcStandings =
+    getRegularSeasonStandings(
+      seasonData,
+      gpfcRosterIds
+    );
+
+  const finalStandings =
+    getFinalStandings(
+      seasonData,
+      fallbackWinnersBracket,
+      fallbackLosersBracket
+    );
+
+  return (
+    <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-8">
-          <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">
+        <Link
+          href="/history"
+          className="text-sm font-medium text-zinc-400 hover:text-white"
+        >
+          ← Back to History
+        </Link>
+
+        <div className="mt-6">
+          <div className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
             SFL Season
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">
+          </div>
+
+          <h1 className="mt-1 text-4xl font-black tracking-tight">
             {season}
           </h1>
-          <p className="mt-1 text-zinc-400">
-            {seasonData.league.name}
+
+          <p className="mt-2 text-zinc-400">
+            {league.name}
           </p>
         </div>
-        <section className="mb-8">
-          <h2 className="mb-1 text-xl font-bold">
-            Regular Season
-          </h2>
-          <p className="mb-4 text-sm text-zinc-500">
-            Overall record across all regular-season
-            games.
-          </p>
-          <div className="grid gap-5 md:grid-cols-2">
-            <ConferenceTable
-              name="OBFC"
-              teams={obfcStandings}
-            />
-            <ConferenceTable
-              name="GPFC"
-              teams={gpfcStandings}
-            />
-          </div>
-        </section>
-        <section className="mb-8">
-          <h2 className="mb-1 text-xl font-bold">
-            Slootbowl
-          </h2>
-          <p className="mb-4 text-sm text-zinc-500">
-            Championship game.
-          </p>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-            {championship &&
-            championship.w !== null &&
-            championship.l !== null ? (
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Slootbowl Champion
-                </p>
-                <p className="mt-2 text-2xl font-bold">
-                  {getFranchiseName(
-                    championship.w
-                  )}
-                </p>
-                <p className="mt-2 text-sm text-zinc-500">
-                  vs{" "}
-                  {getFranchiseName(
-                    championship.l
-                  )}
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className="font-semibold">
-                  Slootbowl not yet played
-                </p>
-                <p className="mt-1 text-sm text-zinc-500">
-                  The championship result will
-                  appear here once complete.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-        <section className="mb-8">
-          <h2 className="mb-1 text-xl font-bold">
-            Final Season Standings
-          </h2>
-          <p className="mb-4 text-sm text-zinc-500">
-            Final league placement after the
-            playoffs and Toilet Bowl.
-          </p>
-          {finalStandings.length === 0 ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-              <p className="font-semibold">
-                Final standings not yet determined
-              </p>
-              <p className="mt-1 text-sm text-zinc-500">
-                Final placement will appear as
-                the postseason is completed.
-              </p>
+
+        <div className="mt-8 space-y-6">
+          <div>
+            <h2 className="mb-4 text-2xl font-black">
+              Regular Season
+            </h2>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <StandingTable
+                title="OBFC"
+                standings={
+                  obfcStandings
+                }
+              />
+
+              <StandingTable
+                title="GPFC"
+                standings={
+                  gpfcStandings
+                }
+              />
             </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
-              {finalStandings.map(
-                (team, index) => (
-                  <div
-                    key={team.placement}
-                    className={`flex items-center justify-between gap-4 px-5 py-4 ${
-                      index <
-                      finalStandings.length - 1
-                        ? "border-b border-zinc-800"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex min-w-0 items-center gap-4">
-                      <span className="w-7 shrink-0 text-lg font-bold text-zinc-500">
-                        {team.placement}
-                      </span>
-                      <span className="truncate font-semibold">
-                        {getFranchiseName(
-                          team.rosterId
-                        )}
-                      </span>
-                    </div>
-                    <span className="shrink-0 text-right text-xs text-zinc-500">
-                      {getPlacementLabel(
-                        team.placement
-                      )}
-                    </span>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </section>
-        <section>
-          <h2 className="mb-4 text-xl font-bold">
-            Season Summary
-          </h2>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <SummaryCard
-              label="Regular Season Games"
-              value={regularSeasonGames}
-            />
-            <SummaryCard
-              label="Main Playoff Games"
-              value={mainPlayoffGames}
-            />
-            <SummaryCard
-              label="Franchises"
-              value={FRANCHISES.length}
-            />
-            <SummaryCard
-              label="Regular Season Weeks"
-              value={14}
-            />
           </div>
-        </section>
+
+          <FinalStandings
+            standings={
+              finalStandings
+            }
+          />
+        </div>
       </div>
     </main>
-  );
-}
-function ConferenceTable({
-  name,
-  teams,
-}: {
-  name: string;
-  teams: TeamStanding[];
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
-      <div className="border-b border-zinc-800 px-5 py-4">
-        <h3 className="font-bold">
-          {name}
-        </h3>
-      </div>
-      {teams.map((team, index) => (
-        <div
-          key={team.rosterId}
-          className={`px-5 py-4 ${
-            index < teams.length - 1
-              ? "border-b border-zinc-800"
-              : ""
-          }`}
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="truncate font-semibold">
-                {getFranchiseName(
-                  team.rosterId
-                )}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                PF {team.pointsFor.toFixed(2)} ·
-                PA{" "}
-                {team.pointsAgainst.toFixed(2)}
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="font-bold">
-                {formatRecord(team)}
-              </p>
-              <p className="text-xs text-zinc-500">
-                {index + 1}
-                {index === 0
-                  ? "st"
-                  : index === 1
-                  ? "nd"
-                  : index === 2
-                  ? "rd"
-                  : "th"}
-              </p>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-      <p className="text-sm text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-bold">
-        {value}
-      </p>
-    </div>
   );
 }
