@@ -1,11 +1,11 @@
-import { getHistoricalData } from "../../lib/sleeper";
+import { getAllTimeRecords } from "../../lib/records";
 
 export default async function HistoryTestPage() {
-  const seasons = await getHistoricalData();
+  const records = await getAllTimeRecords();
 
   return (
     <main>
-      <h1>Historical Data Test</h1>
+      <h1>All-Time Records Test</h1>
 
       <p
         style={{
@@ -13,184 +13,129 @@ export default async function HistoryTestPage() {
           marginBottom: "24px",
         }}
       >
-        Checking how Sleeper games are classified across all
-        historical seasons.
+        Official records from Regular Season + Main
+        Playoffs only.
       </p>
 
-      {seasons.map((season) => {
-        const regularSeason = season.matchups.filter(
-          (matchup) =>
-            matchup.phase === "Regular Season"
-        );
+      <RecordCard
+        title="Highest Team Score"
+        record={records.highestTeamScore}
+        valueLabel="points"
+      />
 
-        const mainPlayoffs = season.matchups.filter(
-          (matchup) =>
-            matchup.phase === "Main Playoffs"
-        );
+      <RecordCard
+        title="Lowest Team Score"
+        record={records.lowestTeamScore}
+        valueLabel="points"
+      />
 
-        const toiletBowl = season.matchups.filter(
-          (matchup) =>
-            matchup.phase === "Toilet Bowl"
-        );
+      <RecordCard
+        title="Biggest Winning Margin"
+        record={records.biggestWinningMargin}
+        valueLabel="points"
+      />
 
-        const ignored = season.matchups.filter(
-          (matchup) =>
-            matchup.phase === "Ignored"
-        );
-
-        return (
-          <article
-            key={season.league.league_id}
-            style={{
-              background: "#151b23",
-              border: "1px solid #27303b",
-              borderRadius: "18px",
-              padding: "18px",
-              marginBottom: "20px",
-            }}
-          >
-            <p
-              style={{
-                fontSize: "12px",
-                fontWeight: "700",
-                letterSpacing: "1px",
-                color: "#687384",
-              }}
-            >
-              SEASON
-            </p>
-
-            <h2
-              style={{
-                margin: "6px 0 18px",
-                fontSize: "24px",
-              }}
-            >
-              {season.league.season}
-            </h2>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "8px",
-              }}
-            >
-              <StatRow
-                label="Regular Season"
-                value={regularSeason.length}
-              />
-
-              <StatRow
-                label="Main Playoffs"
-                value={mainPlayoffs.length}
-              />
-
-              <StatRow
-                label="Toilet Bowl"
-                value={toiletBowl.length}
-              />
-
-              <StatRow
-                label="Ignored"
-                value={ignored.length}
-              />
-            </div>
-
-            <div
-              style={{
-                height: "1px",
-                background: "#27303b",
-                margin: "18px 0",
-              }}
-            />
-
-            <p
-              style={{
-                fontSize: "12px",
-                fontWeight: "700",
-                letterSpacing: "1px",
-                color: "#687384",
-                marginBottom: "10px",
-              }}
-            >
-              PLAYOFF CLASSIFICATION
-            </p>
-
-            {season.matchups
-              .filter(
-                (matchup) => matchup.week >= 15
-              )
-              .map((matchup, index) => (
-                <div
-                  key={`${matchup.week}-${matchup.rosterA}-${matchup.rosterB}-${index}`}
-                  style={{
-                    padding: "10px 0",
-                    borderBottom:
-                      "1px solid #27303b",
-                    fontSize: "13px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent:
-                        "space-between",
-                      gap: "12px",
-                    }}
-                  >
-                    <span>
-                      Week {matchup.week}:{" "}
-                      {matchup.rosterA} vs{" "}
-                      {matchup.rosterB}
-                    </span>
-
-                    <span
-                      style={{
-                        color:
-                          matchup.phase ===
-                          "Main Playoffs"
-                            ? "#ffffff"
-                            : matchup.phase ===
-                              "Toilet Bowl"
-                            ? "#9da7b3"
-                            : "#687384",
-                        fontWeight: "700",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {matchup.phase}
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </article>
-        );
-      })}
+      <RecordCard
+        title="Closest Game"
+        record={records.closestGame}
+        valueLabel="points"
+      />
     </main>
   );
 }
 
-function StatRow({
-  label,
-  value,
+function RecordCard({
+  title,
+  record,
+  valueLabel,
 }: {
-  label: string;
-  value: number;
+  title: string;
+  record: {
+    season: string;
+    week: number;
+    phase: string;
+    rosterId: number;
+    score: number;
+    opponentRosterId: number;
+    opponentScore: number;
+    margin: number;
+  } | null;
+  valueLabel: string;
 }) {
+  if (!record) {
+    return null;
+  }
+
   return (
-    <div
+    <article
       style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "10px 12px",
-        background: "#0f141b",
-        borderRadius: "10px",
+        background: "#151b23",
+        border: "1px solid #27303b",
+        borderRadius: "18px",
+        padding: "18px",
+        marginBottom: "16px",
       }}
     >
-      <span>{label}</span>
+      <p
+        style={{
+          fontSize: "12px",
+          fontWeight: "700",
+          letterSpacing: "1px",
+          color: "#687384",
+        }}
+      >
+        {title.toUpperCase()}
+      </p>
 
-      <strong>{value}</strong>
-    </div>
+      <h2
+        style={{
+          margin: "8px 0",
+          fontSize: "30px",
+        }}
+      >
+        {title === "Highest Team Score" &&
+          record.score.toFixed(2)}
+
+        {title === "Lowest Team Score" &&
+          record.score.toFixed(2)}
+
+        {title === "Biggest Winning Margin" &&
+          record.margin.toFixed(2)}
+
+        {title === "Closest Game" &&
+          record.margin.toFixed(2)}
+
+        <span
+          style={{
+            fontSize: "14px",
+            color: "#687384",
+            marginLeft: "6px",
+          }}
+        >
+          {valueLabel}
+        </span>
+      </h2>
+
+      <p>
+        {record.season} · Week {record.week} ·{" "}
+        {record.phase}
+      </p>
+
+      <p
+        style={{
+          marginTop: "8px",
+          color: "#f5f7fa",
+        }}
+      >
+        Roster {record.rosterId}{" "}
+        <span style={{ color: "#687384" }}>
+          {record.score.toFixed(2)}
+        </span>{" "}
+        vs Roster {record.opponentRosterId}{" "}
+        <span style={{ color: "#687384" }}>
+          {record.opponentScore.toFixed(2)}
+        </span>
+      </p>
+    </article>
   );
 }
