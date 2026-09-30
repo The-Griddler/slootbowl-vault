@@ -24,17 +24,17 @@ export default async function DiagnosticPage() {
 
   const stats = await response.json();
 
+  const statKeys = Object.keys(stats);
+
+  const firstTenKeys =
+    statKeys.slice(0, 10);
+
   const firstStarter =
     matchups.find(
       (matchup) =>
         matchup.starters &&
         matchup.starters.length > 0
     )?.starters?.[0];
-
-  const firstStarterStats =
-    firstStarter
-      ? stats[firstStarter]
-      : null;
 
   return (
     <main>
@@ -61,82 +61,85 @@ export default async function DiagnosticPage() {
         2026 · Week {WEEK}
       </p>
 
-      <article
-        style={{
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "18px",
-          padding: "18px",
-          marginBottom: "12px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "11px",
-            fontWeight: "700",
-            letterSpacing: "1px",
-            color: "#687384",
-          }}
-        >
-          FIRST STARTER FOUND
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          FIRST STARTER
         </p>
 
-        <p
-          style={{
-            marginTop: "10px",
-          }}
-        >
-          Player ID:
-        </p>
-
-        <p
-          style={{
-            marginTop: "4px",
-            color: "#ffffff",
-            fontWeight: "600",
-          }}
-        >
+        <h2 style={valueStyle}>
           {firstStarter ?? "None"}
-        </p>
+        </h2>
       </article>
 
-      <article
-        style={{
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "18px",
-          padding: "18px",
-          marginBottom: "12px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "11px",
-            fontWeight: "700",
-            letterSpacing: "1px",
-            color: "#687384",
-          }}
-        >
-          RAW SLEEPER PLAYER STATS
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          STATS OBJECT
         </p>
 
-        <pre
-          style={{
-            marginTop: "14px",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontSize: "12px",
-            lineHeight: "1.5",
-            color: "#ffffff",
-          }}
-        >
+        <p style={{ marginTop: "10px" }}>
+          Number of players returned:
+        </p>
+
+        <h2 style={valueStyle}>
+          {statKeys.length}
+        </h2>
+      </article>
+
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          FIRST 10 PLAYER IDS RETURNED
+        </p>
+
+        <pre style={preStyle}>
           {JSON.stringify(
-            firstStarterStats,
+            firstTenKeys,
             null,
             2
           )}
         </pre>
       </article>
+
+      <article style={cardStyle}>
+        <p style={labelStyle}>
+          DOES SLEEPER RETURN OUR STARTER?
+        </p>
+
+        <h2 style={valueStyle}>
+          {firstStarter &&
+          stats[firstStarter]
+            ? "YES"
+            : "NO"}
+        </h2>
+      </article>
     </main>
   );
 }
+
+const cardStyle = {
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "18px",
+  padding: "18px",
+  marginBottom: "12px",
+};
+
+const labelStyle = {
+  fontSize: "11px",
+  fontWeight: "700",
+  letterSpacing: "1px",
+  color: "#687384",
+};
+
+const valueStyle = {
+  margin: "8px 0 0",
+  fontSize: "24px",
+};
+
+const preStyle = {
+  marginTop: "12px",
+  whiteSpace: "pre-wrap" as const,
+  wordBreak: "break-word" as const,
+  fontSize: "12px",
+  lineHeight: "1.5",
+  color: "#ffffff",
+};
