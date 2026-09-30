@@ -11,6 +11,9 @@ export type SleeperUser = {
   user_id: string;
   display_name: string;
   avatar: string | null;
+  metadata?: {
+    team_name?: string;
+  } | null;
 };
 
 export type SleeperRoster = {
@@ -97,7 +100,9 @@ async function fetchLeague(
 
 async function fetchBracket(
   leagueId: string,
-  bracket: "winners_bracket" | "losers_bracket"
+  bracket:
+    | "winners_bracket"
+    | "losers_bracket"
 ): Promise<SleeperBracketMatch[]> {
   const response = await fetch(
     `https://api.sleeper.app/v1/league/${leagueId}/${bracket}`,
@@ -215,7 +220,10 @@ function buildBracketMap(
       match.t2 !== null
     ) {
       map.set(
-        rosterPairKey(match.t1, match.t2),
+        rosterPairKey(
+          match.t1,
+          match.t2
+        ),
         match
       );
     }
@@ -227,21 +235,31 @@ function buildBracketMap(
 function classifyPlayoffMatchup(
   rosterA: number,
   rosterB: number,
-  winnersMap: Map<string, SleeperBracketMatch>,
-  losersMap: Map<string, SleeperBracketMatch>
+  winnersMap: Map<
+    string,
+    SleeperBracketMatch
+  >,
+  losersMap: Map<
+    string,
+    SleeperBracketMatch
+  >
 ): HistoricalMatchupPhase {
-  const key = rosterPairKey(rosterA, rosterB);
+  const key = rosterPairKey(
+    rosterA,
+    rosterB
+  );
 
-  const winnersMatch = winnersMap.get(key);
+  const winnersMatch =
+    winnersMap.get(key);
 
   if (winnersMatch) {
     /*
-     * Sleeper's `p` field identifies placement games.
+     * p = 1 represents the championship.
      *
-     * p = 1 is the championship.
-     * Other placement values (3, 5, etc.) are
-     * consolation/placement games and do not count
-     * toward official playoff statistics.
+     * Other placement values such as p = 3
+     * or p = 5 are consolation/placement
+     * games and are excluded from official
+     * playoff statistics.
      */
     if (
       winnersMatch.p === undefined ||
@@ -263,17 +281,19 @@ function classifyPlayoffMatchup(
 export async function getHistoricalSeason(
   league: SleeperLeague
 ): Promise<HistoricalSeason> {
-  const [winnersBracket, losersBracket] =
-    await Promise.all([
-      fetchBracket(
-        league.league_id,
-        "winners_bracket"
-      ),
-      fetchBracket(
-        league.league_id,
-        "losers_bracket"
-      ),
-    ]);
+  const [
+    winnersBracket,
+    losersBracket,
+  ] = await Promise.all([
+    fetchBracket(
+      league.league_id,
+      "winners_bracket"
+    ),
+    fetchBracket(
+      league.league_id,
+      "losers_bracket"
+    ),
+  ]);
 
   const winnersMap =
     buildBracketMap(winnersBracket);
@@ -284,10 +304,11 @@ export async function getHistoricalSeason(
   const matchups: HistoricalMatchup[] = [];
 
   for (let week = 1; week <= 17; week++) {
-    const weeklyMatchups = await getMatchups(
-      week,
-      league.league_id
-    );
+    const weeklyMatchups =
+      await getMatchups(
+        week,
+        league.league_id
+      );
 
     const grouped = new Map<
       number,
@@ -299,8 +320,13 @@ export async function getHistoricalSeason(
         continue;
       }
 
-      if (!grouped.has(matchup.matchup_id)) {
-        grouped.set(matchup.matchup_id, []);
+      if (
+        !grouped.has(matchup.matchup_id)
+      ) {
+        grouped.set(
+          matchup.matchup_id,
+          []
+        );
       }
 
       grouped
@@ -316,14 +342,20 @@ export async function getHistoricalSeason(
       const teamA = teams[0];
       const teamB = teams[1];
 
-      const scoreA = teamA.points ?? 0;
-      const scoreB = teamB.points ?? 0;
+      const scoreA =
+        teamA.points ?? 0;
+
+      const scoreB =
+        teamB.points ?? 0;
 
       /*
-       * Unplayed/future games should never enter
-       * historical statistics.
+       * Unplayed/future games should never
+       * enter historical statistics.
        */
-      if (scoreA === 0 && scoreB === 0) {
+      if (
+        scoreA === 0 &&
+        scoreB === 0
+      ) {
         continue;
       }
 
@@ -345,8 +377,10 @@ export async function getHistoricalSeason(
         rosterB: teamB.roster_id,
         scoreA,
         scoreB,
-        startersA: teamA.starters ?? [],
-        startersB: teamB.starters ?? [],
+        startersA:
+          teamA.starters ?? [],
+        startersB:
+          teamB.starters ?? [],
       });
     }
   }
@@ -360,13 +394,15 @@ export async function getHistoricalSeason(
 export async function getHistoricalData(): Promise<
   HistoricalSeason[]
 > {
-  const leagues = await getLeagueHistory();
+  const leagues =
+    await getLeagueHistory();
 
-  const seasons = await Promise.all(
-    leagues.map((league) =>
-      getHistoricalSeason(league)
-    )
-  );
+  const seasons =
+    await Promise.all(
+      leagues.map((league) =>
+        getHistoricalSeason(league)
+      )
+    );
 
   return seasons;
 }
