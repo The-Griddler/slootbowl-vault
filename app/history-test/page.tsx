@@ -1,194 +1,139 @@
-import { getAllTimeRecords } from "../../lib/records";
+import {
+  getLeagueHistory,
+  getRosters,
+  getUsers,
+} from "../../lib/sleeper";
 
 export default async function HistoryTestPage() {
-  const records = await getAllTimeRecords();
+  const leagues = await getLeagueHistory();
+
+  const historicalTeams = await Promise.all(
+    leagues.map(async (league) => {
+      const [rosters, users] = await Promise.all([
+        getRosters(league.league_id),
+        getUsers(league.league_id),
+      ]);
+
+      const teams = rosters
+        .sort((a, b) => a.roster_id - b.roster_id)
+        .map((roster) => {
+          const user = users.find(
+            (user) =>
+              user.user_id === roster.owner_id
+          );
+
+          return {
+            rosterId: roster.roster_id,
+            teamName:
+              user?.metadata?.team_name ||
+              "No team name",
+            manager:
+              user?.display_name ||
+              "Unknown manager",
+          };
+        });
+
+      return {
+        season: league.season,
+        leagueId: league.league_id,
+        teams,
+      };
+    })
+  );
 
   return (
     <main>
-      <h1>All-Time Records Test</h1>
-
-      <p
-        style={{
-          marginTop: "10px",
-          marginBottom: "28px",
-        }}
-      >
-        Official records from 2022–2026. Toilet Bowl and
-        consolation games are excluded.
-      </p>
-
-      <RecordSection
-        title="Regular Season"
-        records={records.regularSeason}
-      />
-
-      <RecordSection
-        title="Main Playoffs"
-        records={records.mainPlayoffs}
-      />
-    </main>
-  );
-}
-
-function RecordSection({
-  title,
-  records,
-}: {
-  title: string;
-  records: {
-    highestTeamScore: LeagueRecord | null;
-    lowestTeamScore: LeagueRecord | null;
-    biggestWinningMargin: LeagueRecord | null;
-    closestGame: LeagueRecord | null;
-  };
-}) {
-  return (
-    <section style={{ marginBottom: "32px" }}>
       <p
         style={{
           fontSize: "12px",
           fontWeight: "700",
-          letterSpacing: "1px",
+          letterSpacing: "1.5px",
           color: "#687384",
           marginBottom: "8px",
         }}
       >
-        RECORD CATEGORY
+        DYNASTY SLUTS
       </p>
 
-      <h2
-        style={{
-          fontSize: "24px",
-          margin: "0 0 16px",
-        }}
-      >
-        {title}
-      </h2>
-
-      <RecordCard
-        title="Highest Team Score"
-        record={records.highestTeamScore}
-        value={(record) =>
-          record.score.toFixed(2)
-        }
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Lowest Team Score"
-        record={records.lowestTeamScore}
-        value={(record) =>
-          record.score.toFixed(2)
-        }
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Biggest Winning Margin"
-        record={records.biggestWinningMargin}
-        value={(record) =>
-          record.margin.toFixed(2)
-        }
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Closest Game"
-        record={records.closestGame}
-        value={(record) =>
-          record.margin.toFixed(2)
-        }
-        suffix="pts"
-      />
-    </section>
-  );
-}
-
-function RecordCard({
-  title,
-  record,
-  value,
-  suffix,
-}: {
-  title: string;
-  record: LeagueRecord | null;
-  value: (record: LeagueRecord) => string;
-  suffix: string;
-}) {
-  if (!record) {
-    return null;
-  }
-
-  return (
-    <article
-      style={{
-        background: "#151b23",
-        border: "1px solid #27303b",
-        borderRadius: "18px",
-        padding: "18px",
-        marginBottom: "12px",
-      }}
-    >
-      <p
-        style={{
-          fontSize: "12px",
-          fontWeight: "700",
-          letterSpacing: "1px",
-          color: "#687384",
-        }}
-      >
-        {title.toUpperCase()}
-      </p>
-
-      <h3
-        style={{
-          margin: "8px 0",
-          fontSize: "30px",
-        }}
-      >
-        {value(record)}
-
-        <span
-          style={{
-            fontSize: "14px",
-            color: "#687384",
-            marginLeft: "6px",
-          }}
-        >
-          {suffix}
-        </span>
-      </h3>
-
-      <p>
-        {record.season} · Week {record.week}
-      </p>
+      <h1>Historical Teams</h1>
 
       <p
         style={{
           marginTop: "8px",
-          color: "#f5f7fa",
+          marginBottom: "28px",
         }}
       >
-        Roster {record.rosterId}{" "}
-        <span style={{ color: "#687384" }}>
-          {record.score.toFixed(2)}
-        </span>{" "}
-        vs Roster {record.opponentRosterId}{" "}
-        <span style={{ color: "#687384" }}>
-          {record.opponentScore.toFixed(2)}
-        </span>
+        Sleeper team names and managers across every
+        historical season.
       </p>
-    </article>
+
+      {historicalTeams.map((season) => (
+        <section
+          key={season.leagueId}
+          style={{
+            marginBottom: "36px",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "24px",
+              margin: "0 0 6px",
+            }}
+          >
+            {season.season}
+          </h2>
+
+          <p
+            style={{
+              fontSize: "12px",
+              marginBottom: "14px",
+              color: "#687384",
+            }}
+          >
+            League ID: {season.leagueId}
+          </p>
+
+          {season.teams.map((team) => (
+            <article
+              key={team.rosterId}
+              style={{
+                background: "#151b23",
+                border: "1px solid #27303b",
+                borderRadius: "14px",
+                padding: "14px",
+                marginBottom: "8px",
+              }}
+            >
+              <p
+                style={{
+                  color: "#ffffff",
+                  fontWeight: "700",
+                }}
+              >
+                Roster {team.rosterId}
+              </p>
+
+              <p
+                style={{
+                  marginTop: "5px",
+                  color: "#ffffff",
+                }}
+              >
+                {team.teamName}
+              </p>
+
+              <p
+                style={{
+                  marginTop: "4px",
+                  fontSize: "13px",
+                }}
+              >
+                Manager: {team.manager}
+              </p>
+            </article>
+          ))}
+        </section>
+      ))}
+    </main>
   );
 }
-
-type LeagueRecord = {
-  season: string;
-  week: number;
-  phase: string;
-  rosterId: number;
-  score: number;
-  opponentRosterId: number;
-  opponentScore: number;
-  margin: number;
-};
