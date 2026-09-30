@@ -1,24 +1,30 @@
-import { getMatchups } from "../../lib/sleeper";
-const LEAGUE_ID = "1326512818865868800";
-const WEEK = 1;
+import {
+  getPlayerRecords,
+} from "../../lib/playerRecords";
 export default async function DiagnosticPage() {
-  const matchups = await getMatchups(
-    WEEK,
-    LEAGUE_ID
-  );
-  const firstMatchup =
-    matchups[0] ?? null;
-  const starters =
-    firstMatchup?.starters ?? [];
-  const startersPoints =
-    firstMatchup?.starters_points ?? [];
-  const playerRows = starters.map(
-    (playerId, index) => ({
-      playerId,
-      points:
-        startersPoints[index] ?? null,
-    })
-  );
+  const records =
+    await getPlayerRecords();
+  const topCareer =
+    [...records.careers]
+      .sort(
+        (a, b) =>
+          b.points - a.points
+      )
+      .slice(0, 10);
+  const topSeasons =
+    [...records.seasons]
+      .sort(
+        (a, b) =>
+          b.points - a.points
+      )
+      .slice(0, 10);
+  const topFranchisePlayers =
+    [...records.franchises]
+      .sort(
+        (a, b) =>
+          b.points - a.points
+      )
+      .slice(0, 10);
   return (
     <main>
       <p
@@ -33,7 +39,7 @@ export default async function DiagnosticPage() {
         DYNASTY SLUTS
       </p>
       <h1>
-        Player Points Diagnostic
+        Player Records Diagnostic
       </h1>
       <p
         style={{
@@ -41,72 +47,187 @@ export default async function DiagnosticPage() {
           marginBottom: "28px",
         }}
       >
-        2026 · Week {WEEK}
+        Historical player data
       </p>
       <article style={cardStyle}>
         <p style={labelStyle}>
-          ROSTER ID
+          WEEKLY PERFORMANCES
         </p>
         <h2 style={valueStyle}>
-          {firstMatchup?.roster_id ??
-            "None"}
+          {records.weekly.length}
         </h2>
       </article>
       <article style={cardStyle}>
         <p style={labelStyle}>
-          STARTERS
+          PLAYER SEASONS
         </p>
         <h2 style={valueStyle}>
-          {starters.length}
+          {records.seasons.length}
         </h2>
-        <pre style={preStyle}>
-          {JSON.stringify(
-            starters,
-            null,
-            2
-          )}
-        </pre>
       </article>
       <article style={cardStyle}>
         <p style={labelStyle}>
-          STARTERS POINTS
+          PLAYER CAREERS
         </p>
         <h2 style={valueStyle}>
-          {startersPoints.length}
+          {records.careers.length}
         </h2>
-        <pre style={preStyle}>
-          {JSON.stringify(
-            startersPoints,
-            null,
-            2
-          )}
-        </pre>
       </article>
       <article style={cardStyle}>
         <p style={labelStyle}>
-          PLAYER → POINTS
+          FRANCHISE / PLAYER RECORDS
         </p>
-        <pre style={preStyle}>
-          {JSON.stringify(
-            playerRows,
-            null,
-            2
-          )}
-        </pre>
+        <h2 style={valueStyle}>
+          {records.franchises.length}
+        </h2>
       </article>
-      <article style={cardStyle}>
-        <p style={labelStyle}>
-          RAW MATCHUP
-        </p>
-        <pre style={preStyle}>
-          {JSON.stringify(
-            firstMatchup,
-            null,
-            2
-          )}
-        </pre>
-      </article>
+      <section style={sectionStyle}>
+        <h2 style={sectionHeadingStyle}>
+          Top Career Players
+        </h2>
+        {topCareer.map(
+          (record, index) => (
+            <RecordCard
+              key={record.playerId}
+              rank={index + 1}
+              playerId={
+                record.playerId
+              }
+              points={
+                record.points
+              }
+              starts={
+                record.starts
+              }
+              extra={`${record.seasons.length} seasons`}
+            />
+          )
+        )}
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={sectionHeadingStyle}>
+          Top Player Seasons
+        </h2>
+        {topSeasons.map(
+          (record, index) => (
+            <RecordCard
+              key={`${record.season}-${record.playerId}`}
+              rank={index + 1}
+              playerId={
+                record.playerId
+              }
+              points={
+                record.points
+              }
+              starts={
+                record.starts
+              }
+              extra={record.season}
+            />
+          )
+        )}
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={sectionHeadingStyle}>
+          Top Franchise / Player Totals
+        </h2>
+        {topFranchisePlayers.map(
+          (record, index) => (
+            <RecordCard
+              key={`${record.rosterId}-${record.playerId}`}
+              rank={index + 1}
+              playerId={
+                record.playerId
+              }
+              points={
+                record.points
+              }
+              starts={
+                record.starts
+              }
+              extra={`Roster ${record.rosterId}`}
+            />
+          )
+        )}
+      </section>
     </main>
+  );
+}
+function RecordCard({
+  rank,
+  playerId,
+  points,
+  starts,
+  extra,
+}: {
+  rank: number;
+  playerId: string;
+  points: number;
+  starts: number;
+  extra: string;
+}) {
+  return (
+    <article
+      style={cardStyle}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: "10px",
+        }}
+      >
+        <span
+          style={{
+            color: "#687384",
+            fontSize: "13px",
+            fontWeight: "700",
+          }}
+        >
+          #{rank}
+        </span>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: "22px",
+          }}
+        >
+          Player {playerId}
+        </h3>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: "6px",
+          marginTop: "8px",
+        }}
+      >
+        <strong
+          style={{
+            fontSize: "28px",
+          }}
+        >
+          {points.toFixed(2)}
+        </strong>
+        <span
+          style={{
+            color: "#687384",
+            fontSize: "13px",
+          }}
+        >
+          pts
+        </span>
+      </div>
+      <p
+        style={{
+          marginTop: "7px",
+          fontSize: "13px",
+        }}
+      >
+        {starts} starts · {extra}
+      </p>
+    </article>
   );
 }
 const cardStyle = {
@@ -126,11 +247,10 @@ const valueStyle = {
   margin: "8px 0 0",
   fontSize: "24px",
 };
-const preStyle = {
-  marginTop: "14px",
-  whiteSpace: "pre-wrap" as const,
-  wordBreak: "break-word" as const,
-  fontSize: "12px",
-  lineHeight: "1.5",
-  color: "#ffffff",
+const sectionStyle = {
+  marginTop: "40px",
+};
+const sectionHeadingStyle = {
+  fontSize: "22px",
+  marginBottom: "14px",
 };
