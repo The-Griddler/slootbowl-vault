@@ -152,14 +152,14 @@ export default async function SeasonPage({
       </section>
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>OBFC</p>
+          <p style={labelStyle()}>Final Standings</p>
           <h2
             style={{
               margin: "4px 0 0",
               fontSize: "22px",
             }}
           >
-            Final standings
+            OBFC
           </h2>
         </div>
         <article style={cardStyle()}>
@@ -216,14 +216,14 @@ export default async function SeasonPage({
       </section>
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>GPFC</p>
+          <p style={labelStyle()}>Final Standings</p>
           <h2
             style={{
               margin: "4px 0 0",
               fontSize: "22px",
             }}
           >
-            Final standings
+            GPFC
           </h2>
         </div>
         <article style={cardStyle()}>
