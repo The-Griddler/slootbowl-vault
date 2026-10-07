@@ -521,7 +521,9 @@ export default async function SeasonPage({
                         }}
                       >
                         {getFranchiseName(
-                          result.rosterId
+                          "rosterId" in result
+                            ? result.rosterId
+                            : Array.from(result.rosters)[0]
                         )}
                       </span>
                     </div>
