@@ -5,6 +5,7 @@ import { useState } from "react";
 import type {
   AllTimeRecords,
   AllTimeRecordSet,
+  AllTimeFranchiseRecord,
   LeagueRecord,
   RecordSet,
   SeasonRecord,
@@ -34,18 +35,15 @@ export default function RecordsTabs({
       ? records
       : records.bySeason[selectedSeason] ?? records;
 
+  const isSeasonComplete =
+    selectedSeason === "all" ||
+    records.completedSeasons[competition].includes(
+      selectedSeason
+    );
+
   return (
     <>
-      <div
-        style={{
-          display: "flex",
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "14px",
-          padding: "4px",
-          marginBottom: "24px",
-        }}
-      >
+      <div style={tabsStyle}>
         <TabButton
           label="Game"
           active={activeTab === "games"}
@@ -96,15 +94,7 @@ export default function RecordsTabs({
 
           <p style={subheadingStyle}>COMPETITION</p>
 
-          <div
-            style={{
-              display: "flex",
-              background: "#151b23",
-              border: "1px solid #27303b",
-              borderRadius: "12px",
-              padding: "4px",
-            }}
-          >
+          <div style={competitionTabsStyle}>
             <TabButton
               label="Regular Season"
               active={competition === "regularSeason"}
@@ -121,6 +111,23 @@ export default function RecordsTabs({
               }
             />
           </div>
+
+          {activeTab === "season" &&
+            !isSeasonComplete && (
+              <p
+                style={{
+                  marginTop: "12px",
+                  fontSize: "12px",
+                  color: "#aeb8c5",
+                  lineHeight: "1.6",
+                }}
+              >
+                Season in Progress — these totals are
+                provisional and are excluded from
+                all-season records until this competition
+                is complete.
+              </p>
+            )}
         </div>
       )}
 
@@ -135,6 +142,7 @@ export default function RecordsTabs({
       {activeTab === "season" && (
         <SeasonRecords
           records={filteredRecords.season[competition]}
+          competition={competition}
         />
       )}
 
@@ -219,9 +227,13 @@ function IndividualGameRecords({
 
 function SeasonRecords({
   records,
+  competition,
 }: {
   records: SeasonRecordSet;
+  competition: Competition;
 }) {
+  const isPlayoffs = competition === "mainPlayoffs";
+
   return (
     <section>
       <SectionHeading title="Season Long" />
@@ -232,11 +244,13 @@ function SeasonRecords({
         value={(r) => `${r.wins} wins`}
       />
 
-      <SeasonRecordCard
-        title="Fewest Wins"
-        record={records.fewestWins}
-        value={(r) => `${r.wins} wins`}
-      />
+      {!isPlayoffs && (
+        <SeasonRecordCard
+          title="Fewest Wins"
+          record={records.fewestWins}
+          value={(r) => `${r.wins} wins`}
+        />
+      )}
 
       <SeasonRecordCard
         title="Most Points Scored"
@@ -245,12 +259,14 @@ function SeasonRecords({
         suffix="pts"
       />
 
-      <SeasonRecordCard
-        title="Fewest Points Scored"
-        record={records.fewestPointsFor}
-        value={(r) => r.pointsFor.toFixed(2)}
-        suffix="pts"
-      />
+      {!isPlayoffs && (
+        <SeasonRecordCard
+          title="Fewest Points Scored"
+          record={records.fewestPointsFor}
+          value={(r) => r.pointsFor.toFixed(2)}
+          suffix="pts"
+        />
+      )}
 
       <SeasonRecordCard
         title="Most Points Conceded"
@@ -259,30 +275,34 @@ function SeasonRecords({
         suffix="pts"
       />
 
-      <SeasonRecordCard
-        title="Fewest Points Conceded"
-        record={records.fewestPointsAgainst}
-        value={(r) => r.pointsAgainst.toFixed(2)}
-        suffix="pts"
-      />
+      {!isPlayoffs && (
+        <>
+          <SeasonRecordCard
+            title="Fewest Points Conceded"
+            record={records.fewestPointsAgainst}
+            value={(r) => r.pointsAgainst.toFixed(2)}
+            suffix="pts"
+          />
 
-      <SeasonRecordCard
-        title="Best Point Differential"
-        record={records.bestPointDifferential}
-        value={(r) =>
-          formatDifferential(r.pointDifferential)
-        }
-        suffix="pts"
-      />
+          <SeasonRecordCard
+            title="Best Point Differential"
+            record={records.bestPointDifferential}
+            value={(r) =>
+              formatDifferential(r.pointDifferential)
+            }
+            suffix="pts"
+          />
 
-      <SeasonRecordCard
-        title="Worst Point Differential"
-        record={records.worstPointDifferential}
-        value={(r) =>
-          formatDifferential(r.pointDifferential)
-        }
-        suffix="pts"
-      />
+          <SeasonRecordCard
+            title="Worst Point Differential"
+            record={records.worstPointDifferential}
+            value={(r) =>
+              formatDifferential(r.pointDifferential)
+            }
+            suffix="pts"
+          />
+        </>
+      )}
     </section>
   );
 }
@@ -395,12 +415,7 @@ function SectionHeading({
         }}
       />
 
-      <h2
-        style={{
-          margin: 0,
-          fontSize: "24px",
-        }}
-      >
+      <h2 style={{ margin: 0, fontSize: "24px" }}>
         {title}
       </h2>
     </div>
@@ -429,17 +444,8 @@ function RecordCard({
     <article style={cardStyle}>
       <p style={labelStyle}>{title.toUpperCase()}</p>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: "7px",
-          marginTop: "5px",
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: "30px" }}>
-          {value(record)}
-        </h3>
+      <div style={valueRowStyle}>
+        <h3 style={valueStyle}>{value(record)}</h3>
 
         {suffix && (
           <span style={suffixStyle}>{suffix}</span>
@@ -480,17 +486,8 @@ function SeasonRecordCard({
     <article style={cardStyle}>
       <p style={labelStyle}>{title.toUpperCase()}</p>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: "7px",
-          marginTop: "5px",
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: "30px" }}>
-          {value(record)}
-        </h3>
+      <div style={valueRowStyle}>
+        <h3 style={valueStyle}>{value(record)}</h3>
 
         {suffix && (
           <span style={suffixStyle}>{suffix}</span>
@@ -513,18 +510,8 @@ function AllTimeRecordCard({
   suffix,
 }: {
   title: string;
-  record: {
-    rosterId: number;
-    wins: number;
-    losses: number;
-    ties: number;
-    pointsFor: number;
-    pointsAgainst: number;
-    pointDifferential: number;
-  } | null;
-  value: (record: NonNullable<
-    AllTimeRecordSet["mostWins"]
-  >) => string;
+  record: AllTimeFranchiseRecord | null;
+  value: (record: AllTimeFranchiseRecord) => string;
   suffix?: string;
 }) {
   if (!record) return null;
@@ -533,17 +520,8 @@ function AllTimeRecordCard({
     <article style={cardStyle}>
       <p style={labelStyle}>{title.toUpperCase()}</p>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: "7px",
-          marginTop: "5px",
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: "30px" }}>
-          {value(record)}
-        </h3>
+      <div style={valueRowStyle}>
+        <h3 style={valueStyle}>{value(record)}</h3>
 
         {suffix && (
           <span style={suffixStyle}>{suffix}</span>
@@ -563,12 +541,41 @@ function formatDifferential(value: number) {
     : value.toFixed(2);
 }
 
+const tabsStyle = {
+  display: "flex",
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "14px",
+  padding: "4px",
+  marginBottom: "24px",
+};
+
+const competitionTabsStyle = {
+  display: "flex",
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: "12px",
+  padding: "4px",
+};
+
 const cardStyle = {
   background: "#151b23",
   border: "1px solid #27303b",
   borderRadius: "18px",
   padding: "18px",
   marginBottom: "12px",
+};
+
+const valueRowStyle = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: "7px",
+  marginTop: "5px",
+};
+
+const valueStyle = {
+  margin: 0,
+  fontSize: "30px",
 };
 
 const labelStyle = {
