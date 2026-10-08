@@ -18,14 +18,7 @@ export type TeamPerformance = {
   opponentScore: number;
 };
 
-export type LeagueRecord = {
-  season: string;
-  week: number;
-  phase: RecordPhase;
-  rosterId: number;
-  score: number;
-  opponentRosterId: number;
-  opponentScore: number;
+export type LeagueRecord = TeamPerformance & {
   margin: number;
 };
 
@@ -96,6 +89,10 @@ export type AllTimeRecords = FilteredSeasonRecords & {
   allTime: AllTimeRecordSet;
   bySeason: Record<string, FilteredSeasonRecords>;
   availableSeasons: string[];
+  completedSeasons: {
+    regularSeason: string[];
+    mainPlayoffs: string[];
+  };
 };
 
 function buildPerformances(
@@ -146,114 +143,75 @@ function toLeagueRecord(
   };
 }
 
+function highest<T>(
+  records: T[],
+  value: (record: T) => number
+): T | null {
+  return records.reduce<T | null>(
+    (best, current) =>
+      best === null || value(current) > value(best)
+        ? current
+        : best,
+    null
+  );
+}
+
+function lowest<T>(
+  records: T[],
+  value: (record: T) => number
+): T | null {
+  return records.reduce<T | null>(
+    (best, current) =>
+      best === null || value(current) < value(best)
+        ? current
+        : best,
+    null
+  );
+}
+
 function calculateRecordSet(
   performances: TeamPerformance[]
 ): RecordSet {
   const records = performances.map(toLeagueRecord);
 
-  const highestTeamScore =
-    records.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.score > best.score
-          ? current
-          : best,
-      null
-    );
-
-  const lowestTeamScore =
-    records.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.score < best.score
-          ? current
-          : best,
-      null
-    );
-
   const winningGames = records.filter(
-    (record) => record.score > record.opponentScore
+    (r) => r.score > r.opponentScore
   );
 
   const losingGames = records.filter(
-    (record) => record.score < record.opponentScore
+    (r) => r.score < r.opponentScore
   );
 
-  const biggestWinningMargin =
-    winningGames.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.margin > best.margin
-          ? current
-          : best,
-      null
-    );
-
-  const closestGame =
-    records.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.margin < best.margin
-          ? current
-          : best,
-      null
-    );
-
-  const highestCombinedScore =
-    records.reduce<LeagueRecord | null>(
-      (best, current) => {
-        if (best === null) return current;
-
-        const currentTotal =
-          current.score + current.opponentScore;
-
-        const bestTotal =
-          best.score + best.opponentScore;
-
-        return currentTotal > bestTotal ? current : best;
-      },
-      null
-    );
-
-  const lowestCombinedScore =
-    records.reduce<LeagueRecord | null>(
-      (best, current) => {
-        if (best === null) return current;
-
-        const currentTotal =
-          current.score + current.opponentScore;
-
-        const bestTotal =
-          best.score + best.opponentScore;
-
-        return currentTotal < bestTotal ? current : best;
-      },
-      null
-    );
-
-  const highestLosingScore =
-    losingGames.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.score > best.score
-          ? current
-          : best,
-      null
-    );
-
-  const lowestWinningScore =
-    winningGames.reduce<LeagueRecord | null>(
-      (best, current) =>
-        best === null || current.score < best.score
-          ? current
-          : best,
-      null
-    );
-
   return {
-    highestTeamScore,
-    lowestTeamScore,
-    biggestWinningMargin,
-    closestGame,
-    highestCombinedScore,
-    lowestCombinedScore,
-    highestLosingScore,
-    lowestWinningScore,
+    highestTeamScore: highest(records, (r) => r.score),
+    lowestTeamScore: lowest(records, (r) => r.score),
+
+    biggestWinningMargin: highest(
+      winningGames,
+      (r) => r.margin
+    ),
+
+    closestGame: lowest(records, (r) => r.margin),
+
+    highestCombinedScore: highest(
+      records,
+      (r) => r.score + r.opponentScore
+    ),
+
+    lowestCombinedScore: lowest(
+      records,
+      (r) => r.score + r.opponentScore
+    ),
+
+    highestLosingScore: highest(
+      losingGames,
+      (r) => r.score
+    ),
+
+    lowestWinningScore: lowest(
+      winningGames,
+      (r) => r.score
+    ),
   };
 }
 
@@ -266,47 +224,36 @@ function buildSeasonRecords(
     const key =
       `${performance.season}-${performance.rosterId}`;
 
-    const existing = seasons.get(key);
+    let record = seasons.get(key);
 
-    if (!existing) {
-      seasons.set(key, {
+    if (!record) {
+      record = {
         season: performance.season,
         rosterId: performance.rosterId,
-        wins:
-          performance.score > performance.opponentScore
-            ? 1
-            : 0,
-        losses:
-          performance.score < performance.opponentScore
-            ? 1
-            : 0,
-        ties:
-          performance.score === performance.opponentScore
-            ? 1
-            : 0,
-        pointsFor: performance.score,
-        pointsAgainst: performance.opponentScore,
-        pointDifferential:
-          performance.score - performance.opponentScore,
-      });
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointDifferential: 0,
+      };
 
-      continue;
+      seasons.set(key, record);
     }
 
     if (performance.score > performance.opponentScore) {
-      existing.wins += 1;
+      record.wins++;
     } else if (
       performance.score < performance.opponentScore
     ) {
-      existing.losses += 1;
+      record.losses++;
     } else {
-      existing.ties += 1;
+      record.ties++;
     }
 
-    existing.pointsFor += performance.score;
-    existing.pointsAgainst += performance.opponentScore;
-
-    existing.pointDifferential +=
+    record.pointsFor += performance.score;
+    record.pointsAgainst += performance.opponentScore;
+    record.pointDifferential +=
       performance.score - performance.opponentScore;
   }
 
@@ -317,79 +264,38 @@ function calculateSeasonRecordSet(
   records: SeasonRecord[]
 ): SeasonRecordSet {
   return {
-    mostWins: records.reduce<SeasonRecord | null>(
-      (best, current) =>
-        best === null || current.wins > best.wins
-          ? current
-          : best,
-      null
+    mostWins: highest(records, (r) => r.wins),
+    fewestWins: lowest(records, (r) => r.wins),
+
+    mostPointsFor: highest(
+      records,
+      (r) => r.pointsFor
     ),
 
-    fewestWins: records.reduce<SeasonRecord | null>(
-      (best, current) =>
-        best === null || current.wins < best.wins
-          ? current
-          : best,
-      null
+    fewestPointsFor: lowest(
+      records,
+      (r) => r.pointsFor
     ),
 
-    mostPointsFor: records.reduce<SeasonRecord | null>(
-      (best, current) =>
-        best === null || current.pointsFor > best.pointsFor
-          ? current
-          : best,
-      null
+    mostPointsAgainst: highest(
+      records,
+      (r) => r.pointsAgainst
     ),
 
-    fewestPointsFor: records.reduce<SeasonRecord | null>(
-      (best, current) =>
-        best === null || current.pointsFor < best.pointsFor
-          ? current
-          : best,
-      null
+    fewestPointsAgainst: lowest(
+      records,
+      (r) => r.pointsAgainst
     ),
 
-    mostPointsAgainst:
-      records.reduce<SeasonRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointsAgainst > best.pointsAgainst
-            ? current
-            : best,
-        null
-      ),
+    bestPointDifferential: highest(
+      records,
+      (r) => r.pointDifferential
+    ),
 
-    fewestPointsAgainst:
-      records.reduce<SeasonRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointsAgainst < best.pointsAgainst
-            ? current
-            : best,
-        null
-      ),
-
-    bestPointDifferential:
-      records.reduce<SeasonRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointDifferential >
-            best.pointDifferential
-            ? current
-            : best,
-        null
-      ),
-
-    worstPointDifferential:
-      records.reduce<SeasonRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointDifferential <
-            best.pointDifferential
-            ? current
-            : best,
-        null
-      ),
+    worstPointDifferential: lowest(
+      records,
+      (r) => r.pointDifferential
+    ),
   };
 }
 
@@ -402,46 +308,35 @@ function buildAllTimeFranchiseRecords(
   >();
 
   for (const performance of performances) {
-    const existing = franchises.get(performance.rosterId);
+    let record = franchises.get(performance.rosterId);
 
-    if (!existing) {
-      franchises.set(performance.rosterId, {
+    if (!record) {
+      record = {
         rosterId: performance.rosterId,
-        wins:
-          performance.score > performance.opponentScore
-            ? 1
-            : 0,
-        losses:
-          performance.score < performance.opponentScore
-            ? 1
-            : 0,
-        ties:
-          performance.score === performance.opponentScore
-            ? 1
-            : 0,
-        pointsFor: performance.score,
-        pointsAgainst: performance.opponentScore,
-        pointDifferential:
-          performance.score - performance.opponentScore,
-      });
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointDifferential: 0,
+      };
 
-      continue;
+      franchises.set(performance.rosterId, record);
     }
 
     if (performance.score > performance.opponentScore) {
-      existing.wins += 1;
+      record.wins++;
     } else if (
       performance.score < performance.opponentScore
     ) {
-      existing.losses += 1;
+      record.losses++;
     } else {
-      existing.ties += 1;
+      record.ties++;
     }
 
-    existing.pointsFor += performance.score;
-    existing.pointsAgainst += performance.opponentScore;
-
-    existing.pointDifferential +=
+    record.pointsFor += performance.score;
+    record.pointsAgainst += performance.opponentScore;
+    record.pointDifferential +=
       performance.score - performance.opponentScore;
   }
 
@@ -452,63 +347,74 @@ function calculateAllTimeRecordSet(
   records: AllTimeFranchiseRecord[]
 ): AllTimeRecordSet {
   return {
-    mostWins: records.reduce<AllTimeFranchiseRecord | null>(
-      (best, current) =>
-        best === null || current.wins > best.wins
-          ? current
-          : best,
-      null
+    mostWins: highest(records, (r) => r.wins),
+    fewestWins: lowest(records, (r) => r.wins),
+
+    mostPointsFor: highest(
+      records,
+      (r) => r.pointsFor
     ),
 
-    fewestWins: records.reduce<AllTimeFranchiseRecord | null>(
-      (best, current) =>
-        best === null || current.wins < best.wins
-          ? current
-          : best,
-      null
+    mostPointsAgainst: highest(
+      records,
+      (r) => r.pointsAgainst
     ),
 
-    mostPointsFor:
-      records.reduce<AllTimeFranchiseRecord | null>(
-        (best, current) =>
-          best === null || current.pointsFor > best.pointsFor
-            ? current
-            : best,
-        null
-      ),
+    bestPointDifferential: highest(
+      records,
+      (r) => r.pointDifferential
+    ),
 
-    mostPointsAgainst:
-      records.reduce<AllTimeFranchiseRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointsAgainst > best.pointsAgainst
-            ? current
-            : best,
-        null
-      ),
-
-    bestPointDifferential:
-      records.reduce<AllTimeFranchiseRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointDifferential >
-            best.pointDifferential
-            ? current
-            : best,
-        null
-      ),
-
-    worstPointDifferential:
-      records.reduce<AllTimeFranchiseRecord | null>(
-        (best, current) =>
-          best === null ||
-          current.pointDifferential <
-            best.pointDifferential
-            ? current
-            : best,
-        null
-      ),
+    worstPointDifferential: lowest(
+      records,
+      (r) => r.pointDifferential
+    ),
   };
+}
+
+/*
+ * A regular season is complete when all five
+ * Week 14 matchups have final scores.
+ *
+ * The main playoffs are complete when the
+ * Week 17 Slootbowl has a final score.
+ *
+ * Historical seasons are checked using their
+ * actual matchup data, not the calendar year.
+ */
+
+function isFinalScore(
+  matchup: HistoricalMatchup
+): boolean {
+  return (
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    (matchup.scoreA !== 0 || matchup.scoreB !== 0)
+  );
+}
+
+function isRegularSeasonComplete(
+  matchups: HistoricalMatchup[]
+): boolean {
+  const finalWeek = matchups.filter(
+    (matchup) =>
+      matchup.week === 14 &&
+      matchup.phase === "Regular Season" &&
+      isFinalScore(matchup)
+  );
+
+  return finalWeek.length === 5;
+}
+
+function arePlayoffsComplete(
+  matchups: HistoricalMatchup[]
+): boolean {
+  return matchups.some(
+    (matchup) =>
+      matchup.week === 17 &&
+      matchup.phase === "Main Playoffs" &&
+      isFinalScore(matchup)
+  );
 }
 
 export async function getAllTimeRecords(): Promise<AllTimeRecords> {
@@ -519,26 +425,53 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
   );
 
   const regularSeason = allPerformances.filter(
-    (performance) => performance.phase === "Regular Season"
+    (p) => p.phase === "Regular Season"
   );
 
   const mainPlayoffs = allPerformances.filter(
-    (performance) => performance.phase === "Main Playoffs"
+    (p) => p.phase === "Main Playoffs"
   );
 
   const availableSeasons = Array.from(
-    new Set(seasons.map((season) => season.league.season))
+    new Set(
+      seasons.map((season) => season.league.season)
+    )
   ).sort((a, b) => Number(b) - Number(a));
 
-  const bySeason: Record<string, FilteredSeasonRecords> = {};
+  const completedRegularSeasons = seasons
+    .filter((season) =>
+      isRegularSeasonComplete(season.matchups)
+    )
+    .map((season) => season.league.season);
+
+  const completedPlayoffSeasons = seasons
+    .filter((season) =>
+      arePlayoffsComplete(season.matchups)
+    )
+    .map((season) => season.league.season);
+
+  const completedRegularPerformances =
+    regularSeason.filter((p) =>
+      completedRegularSeasons.includes(p.season)
+    );
+
+  const completedPlayoffPerformances =
+    mainPlayoffs.filter((p) =>
+      completedPlayoffSeasons.includes(p.season)
+    );
+
+  const bySeason: Record<
+    string,
+    FilteredSeasonRecords
+  > = {};
 
   for (const year of availableSeasons) {
     const yearRegular = regularSeason.filter(
-      (performance) => performance.season === year
+      (p) => p.season === year
     );
 
     const yearPlayoffs = mainPlayoffs.filter(
-      (performance) => performance.season === year
+      (p) => p.season === year
     );
 
     bySeason[year] = {
@@ -551,6 +484,7 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
         regularSeason: calculateSeasonRecordSet(
           buildSeasonRecords(yearRegular)
         ),
+
         mainPlayoffs: calculateSeasonRecordSet(
           buildSeasonRecords(yearPlayoffs)
         ),
@@ -566,10 +500,15 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
 
     season: {
       regularSeason: calculateSeasonRecordSet(
-        buildSeasonRecords(regularSeason)
+        buildSeasonRecords(
+          completedRegularPerformances
+        )
       ),
+
       mainPlayoffs: calculateSeasonRecordSet(
-        buildSeasonRecords(mainPlayoffs)
+        buildSeasonRecords(
+          completedPlayoffPerformances
+        )
       ),
     },
 
@@ -579,5 +518,10 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
 
     bySeason,
     availableSeasons,
+
+    completedSeasons: {
+      regularSeason: completedRegularSeasons,
+      mainPlayoffs: completedPlayoffSeasons,
+    },
   };
 }
