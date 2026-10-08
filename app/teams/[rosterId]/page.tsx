@@ -7,10 +7,18 @@ import {
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
 import { getPlayerNames } from "../../../lib/players";
+import {
+  getLoveTriangleHistory,
+} from "../../../lib/loveTriangle";
+import {
+  isLoveTriangleTeam,
+} from "../../../lib/rivalries";
+
 import FranchiseTabs from "./FranchiseTabs";
 import TeamRecords from "./TeamRecords";
 import PlayerLegends from "./PlayerLegends";
 import HeadToHead from "./HeadToHead";
+import LoveTriangle from "./LoveTriangle";
 
 const OBFC_IDS = [4, 6, 8, 7, 9];
 
@@ -32,7 +40,8 @@ function isPlayed(matchup: HistoricalMatchup) {
   return (
     Number.isFinite(matchup.scoreA) &&
     Number.isFinite(matchup.scoreB) &&
-    (matchup.scoreA !== 0 || matchup.scoreB !== 0)
+    (matchup.scoreA !== 0 ||
+      matchup.scoreB !== 0)
   );
 }
 
@@ -73,9 +82,13 @@ function calculateRecord(
     record.pointsFor += scored;
     record.pointsAgainst += conceded;
 
-    if (scored > conceded) record.wins++;
-    else if (scored < conceded) record.losses++;
-    else record.ties++;
+    if (scored > conceded) {
+      record.wins++;
+    } else if (scored < conceded) {
+      record.losses++;
+    } else {
+      record.ties++;
+    }
   }
 
   return record;
@@ -131,7 +144,9 @@ export default async function FranchisePage({
 }: {
   params: Promise<{ rosterId: string }>;
 }) {
-  const { rosterId: rosterIdParam } = await params;
+  const { rosterId: rosterIdParam } =
+    await params;
+
   const rosterId = Number(rosterIdParam);
 
   const franchise = FRANCHISES.find(
@@ -140,7 +155,9 @@ export default async function FranchisePage({
 
   if (!franchise) notFound();
 
-  const conference = OBFC_IDS.includes(rosterId)
+  const conference = OBFC_IDS.includes(
+    rosterId
+  )
     ? "OBFC"
     : "GPFC";
 
@@ -154,87 +171,128 @@ export default async function FranchisePage({
       ? "George Barnes Memorial Trophy"
       : "Ryan Birr Memorial Shield";
 
-  const historicalData = await getHistoricalData();
+  // Load every available SFL season.
+  const historicalData =
+    await getHistoricalData();
 
   const allMatchups = historicalData.flatMap(
     (season) => season.matchups
   );
 
-  const franchiseMatchups = allMatchups.filter(
-    (matchup) =>
-      matchup.rosterA === rosterId ||
-      matchup.rosterB === rosterId
-  );
-
-  const playerIds = franchiseMatchups.flatMap(
-    (matchup) =>
-      matchup.rosterA === rosterId
-        ? matchup.startersA
-        : matchup.startersB
-  );
-
-  const playerNames = await getPlayerNames(playerIds);
-
-  const franchiseNames: Record<number, string> =
-    Object.fromEntries(
-      FRANCHISES.map((team) => [
-        team.rosterId,
-        team.name,
-      ])
+  // Calculate the Love Triangle competition
+  // across every historical season.
+  const loveTriangleHistory =
+    getLoveTriangleHistory(
+      allMatchups,
+      historicalData.map(
+        (season) => season.league.season
+      )
     );
 
+  // Only games involving this franchise.
+  const franchiseMatchups =
+    allMatchups.filter(
+      (matchup) =>
+        matchup.rosterA === rosterId ||
+        matchup.rosterB === rosterId
+    );
+
+  // Resolve historical starting players.
+  const playerIds =
+    franchiseMatchups.flatMap(
+      (matchup) =>
+        matchup.rosterA === rosterId
+          ? matchup.startersA
+          : matchup.startersB
+    );
+
+  const playerNames =
+    await getPlayerNames(playerIds);
+
+  const franchiseNames: Record<
+    number,
+    string
+  > = Object.fromEntries(
+    FRANCHISES.map((team) => [
+      team.rosterId,
+      team.name,
+    ])
+  );
+
+  // Build regular-season franchise history.
   const seasons = historicalData
     .map((season) => {
       const year = season.league.season;
 
-      const regularMatchups = season.matchups.filter(
-        (matchup) =>
-          matchup.phase === "Regular Season"
-      );
+      const regularMatchups =
+        season.matchups.filter(
+          (matchup) =>
+            matchup.phase ===
+            "Regular Season"
+        );
 
       const record = calculateRecord(
         regularMatchups,
         rosterId
       );
 
-      const week14Games = regularMatchups.filter(
-        (matchup) =>
-          matchup.week === 14 && isPlayed(matchup)
-      );
+      const week14Games =
+        regularMatchups.filter(
+          (matchup) =>
+            matchup.week === 14 &&
+            isPlayed(matchup)
+        );
 
-      const completed = week14Games.length === 5;
+      const completed =
+        week14Games.length === 5;
 
       const finalist =
-        FINALISTS[year]?.includes(rosterId) ?? false;
+        FINALISTS[year]?.includes(
+          rosterId
+        ) ?? false;
 
       return {
         year,
         ...record,
         completed,
-        champion: CHAMPIONS[year] === rosterId,
+        champion:
+          CHAMPIONS[year] === rosterId,
         finalist,
         conferenceChampion: finalist,
         conferenceChampionshipAppearance:
           season.matchups.some(
             (matchup) =>
               matchup.week === 16 &&
-              matchup.phase === "Main Playoffs" &&
+              matchup.phase ===
+                "Main Playoffs" &&
               (matchup.rosterA === rosterId ||
                 matchup.rosterB === rosterId)
           ),
       };
     })
-    .sort((a, b) => Number(b.year) - Number(a.year));
+    .sort(
+      (a, b) =>
+        Number(b.year) -
+        Number(a.year)
+    );
 
+  // SFL regular-season career totals.
   const career = seasons.reduce(
     (total, season) => ({
-      wins: total.wins + season.wins,
-      losses: total.losses + season.losses,
-      ties: total.ties + season.ties,
-      games: total.games + season.games,
-      pointsFor: total.pointsFor + season.pointsFor,
+      wins:
+        total.wins + season.wins,
+      losses:
+        total.losses + season.losses,
+      ties:
+        total.ties + season.ties,
+      games:
+        total.games + season.games,
+      pointsFor:
+        total.pointsFor +
+        season.pointsFor,
       pointsAgainst:
-        total.pointsAgainst + season.pointsAgainst,
+        total.pointsAgainst +
+        season.pointsAgainst,
     }),
     {
       wins: 0,
@@ -248,19 +306,23 @@ export default async function FranchisePage({
 
   const winPercentage = career.games
     ? (
-        ((career.wins + career.ties / 2) /
+        ((career.wins +
+          career.ties / 2) /
           career.games) *
         100
       ).toFixed(1)
     : "0.0";
 
-  const championships = seasons.filter(
-    (season) => season.champion
-  );
+  const championships =
+    seasons.filter(
+      (season) => season.champion
+    );
 
-  const conferenceTitles = seasons.filter(
-    (season) => season.conferenceChampion
-  );
+  const conferenceTitles =
+    seasons.filter(
+      (season) =>
+        season.conferenceChampion
+    );
 
   const conferenceChampionshipAppearances =
     seasons.filter(
@@ -275,17 +337,26 @@ export default async function FranchisePage({
     padding: "18px",
   };
 
+  // =====================================
+  // OVERVIEW TAB
+  // =====================================
+
   const overview = (
     <>
-      <section style={{ marginTop: "24px" }}>
-        <h2 style={{ fontSize: "21px" }}>
+      <section
+        style={{ marginTop: "24px" }}
+      >
+        <h2
+          style={{ fontSize: "21px" }}
+        >
           SFL Career
         </h2>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
+            gridTemplateColumns:
+              "repeat(2, 1fr)",
             gap: "10px",
             marginTop: "16px",
           }}
@@ -302,42 +373,57 @@ export default async function FranchisePage({
 
           <StatCard
             label="Points Scored"
-            value={formatPoints(career.pointsFor)}
+            value={formatPoints(
+              career.pointsFor
+            )}
           />
 
           <StatCard
             label="Points Conceded"
-            value={formatPoints(career.pointsAgainst)}
+            value={formatPoints(
+              career.pointsAgainst
+            )}
           />
         </div>
       </section>
 
-      <section style={{ marginTop: "36px" }}>
-        <h2 style={{ fontSize: "21px" }}>
+      <section
+        style={{ marginTop: "36px" }}
+      >
+        <h2
+          style={{ fontSize: "21px" }}
+        >
           Trophy Cabinet
         </h2>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns:
+              "repeat(3, 1fr)",
             gap: "10px",
             marginTop: "16px",
           }}
         >
           <StatCard
             label="Slootbowl Titles"
-            value={championships.length}
+            value={
+              championships.length
+            }
           />
 
           <StatCard
             label="Conference Championship Appearances"
-            value={conferenceChampionshipAppearances.length}
+            value={
+              conferenceChampionshipAppearances.length
+            }
           />
 
           <StatCard
             label="Conference Titles"
-            value={conferenceTitles.length}
+            value={
+              conferenceTitles.length
+            }
           />
         </div>
 
@@ -357,14 +443,24 @@ export default async function FranchisePage({
           </h3>
 
           {championships.length > 0 ? (
-            <p style={{ lineHeight: "1.8" }}>
+            <p
+              style={{
+                lineHeight: "1.8",
+              }}
+            >
               Slootbowl Champions:{" "}
               {championships
-                .map((season) => season.year)
+                .map(
+                  (season) =>
+                    season.year
+                )
                 .join(", ")}
             </p>
           ) : (
-            <p>No Slootbowl championships yet.</p>
+            <p>
+              No Slootbowl
+              championships yet.
+            </p>
           )}
 
           <p
@@ -374,9 +470,13 @@ export default async function FranchisePage({
             }}
           >
             {trophyName}:{" "}
-            {conferenceTitles.length > 0
+            {conferenceTitles.length >
+            0
               ? conferenceTitles
-                  .map((season) => season.year)
+                  .map(
+                    (season) =>
+                      season.year
+                  )
                   .join(", ")
               : "None yet"}
           </p>
@@ -387,18 +487,27 @@ export default async function FranchisePage({
               lineHeight: "1.8",
             }}
           >
-            Conference Championship Appearances:{" "}
-            {conferenceChampionshipAppearances.length > 0
+            Conference Championship
+            Appearances:{" "}
+            {conferenceChampionshipAppearances.length >
+            0
               ? conferenceChampionshipAppearances
-                  .map((season) => season.year)
+                  .map(
+                    (season) =>
+                      season.year
+                  )
                   .join(", ")
               : "None yet"}
           </p>
         </div>
       </section>
 
-      <section style={{ marginTop: "36px" }}>
-        <h2 style={{ fontSize: "21px" }}>
+      <section
+        style={{ marginTop: "36px" }}
+      >
+        <h2
+          style={{ fontSize: "21px" }}
+        >
           Season History
         </h2>
 
@@ -409,8 +518,8 @@ export default async function FranchisePage({
             fontSize: "12px",
           }}
         >
-          Regular-season records across every SFL
-          season.
+          Regular-season records
+          across every SFL season.
         </p>
 
         <div
@@ -420,111 +529,182 @@ export default async function FranchisePage({
             gap: "10px",
           }}
         >
-          {seasons.map((season) => (
-            <Link
-              key={season.year}
-              href={`/history/${season.year}`}
-              style={{
-                ...cardStyle,
-                display: "block",
-                color: "#ffffff",
-                textDecoration: "none",
-              }}
-            >
-              <div
+          {seasons.map(
+            (season) => (
+              <Link
+                key={season.year}
+                href={`/history/${season.year}`}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "12px",
+                  ...cardStyle,
+                  display: "block",
+                  color: "#ffffff",
+                  textDecoration:
+                    "none",
                 }}
               >
-                <div>
-                  <div
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "800",
-                    }}
-                  >
-                    {season.year}
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#9da7b3",
-                      fontSize: "12px",
-                      marginTop: "6px",
-                    }}
-                  >
-                    {season.wins}-{season.losses}-
-                    {season.ties} ·{" "}
-                    {formatPoints(season.pointsFor)} PF
-                  </div>
-                </div>
-
                 <div
                   style={{
-                    textAlign: "right",
-                    fontSize: "12px",
-                    fontWeight: "700",
+                    display: "flex",
+                    justifyContent:
+                      "space-between",
+                    alignItems:
+                      "center",
+                    gap: "12px",
                   }}
                 >
-                  {season.champion ? (
-                    <span>🏆 Champion</span>
-                  ) : season.finalist ? (
-                    <span>🥈 Finalist</span>
-                  ) : season.conferenceChampionshipAppearance ? (
-                    <span>Conference Finalist</span>
-                  ) : (
-                    <span
+                  <div>
+                    <div
                       style={{
-                        color: "#687384",
+                        fontSize:
+                          "18px",
+                        fontWeight:
+                          "800",
                       }}
                     >
-                      View Season ›
-                    </span>
-                  )}
+                      {season.year}
+                    </div>
+
+                    <div
+                      style={{
+                        color:
+                          "#9da7b3",
+                        fontSize:
+                          "12px",
+                        marginTop:
+                          "6px",
+                      }}
+                    >
+                      {season.wins}-
+                      {season.losses}-
+                      {season.ties}
+                      {" · "}
+                      {formatPoints(
+                        season.pointsFor
+                      )}{" "}
+                      PF
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      textAlign:
+                        "right",
+                      fontSize:
+                        "12px",
+                      fontWeight:
+                        "700",
+                    }}
+                  >
+                    {season.champion ? (
+                      <span>
+                        🏆 Champion
+                      </span>
+                    ) : season.finalist ? (
+                      <span>
+                        🥈 Finalist
+                      </span>
+                    ) : season.conferenceChampionshipAppearance ? (
+                      <span>
+                        Conference
+                        Finalist
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          color:
+                            "#687384",
+                        }}
+                      >
+                        View Season ›
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          )}
         </div>
       </section>
     </>
   );
 
+  // =====================================
+  // TEAM RECORDS TAB
+  // =====================================
+
   const records = (
     <TeamRecords
       rosterId={rosterId}
       matchups={allMatchups}
-      seasons={seasons.map((season) => ({
-        year: season.year,
-        wins: season.wins,
-        losses: season.losses,
-        ties: season.ties,
-        games: season.games,
-        pointsFor: season.pointsFor,
-        completed: season.completed,
-      }))}
-      franchiseNames={franchiseNames}
+      seasons={seasons.map(
+        (season) => ({
+          year: season.year,
+          wins: season.wins,
+          losses: season.losses,
+          ties: season.ties,
+          games: season.games,
+          pointsFor:
+            season.pointsFor,
+          completed:
+            season.completed,
+        })
+      )}
+      franchiseNames={
+        franchiseNames
+      }
     />
   );
+
+  // =====================================
+  // PLAYER LEGENDS TAB
+  // =====================================
 
   const legends = (
     <PlayerLegends
       rosterId={rosterId}
-      matchups={franchiseMatchups}
-      playerNames={playerNames}
+      matchups={
+        franchiseMatchups
+      }
+      playerNames={
+        playerNames
+      }
     />
   );
 
+  // =====================================
+  // RIVALRIES TAB
+  // =====================================
+
   const rivalries = (
-    <HeadToHead
-      rosterId={rosterId}
-      matchups={franchiseMatchups}
-      franchiseNames={franchiseNames}
-    />
+    <>
+      <HeadToHead
+        rosterId={rosterId}
+        matchups={
+          franchiseMatchups
+        }
+        franchiseNames={
+          franchiseNames
+        }
+      />
+
+      {isLoveTriangleTeam(
+        rosterId
+      ) && (
+        <LoveTriangle
+          history={
+            loveTriangleHistory
+          }
+          franchiseNames={
+            franchiseNames
+          }
+        />
+      )}
+    </>
   );
+
+  // =====================================
+  // FRANCHISE PAGE
+  // =====================================
 
   return (
     <main>
@@ -539,19 +719,26 @@ export default async function FranchisePage({
         ← All Franchises
       </Link>
 
-      <div style={{ marginTop: "28px" }}>
+      <div
+        style={{
+          marginTop: "28px",
+        }}
+      >
         <p
           style={{
             fontSize: "12px",
             fontWeight: "700",
-            letterSpacing: "1.5px",
+            letterSpacing:
+              "1.5px",
             marginBottom: "8px",
           }}
         >
           {conference} · EST. 2022
         </p>
 
-        <h1>{franchise.name}</h1>
+        <h1>
+          {franchise.name}
+        </h1>
 
         <p
           style={{
