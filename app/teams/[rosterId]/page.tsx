@@ -6,8 +6,10 @@ import {
   getHistoricalData,
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
+import { getPlayerNames } from "../../../lib/players";
 import FranchiseTabs from "./FranchiseTabs";
 import TeamRecords from "./TeamRecords";
+import PlayerLegends from "./PlayerLegends";
 
 const OBFC_IDS = [4, 6, 8, 7, 9];
 
@@ -157,6 +159,21 @@ export default async function FranchisePage({
     (season) => season.matchups
   );
 
+  const franchiseMatchups = allMatchups.filter(
+    (matchup) =>
+      matchup.rosterA === rosterId ||
+      matchup.rosterB === rosterId
+  );
+
+  const playerIds = franchiseMatchups.flatMap(
+    (matchup) =>
+      matchup.rosterA === rosterId
+        ? matchup.startersA
+        : matchup.startersB
+  );
+
+  const playerNames = await getPlayerNames(playerIds);
+
   const franchiseNames: Record<number, string> =
     Object.fromEntries(
       FRANCHISES.map((team) => [
@@ -179,8 +196,6 @@ export default async function FranchisePage({
         rosterId
       );
 
-      // A completed regular season has a full
-      // Week 14 slate of five played matchups.
       const week14Games = regularMatchups.filter(
         (matchup) =>
           matchup.week === 14 && isPlayed(matchup)
@@ -495,19 +510,11 @@ export default async function FranchisePage({
   );
 
   const legends = (
-    <section style={{ marginTop: "24px" }}>
-      <h2 style={{ fontSize: "21px" }}>
-        Player Legends
-      </h2>
-
-      <div style={{ ...cardStyle, marginTop: "16px" }}>
-        <p style={{ lineHeight: "1.7" }}>
-          The greatest players in franchise history,
-          ranked by points scored and games started
-          for this team, will appear here.
-        </p>
-      </div>
-    </section>
+    <PlayerLegends
+      rosterId={rosterId}
+      matchups={franchiseMatchups}
+      playerNames={playerNames}
+    />
   );
 
   return (
