@@ -13,15 +13,17 @@ type PlayerGame = {
   points: number;
 };
 
-type PlayerStats = {
+type CareerStats = {
   playerId: string;
   games: number;
   points: number;
-  bestGame: number;
-  bestGameYear: string;
-  bestGameWeek: number;
-  bestSeason: number;
-  bestSeasonYear: string;
+};
+
+type SeasonStats = {
+  playerId: string;
+  year: string;
+  games: number;
+  points: number;
 };
 
 type PlayerLegendsProps = {
@@ -34,17 +36,20 @@ function formatPoints(value: number) {
   return value.toFixed(2);
 }
 
+type LeaderboardEntry = {
+  key: string;
+  playerId: string;
+  value: string;
+  detail: string;
+};
+
 function Leaderboard({
   title,
-  players,
-  getValue,
-  getDetail,
+  entries,
   playerNames,
 }: {
   title: string;
-  players: PlayerStats[];
-  getValue: (player: PlayerStats) => string;
-  getDetail: (player: PlayerStats) => string;
+  entries: LeaderboardEntry[];
   playerNames: Record<string, string>;
 }) {
   return (
@@ -66,21 +71,26 @@ function Leaderboard({
           overflow: "hidden",
         }}
       >
-        {players.length === 0 ? (
-          <p style={{ padding: "18px", color: "#9da7b3" }}>
+        {entries.length === 0 ? (
+          <p
+            style={{
+              padding: "18px",
+              color: "#9da7b3",
+            }}
+          >
             No qualifying player performances.
           </p>
         ) : (
-          players.map((player, index) => (
+          entries.map((entry, index) => (
             <div
-              key={player.playerId}
+              key={entry.key}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "10px",
                 padding: "13px 12px",
                 borderBottom:
-                  index === players.length - 1
+                  index === entries.length - 1
                     ? "none"
                     : "1px solid #27303b",
               }}
@@ -113,8 +123,8 @@ function Leaderboard({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {playerNames[player.playerId] ??
-                    `Player ${player.playerId}`}
+                  {playerNames[entry.playerId] ??
+                    `Player ${entry.playerId}`}
                 </div>
 
                 <div
@@ -124,7 +134,7 @@ function Leaderboard({
                     marginTop: "4px",
                   }}
                 >
-                  {getDetail(player)}
+                  {entry.detail}
                 </div>
               </div>
 
@@ -137,7 +147,7 @@ function Leaderboard({
                   flexShrink: 0,
                 }}
               >
-                {getValue(player)}
+                {entry.value}
               </div>
             </div>
           ))
@@ -155,7 +165,12 @@ export default function PlayerLegends({
   const [phase, setPhase] =
     useState<Phase>("Regular Season");
 
-  const stats = useMemo(() => {
+  const {
+    careerPoints,
+    careerStarts,
+    bestGames,
+    bestSeasons,
+  } = useMemo(() => {
     const games: PlayerGame[] = [];
 
     for (const matchup of matchups) {
@@ -164,6 +179,16 @@ export default function PlayerLegends({
       if (
         matchup.rosterA !== rosterId &&
         matchup.rosterB !== rosterId
+      ) {
+        continue;
+      }
+
+      // Exclude unplayed matchups.
+      if (
+        !Number.isFinite(matchup.scoreA) ||
+        !Number.isFinite(matchup.scoreB) ||
+        (matchup.scoreA === 0 &&
+          matchup.scoreB === 0)
       ) {
         continue;
       }
@@ -178,12 +203,17 @@ export default function PlayerLegends({
         ? matchup.startersPointsA
         : matchup.startersPointsB;
 
-      for (let index = 0; index < starters.length; index++) {
+      for (
+        let index = 0;
+        index < starters.length;
+        index++
+      ) {
         const playerId = starters[index];
         const points = starterPoints[index];
 
         if (
           !playerId ||
+          playerId === "0" ||
           !Number.isFinite(points)
         ) {
           continue;
@@ -198,86 +228,137 @@ export default function PlayerLegends({
       }
     }
 
-    const byPlayer = new Map<
+    // Career totals: one entry per player.
+    const careerMap = new Map<
       string,
-      {
-        games: number;
-        points: number;
-        bestGame: number;
-        bestGameYear: string;
-        bestGameWeek: number;
-        seasons: Map<string, number>;
-      }
+      CareerStats
+    >();
+
+    // Season totals: one entry per player
+    // per season.
+    const seasonMap = new Map<
+      string,
+      SeasonStats
     >();
 
     for (const game of games) {
-      let player = byPlayer.get(game.playerId);
-
-      if (!player) {
-        player = {
-          games: 0,
-          points: 0,
-          bestGame: -Infinity,
-          bestGameYear: "",
-          bestGameWeek: 0,
-          seasons: new Map<string, number>(),
-        };
-
-        byPlayer.set(game.playerId, player);
-      }
-
-      player.games++;
-      player.points += game.points;
-
-      if (game.points > player.bestGame) {
-        player.bestGame = game.points;
-        player.bestGameYear = game.year;
-        player.bestGameWeek = game.week;
-      }
-
-      player.seasons.set(
-        game.year,
-        (player.seasons.get(game.year) ?? 0) +
-          game.points
+      const career = careerMap.get(
+        game.playerId
       );
+
+      if (career) {
+        career.games++;
+        career.points += game.points;
+      } else {
+        careerMap.set(game.playerId, {
+          playerId: game.playerId,
+          games: 1,
+          points: game.points,
+        });
+      }
+
+      const seasonKey =
+        `${game.playerId}-${game.year}`;
+
+      const season = seasonMap.get(
+        seasonKey
+      );
+
+      if (season) {
+        season.games++;
+        season.points += game.points;
+      } else {
+        seasonMap.set(seasonKey, {
+          playerId: game.playerId,
+          year: game.year,
+          games: 1,
+          points: game.points,
+        });
+      }
     }
 
-    const result: PlayerStats[] = [];
+    const careers = [...careerMap.values()];
+    const seasons = [...seasonMap.values()];
 
-    for (const [playerId, player] of byPlayer) {
-      const bestSeason = [...player.seasons.entries()]
-        .sort((a, b) => b[1] - a[1])[0];
+    // Career leaderboards: unique players.
+    const careerPoints: LeaderboardEntry[] =
+      [...careers]
+        .sort(
+          (a, b) =>
+            b.points - a.points ||
+            b.games - a.games
+        )
+        .slice(0, 10)
+        .map((player) => ({
+          key: player.playerId,
+          playerId: player.playerId,
+          value: formatPoints(player.points),
+          detail:
+            `${player.games} games started`,
+        }));
 
-      result.push({
-        playerId,
-        games: player.games,
-        points: player.points,
-        bestGame: player.bestGame,
-        bestGameYear: player.bestGameYear,
-        bestGameWeek: player.bestGameWeek,
-        bestSeason: bestSeason?.[1] ?? 0,
-        bestSeasonYear: bestSeason?.[0] ?? "",
-      });
-    }
+    const careerStarts: LeaderboardEntry[] =
+      [...careers]
+        .sort(
+          (a, b) =>
+            b.games - a.games ||
+            b.points - a.points
+        )
+        .slice(0, 10)
+        .map((player) => ({
+          key: player.playerId,
+          playerId: player.playerId,
+          value: String(player.games),
+          detail:
+            `${formatPoints(player.points)} career points`,
+        }));
 
-    return result;
+    // Individual games: a player can
+    // appear multiple times.
+    const bestGames: LeaderboardEntry[] =
+      [...games]
+        .sort(
+          (a, b) =>
+            b.points - a.points ||
+            Number(b.year) - Number(a.year) ||
+            b.week - a.week
+        )
+        .slice(0, 10)
+        .map((game) => ({
+          key:
+            `${game.playerId}-${game.year}-${game.week}`,
+          playerId: game.playerId,
+          value: formatPoints(game.points),
+          detail:
+            `${game.year} · Week ${game.week}`,
+        }));
+
+    // Individual seasons: a player can
+    // appear once for each different season.
+    const bestSeasons: LeaderboardEntry[] =
+      [...seasons]
+        .sort(
+          (a, b) =>
+            b.points - a.points ||
+            Number(b.year) - Number(a.year)
+        )
+        .slice(0, 10)
+        .map((season) => ({
+          key:
+            `${season.playerId}-${season.year}`,
+          playerId: season.playerId,
+          value: formatPoints(season.points),
+          detail:
+            `${season.year} season · ${season.games} starts`,
+        }));
+
+    return {
+      careerPoints,
+      careerStarts,
+      bestGames,
+      bestSeasons,
+    };
   }, [rosterId, matchups, phase]);
-
-  const mostPoints = [...stats]
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 10);
-
-  const mostStarts = [...stats]
-    .sort((a, b) => b.games - a.games)
-    .slice(0, 10);
-
-  const bestGames = [...stats]
-    .sort((a, b) => b.bestGame - a.bestGame)
-    .slice(0, 10);
-
-  const bestSeasons = [...stats]
-    .sort((a, b) => b.bestSeason - a.bestSeason)
-    .slice(0, 10);
 
   return (
     <section style={{ marginTop: "24px" }}>
@@ -295,7 +376,8 @@ export default function PlayerLegends({
       >
         Franchise player records based exclusively
         on games started for this team. Bench
-        performances are excluded.
+        performances, Toilet Bowl games and
+        consolation matches are excluded.
       </p>
 
       <div
@@ -306,82 +388,61 @@ export default function PlayerLegends({
           marginTop: "20px",
         }}
       >
-        {(["Regular Season", "Main Playoffs"] as Phase[]).map(
-          (option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setPhase(option)}
-              style={{
-                padding: "12px 6px",
-                background:
-                  phase === option
-                    ? "#303b48"
-                    : "#151b23",
-                color:
-                  phase === option
-                    ? "#ffffff"
-                    : "#9da7b3",
-                border: "1px solid #27303b",
-                borderRadius: "10px",
-                fontSize: "12px",
-                fontWeight: "700",
-                cursor: "pointer",
-              }}
-            >
-              {option === "Main Playoffs"
-                ? "Playoffs"
-                : option}
-            </button>
-          )
-        )}
+        {(
+          [
+            "Regular Season",
+            "Main Playoffs",
+          ] as Phase[]
+        ).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setPhase(option)}
+            style={{
+              padding: "12px 6px",
+              background:
+                phase === option
+                  ? "#303b48"
+                  : "#151b23",
+              color:
+                phase === option
+                  ? "#ffffff"
+                  : "#9da7b3",
+              border: "1px solid #27303b",
+              borderRadius: "10px",
+              fontSize: "12px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            {option === "Main Playoffs"
+              ? "Playoffs"
+              : option}
+          </button>
+        ))}
       </div>
 
       <Leaderboard
         title="All-Time Points Leaders"
-        players={mostPoints}
-        getValue={(player) =>
-          formatPoints(player.points)
-        }
-        getDetail={(player) =>
-          `${player.games} games started`
-        }
+        entries={careerPoints}
         playerNames={playerNames}
       />
 
       <Leaderboard
         title="Most Games Started"
-        players={mostStarts}
-        getValue={(player) =>
-          String(player.games)
-        }
-        getDetail={(player) =>
-          `${formatPoints(player.points)} career points`
-        }
+        entries={careerStarts}
         playerNames={playerNames}
       />
 
       <Leaderboard
         title="Highest Single-Game Score"
-        players={bestGames}
-        getValue={(player) =>
-          formatPoints(player.bestGame)
-        }
-        getDetail={(player) =>
-          `${player.bestGameYear} · Week ${player.bestGameWeek}`
-        }
+        entries={bestGames}
         playerNames={playerNames}
       />
 
       <Leaderboard
         title="Best Single Season"
-        players={bestSeasons}
-        getValue={(player) =>
-          formatPoints(player.bestSeason)
-        }
-        getDetail={(player) =>
-          `${player.bestSeasonYear} season`
-        }
+        entries={bestSeasons}
         playerNames={playerNames}
       />
     </section>
