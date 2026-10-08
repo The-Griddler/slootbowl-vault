@@ -1,7 +1,9 @@
+
 "use client";
 
 import { useState } from "react";
 import type {
+  AllTimeRecords,
   AllTimeRecordSet,
   LeagueRecord,
   RecordSet,
@@ -10,26 +12,27 @@ import type {
 } from "../../lib/records";
 import { getFranchiseName } from "../../lib/franchises";
 
-type RecordsData = {
-  individualGame: {
-    regularSeason: RecordSet;
-    mainPlayoffs: RecordSet;
-  };
-  season: {
-    regularSeason: SeasonRecordSet;
-    mainPlayoffs: SeasonRecordSet;
-  };
-  allTime: AllTimeRecordSet;
-};
+type RecordsTab = "games" | "season" | "allTime";
+type Competition = "regularSeason" | "mainPlayoffs";
 
 export default function RecordsTabs({
   records,
 }: {
-  records: RecordsData;
+  records: AllTimeRecords;
 }) {
-  const [activeTab, setActiveTab] = useState<
-    "games" | "season" | "allTime"
-  >("games");
+  const [activeTab, setActiveTab] =
+    useState<RecordsTab>("games");
+
+  const [selectedSeason, setSelectedSeason] =
+    useState("all");
+
+  const [competition, setCompetition] =
+    useState<Competition>("regularSeason");
+
+  const filteredRecords =
+    selectedSeason === "all"
+      ? records
+      : records.bySeason[selectedSeason] ?? records;
 
   return (
     <>
@@ -40,7 +43,7 @@ export default function RecordsTabs({
           border: "1px solid #27303b",
           borderRadius: "14px",
           padding: "4px",
-          marginBottom: "28px",
+          marginBottom: "24px",
         }}
       >
         <TabButton
@@ -62,138 +65,152 @@ export default function RecordsTabs({
         />
       </div>
 
+      {activeTab !== "allTime" && (
+        <div style={{ marginBottom: "28px" }}>
+          <p style={subheadingStyle}>SEASON</p>
+
+          <select
+            value={selectedSeason}
+            onChange={(event) =>
+              setSelectedSeason(event.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "13px 14px",
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "12px",
+              color: "#ffffff",
+              fontSize: "14px",
+              marginBottom: "20px",
+            }}
+          >
+            <option value="all">All Seasons</option>
+
+            {records.availableSeasons.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+
+          <p style={subheadingStyle}>COMPETITION</p>
+
+          <div
+            style={{
+              display: "flex",
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "12px",
+              padding: "4px",
+            }}
+          >
+            <TabButton
+              label="Regular Season"
+              active={competition === "regularSeason"}
+              onClick={() =>
+                setCompetition("regularSeason")
+              }
+            />
+
+            <TabButton
+              label="Main Playoffs"
+              active={competition === "mainPlayoffs"}
+              onClick={() =>
+                setCompetition("mainPlayoffs")
+              }
+            />
+          </div>
+        </div>
+      )}
+
       {activeTab === "games" && (
         <IndividualGameRecords
-          regularSeason={records.individualGame.regularSeason}
-          mainPlayoffs={records.individualGame.mainPlayoffs}
+          records={
+            filteredRecords.individualGame[competition]
+          }
         />
       )}
 
       {activeTab === "season" && (
         <SeasonRecords
-          regularSeason={records.season.regularSeason}
-          mainPlayoffs={records.season.mainPlayoffs}
+          records={filteredRecords.season[competition]}
         />
       )}
 
       {activeTab === "allTime" && (
-        <AllTimeRecords records={records.allTime} />
+        <AllTimeRecordsSection records={records.allTime} />
       )}
     </>
   );
 }
 
 function IndividualGameRecords({
-  regularSeason,
-  mainPlayoffs,
+  records,
 }: {
-  regularSeason: RecordSet;
-  mainPlayoffs: RecordSet;
+  records: RecordSet;
 }) {
   return (
     <section>
       <SectionHeading title="Individual Game" />
 
-      <p style={subheadingStyle}>REGULAR SEASON</p>
-
       <RecordCard
         title="Highest Team Score"
-        record={regularSeason.highestTeamScore}
+        record={records.highestTeamScore}
         value={(r) => r.score.toFixed(2)}
         suffix="pts"
       />
 
       <RecordCard
         title="Lowest Team Score"
-        record={regularSeason.lowestTeamScore}
+        record={records.lowestTeamScore}
         value={(r) => r.score.toFixed(2)}
         suffix="pts"
       />
 
       <RecordCard
         title="Biggest Winning Margin"
-        record={regularSeason.biggestWinningMargin}
+        record={records.biggestWinningMargin}
         value={(r) => r.margin.toFixed(2)}
         suffix="pts"
       />
 
       <RecordCard
         title="Closest Game"
-        record={regularSeason.closestGame}
+        record={records.closestGame}
         value={(r) => r.margin.toFixed(2)}
         suffix="pts"
       />
 
       <RecordCard
         title="Highest Combined Score"
-        record={regularSeason.highestCombinedScore}
+        record={records.highestCombinedScore}
         value={(r) =>
-          (
-            r.score + r.opponentScore
-          ).toFixed(2)
+          (r.score + r.opponentScore).toFixed(2)
         }
         suffix="pts"
       />
 
       <RecordCard
         title="Lowest Combined Score"
-        record={regularSeason.lowestCombinedScore}
+        record={records.lowestCombinedScore}
         value={(r) =>
-          (
-            r.score + r.opponentScore
-          ).toFixed(2)
+          (r.score + r.opponentScore).toFixed(2)
         }
         suffix="pts"
       />
 
       <RecordCard
         title="Highest Losing Score"
-        record={regularSeason.highestLosingScore}
+        record={records.highestLosingScore}
         value={(r) => r.score.toFixed(2)}
         suffix="pts"
       />
 
       <RecordCard
         title="Lowest Winning Score"
-        record={regularSeason.lowestWinningScore}
+        record={records.lowestWinningScore}
         value={(r) => r.score.toFixed(2)}
-        suffix="pts"
-      />
-
-      <p
-        style={{
-          ...subheadingStyle,
-          marginTop: "28px",
-        }}
-      >
-        MAIN PLAYOFFS
-      </p>
-
-      <RecordCard
-        title="Highest Team Score"
-        record={mainPlayoffs.highestTeamScore}
-        value={(r) => r.score.toFixed(2)}
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Lowest Team Score"
-        record={mainPlayoffs.lowestTeamScore}
-        value={(r) => r.score.toFixed(2)}
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Biggest Winning Margin"
-        record={mainPlayoffs.biggestWinningMargin}
-        value={(r) => r.margin.toFixed(2)}
-        suffix="pts"
-      />
-
-      <RecordCard
-        title="Closest Game"
-        record={mainPlayoffs.closestGame}
-        value={(r) => r.margin.toFixed(2)}
         suffix="pts"
       />
     </section>
@@ -201,98 +218,76 @@ function IndividualGameRecords({
 }
 
 function SeasonRecords({
-  regularSeason,
-  mainPlayoffs,
+  records,
 }: {
-  regularSeason: SeasonRecordSet;
-  mainPlayoffs: SeasonRecordSet;
+  records: SeasonRecordSet;
 }) {
   return (
     <section>
       <SectionHeading title="Season Long" />
 
-      <p style={subheadingStyle}>REGULAR SEASON</p>
-
       <SeasonRecordCard
         title="Most Wins"
-        record={regularSeason.mostWins}
+        record={records.mostWins}
         value={(r) => `${r.wins} wins`}
       />
 
       <SeasonRecordCard
         title="Fewest Wins"
-        record={regularSeason.fewestWins}
+        record={records.fewestWins}
         value={(r) => `${r.wins} wins`}
       />
 
       <SeasonRecordCard
         title="Most Points Scored"
-        record={regularSeason.mostPointsFor}
+        record={records.mostPointsFor}
         value={(r) => r.pointsFor.toFixed(2)}
         suffix="pts"
       />
 
       <SeasonRecordCard
         title="Fewest Points Scored"
-        record={regularSeason.fewestPointsFor}
+        record={records.fewestPointsFor}
         value={(r) => r.pointsFor.toFixed(2)}
         suffix="pts"
       />
 
       <SeasonRecordCard
         title="Most Points Conceded"
-        record={regularSeason.mostPointsAgainst}
+        record={records.mostPointsAgainst}
         value={(r) => r.pointsAgainst.toFixed(2)}
         suffix="pts"
       />
 
       <SeasonRecordCard
         title="Fewest Points Conceded"
-        record={regularSeason.fewestPointsAgainst}
+        record={records.fewestPointsAgainst}
         value={(r) => r.pointsAgainst.toFixed(2)}
         suffix="pts"
       />
 
       <SeasonRecordCard
         title="Best Point Differential"
-        record={regularSeason.bestPointDifferential}
-        value={(r) => formatDifferential(r.pointDifferential)}
+        record={records.bestPointDifferential}
+        value={(r) =>
+          formatDifferential(r.pointDifferential)
+        }
         suffix="pts"
       />
 
       <SeasonRecordCard
         title="Worst Point Differential"
-        record={regularSeason.worstPointDifferential}
-        value={(r) => formatDifferential(r.pointDifferential)}
-        suffix="pts"
-      />
-
-      <p
-        style={{
-          ...subheadingStyle,
-          marginTop: "28px",
-        }}
-      >
-        MAIN PLAYOFFS
-      </p>
-
-      <SeasonRecordCard
-        title="Most Wins"
-        record={mainPlayoffs.mostWins}
-        value={(r) => `${r.wins} wins`}
-      />
-
-      <SeasonRecordCard
-        title="Most Points Scored"
-        record={mainPlayoffs.mostPointsFor}
-        value={(r) => r.pointsFor.toFixed(2)}
+        record={records.worstPointDifferential}
+        value={(r) =>
+          formatDifferential(r.pointDifferential)
+        }
         suffix="pts"
       />
     </section>
   );
 }
 
-function AllTimeRecords({
+function AllTimeRecordsSection({
   records,
 }: {
   records: AllTimeRecordSet;
@@ -330,14 +325,18 @@ function AllTimeRecords({
       <AllTimeRecordCard
         title="Best Career Point Differential"
         record={records.bestPointDifferential}
-        value={(r) => formatDifferential(r.pointDifferential)}
+        value={(r) =>
+          formatDifferential(r.pointDifferential)
+        }
         suffix="pts"
       />
 
       <AllTimeRecordCard
         title="Worst Career Point Differential"
         record={records.worstPointDifferential}
-        value={(r) => formatDifferential(r.pointDifferential)}
+        value={(r) =>
+          formatDifferential(r.pointDifferential)
+        }
         suffix="pts"
       />
     </section>
@@ -361,12 +360,8 @@ function TabButton({
         border: "none",
         borderRadius: "10px",
         padding: "10px 6px",
-        background: active
-          ? "#ffffff"
-          : "transparent",
-        color: active
-          ? "#0b0f14"
-          : "#687384",
+        background: active ? "#ffffff" : "transparent",
+        color: active ? "#0b0f14" : "#687384",
         fontSize: "13px",
         fontWeight: "700",
         cursor: "pointer",
@@ -425,19 +420,14 @@ function RecordCard({
 }) {
   if (!record) return null;
 
-  const teamName = getFranchiseName(
-    record.rosterId
-  );
-
+  const teamName = getFranchiseName(record.rosterId);
   const opponentName = getFranchiseName(
     record.opponentRosterId
   );
 
   return (
     <article style={cardStyle}>
-      <p style={labelStyle}>
-        {title.toUpperCase()}
-      </p>
+      <p style={labelStyle}>{title.toUpperCase()}</p>
 
       <div
         style={{
@@ -447,36 +437,23 @@ function RecordCard({
           marginTop: "5px",
         }}
       >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "30px",
-          }}
-        >
+        <h3 style={{ margin: 0, fontSize: "30px" }}>
           {value(record)}
         </h3>
 
         {suffix && (
-          <span style={suffixStyle}>
-            {suffix}
-          </span>
+          <span style={suffixStyle}>{suffix}</span>
         )}
       </div>
 
-      <p style={teamStyle}>
-        {teamName}
-      </p>
+      <p style={teamStyle}>{teamName}</p>
 
       <p style={matchupStyle}>
-        {teamName}{" "}
-        {record.score.toFixed(2)}
+        {teamName} {record.score.toFixed(2)}
         {"  "}
-        <span style={{ color: "#687384" }}>
-          vs
-        </span>
+        <span style={{ color: "#687384" }}>vs</span>
         {"  "}
-        {opponentName}{" "}
-        {record.opponentScore.toFixed(2)}
+        {opponentName} {record.opponentScore.toFixed(2)}
       </p>
 
       <p style={metaStyle}>
@@ -501,9 +478,7 @@ function SeasonRecordCard({
 
   return (
     <article style={cardStyle}>
-      <p style={labelStyle}>
-        {title.toUpperCase()}
-      </p>
+      <p style={labelStyle}>{title.toUpperCase()}</p>
 
       <div
         style={{
@@ -513,19 +488,12 @@ function SeasonRecordCard({
           marginTop: "5px",
         }}
       >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "30px",
-          }}
-        >
+        <h3 style={{ margin: 0, fontSize: "30px" }}>
           {value(record)}
         </h3>
 
         {suffix && (
-          <span style={suffixStyle}>
-            {suffix}
-          </span>
+          <span style={suffixStyle}>{suffix}</span>
         )}
       </div>
 
@@ -533,9 +501,7 @@ function SeasonRecordCard({
         {getFranchiseName(record.rosterId)}
       </p>
 
-      <p style={metaStyle}>
-        {record.season}
-      </p>
+      <p style={metaStyle}>{record.season}</p>
     </article>
   );
 }
@@ -549,17 +515,23 @@ function AllTimeRecordCard({
   title: string;
   record: {
     rosterId: number;
+    wins: number;
+    losses: number;
+    ties: number;
+    pointsFor: number;
+    pointsAgainst: number;
+    pointDifferential: number;
   } | null;
-  value: (record: any) => string;
+  value: (record: NonNullable<
+    AllTimeRecordSet["mostWins"]
+  >) => string;
   suffix?: string;
 }) {
   if (!record) return null;
 
   return (
     <article style={cardStyle}>
-      <p style={labelStyle}>
-        {title.toUpperCase()}
-      </p>
+      <p style={labelStyle}>{title.toUpperCase()}</p>
 
       <div
         style={{
@@ -569,19 +541,12 @@ function AllTimeRecordCard({
           marginTop: "5px",
         }}
       >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "30px",
-          }}
-        >
+        <h3 style={{ margin: 0, fontSize: "30px" }}>
           {value(record)}
         </h3>
 
         {suffix && (
-          <span style={suffixStyle}>
-            {suffix}
-          </span>
+          <span style={suffixStyle}>{suffix}</span>
         )}
       </div>
 
@@ -592,9 +557,7 @@ function AllTimeRecordCard({
   );
 }
 
-function formatDifferential(
-  value: number
-) {
+function formatDifferential(value: number) {
   return value >= 0
     ? `+${value.toFixed(2)}`
     : value.toFixed(2);
