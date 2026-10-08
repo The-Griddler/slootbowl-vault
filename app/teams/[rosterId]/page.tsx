@@ -165,14 +165,23 @@ export default async function FranchisePage({
         rosterId
       );
 
+      const finalist =
+        FINALISTS[year]?.includes(rosterId) ?? false;
+
       return {
         year,
         ...record,
         champion: CHAMPIONS[year] === rosterId,
-        finalist:
-          FINALISTS[year]?.includes(rosterId) ?? false,
-        conferenceChampion:
-          FINALISTS[year]?.includes(rosterId) ?? false,
+        finalist,
+        conferenceChampion: finalist,
+        conferenceChampionshipAppearance:
+          season.matchups.some(
+            (matchup) =>
+              matchup.week === 16 &&
+              matchup.phase === "Main Playoffs" &&
+              (matchup.rosterA === rosterId ||
+                matchup.rosterB === rosterId)
+          ),
       };
     })
     .sort((a, b) => Number(b.year) - Number(a.year));
@@ -209,20 +218,15 @@ export default async function FranchisePage({
     (season) => season.champion
   );
 
-  const appearances = seasons.filter(
-    (season) => season.finalist
+  const conferenceTitles = seasons.filter(
+    (season) => season.conferenceChampion
   );
 
   const conferenceChampionshipAppearances =
-  historicalData.filter((season) =>
-    season.matchups.some(
-      (matchup) =>
-        matchup.week === 16 &&
-        matchup.phase === "Main Playoffs" &&
-        (matchup.rosterA === rosterId ||
-          matchup.rosterB === rosterId)
-    )
-  ).length;
+    seasons.filter(
+      (season) =>
+        season.conferenceChampionshipAppearance
+    );
 
   const cardStyle = {
     background: "#151b23",
@@ -323,7 +327,7 @@ export default async function FranchisePage({
 
           <StatCard
             label="Conference Championship Appearances"
-            value={conferenceChampionshipAppearances}
+            value={conferenceChampionshipAppearances.length}
           />
 
           <StatCard
@@ -367,6 +371,20 @@ export default async function FranchisePage({
             {trophyName}:{" "}
             {conferenceTitles.length > 0
               ? conferenceTitles
+                  .map((season) => season.year)
+                  .join(", ")
+              : "None yet"}
+          </p>
+
+          <p
+            style={{
+              marginTop: "12px",
+              lineHeight: "1.8",
+            }}
+          >
+            Conference Championship Appearances:{" "}
+            {conferenceChampionshipAppearances.length > 0
+              ? conferenceChampionshipAppearances
                   .map((season) => season.year)
                   .join(", ")
               : "None yet"}
@@ -450,6 +468,8 @@ export default async function FranchisePage({
                     <span>🏆 Champion</span>
                   ) : season.finalist ? (
                     <span>🥈 Finalist</span>
+                  ) : season.conferenceChampionshipAppearance ? (
+                    <span>Conference Finalist</span>
                   ) : (
                     <span
                       style={{
