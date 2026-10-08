@@ -187,32 +187,38 @@ export default async function SeasonPage({
       null;
     return position && position !== mvpPosition;
   });
-  /*
-   * ROY
-   * Highest regular-season scorer whose NFL rookie
-   * season matches this SFL season.
-   *
-   * Sleeper's years_exp is current experience, so
-   * rookie season = current season - years_exp.
-   */
-  const seasonNumber = Number(season);
-  const rookieCandidates = Array.from(
-    playerTotals.values()
-  )
-    .filter((candidate) => {
-      const player = players[candidate.playerId];
-      if (
-        player?.years_exp === null ||
-        player?.years_exp === undefined
-      ) {
-        return false;
-      }
-      const rookieSeason =
-        seasonNumber - player.years_exp;
-      return rookieSeason === seasonNumber;
-    })
-    .sort((a, b) => b.points - a.points);
-  const roy = rookieCandidates[0];
+/*
+ * ROY
+ * Highest regular-season scorer whose NFL rookie
+ * season matches this SFL season.
+ *
+ * Sleeper's years_exp represents experience in the
+ * current 2026 NFL season, so the player's NFL rookie
+ * season is 2026 - years_exp.
+ */
+const seasonNumber = Number(season);
+
+const rookieCandidates = Array.from(
+  playerTotals.values()
+)
+  .filter((candidate) => {
+    const player = players[candidate.playerId];
+
+    if (
+      player?.years_exp === null ||
+      player?.years_exp === undefined
+    ) {
+      return false;
+    }
+
+    const rookieSeason =
+      2026 - player.years_exp;
+
+    return rookieSeason === seasonNumber;
+  })
+  .sort((a, b) => b.points - a.points);
+
+const roy = rookieCandidates[0];
   /*
    * Slootbowl MVP
    * Highest-scoring starter in the Slootbowl
