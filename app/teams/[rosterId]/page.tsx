@@ -10,6 +10,7 @@ import { getPlayerNames } from "../../../lib/players";
 import FranchiseTabs from "./FranchiseTabs";
 import TeamRecords from "./TeamRecords";
 import PlayerLegends from "./PlayerLegends";
+import HeadToHead from "./HeadToHead";
 
 const OBFC_IDS = [4, 6, 8, 7, 9];
 
@@ -517,6 +518,14 @@ export default async function FranchisePage({
     />
   );
 
+  const rivalries = (
+    <HeadToHead
+      rosterId={rosterId}
+      matchups={franchiseMatchups}
+      franchiseNames={franchiseNames}
+    />
+  );
+
   return (
     <main>
       <Link
@@ -558,6 +567,7 @@ export default async function FranchisePage({
         overview={overview}
         records={records}
         legends={legends}
+        rivalries={rivalries}
       />
     </main>
   );
