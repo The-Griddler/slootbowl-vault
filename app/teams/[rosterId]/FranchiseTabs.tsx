@@ -4,74 +4,86 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-type Tab = "overview" | "records" | "legends";
+type Tab =
+  | "overview"
+  | "records"
+  | "legends"
+  | "rivalries";
 
 type FranchiseTabsProps = {
   overview: ReactNode;
   records: ReactNode;
   legends: ReactNode;
+  rivalries: ReactNode;
 };
-
-const tabs: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "records", label: "Team Records" },
-  { id: "legends", label: "Player Legends" },
-];
 
 export default function FranchiseTabs({
   overview,
   records,
   legends,
+  rivalries,
 }: FranchiseTabsProps) {
   const [activeTab, setActiveTab] =
     useState<Tab>("overview");
 
-  const content = {
+  const tabs: {
+    id: Tab;
+    label: string;
+  }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "records", label: "Team Records" },
+    { id: "legends", label: "Player Legends" },
+    { id: "rivalries", label: "Rivalries" },
+  ];
+
+  const content: Record<Tab, ReactNode> = {
     overview,
     records,
     legends,
+    rivalries,
   };
 
   return (
-    <div style={{ marginTop: "28px" }}>
+    <div>
       <div
-        role="tablist"
-        aria-label="Franchise history sections"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns:
+            "repeat(4, minmax(0, 1fr))",
           gap: "6px",
-          padding: "5px",
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "14px",
+          marginTop: "24px",
+          marginBottom: "20px",
         }}
       >
         {tabs.map((tab) => {
-          const active = activeTab === tab.id;
+          const selected =
+            activeTab === tab.id;
 
           return (
             <button
               key={tab.id}
               type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() =>
+                setActiveTab(tab.id)
+              }
               style={{
-                minWidth: 0,
-                minHeight: "46px",
-                padding: "8px 4px",
-                background: active
+                padding: "12px 4px",
+                background: selected
                   ? "#303b48"
-                  : "transparent",
-                color: active
+                  : "#151b23",
+                color: selected
                   ? "#ffffff"
                   : "#9da7b3",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "12px",
-                fontWeight: "700",
+                border: selected
+                  ? "1px solid #64748b"
+                  : "1px solid #27303b",
+                borderRadius: "9px",
+                fontSize: "11px",
+                fontWeight: selected
+                  ? "800"
+                  : "600",
                 cursor: "pointer",
+                minWidth: 0,
               }}
             >
               {tab.label}
@@ -80,12 +92,7 @@ export default function FranchiseTabs({
         })}
       </div>
 
-      <div
-        role="tabpanel"
-        style={{ marginTop: "8px" }}
-      >
-        {content[activeTab]}
-      </div>
+      <div>{content[activeTab]}</div>
     </div>
   );
 }
