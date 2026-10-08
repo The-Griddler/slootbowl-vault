@@ -1,31 +1,17 @@
+
 export type SleeperPlayer = {
-  player_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  full_name: string | null;
-  position: string | null;
-  fantasy_positions: string[] | null;
-  team: string | null;
-  years_exp: number | null;
-  status: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  position?: string | null;
+  team?: string | null;
 };
 
-const PLAYERS_URL =
-  "https://api.sleeper.app/v1/players/nfl";
-
-let playersCache:
-  | Record<string, SleeperPlayer>
-  | null = null;
-
-export async function getPlayers(): Promise<
-  Record<string, SleeperPlayer>
-> {
-  if (playersCache) {
-    return playersCache;
-  }
-
+export async function getPlayerNames(
+  playerIds: string[]
+): Promise<Record<string, string>> {
   const response = await fetch(
-    PLAYERS_URL,
+    "https://api.sleeper.app/v1/players/nfl",
     {
       next: {
         revalidate: 86400,
@@ -35,50 +21,34 @@ export async function getPlayers(): Promise<
 
   if (!response.ok) {
     throw new Error(
-      "Failed to load Sleeper player data"
+      "Failed to load Sleeper NFL player names"
     );
   }
 
-  const data =
-    (await response.json()) as Record<
-      string,
-      SleeperPlayer
-    >;
+  const players: Record<string, SleeperPlayer> =
+    await response.json();
 
-  playersCache = data;
+  const names: Record<string, string> = {};
 
-  return data;
-}
+  for (const id of new Set(playerIds)) {
+    const player = players[id];
 
-export async function getPlayer(
-  playerId: string
-): Promise<SleeperPlayer | null> {
-  const players = await getPlayers();
+    if (!player) {
+      names[id] = `Player ${id}`;
+      continue;
+    }
 
-  return players[playerId] ?? null;
-}
+    const name =
+      player.full_name ||
+      [
+        player.first_name,
+        player.last_name,
+      ]
+        .filter(Boolean)
+        .join(" ");
 
-export function getPlayerName(
-  player: SleeperPlayer | null
-): string {
-  if (!player) {
-    return "Unknown Player";
+    names[id] = name || `Player ${id}`;
   }
 
-  if (player.full_name) {
-    return player.full_name;
-  }
-
-  return [
-    player.first_name,
-    player.last_name,
-  ]
-    .filter(Boolean)
-    .join(" ") || "Unknown Player";
-}
-
-export function getPlayerPosition(
-  player: SleeperPlayer | null
-): string {
-  return player?.position ?? "—";
+  return names;
 }
