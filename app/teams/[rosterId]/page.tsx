@@ -6,6 +6,7 @@ import {
   getHistoricalData,
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
+import FranchiseTabs from "./FranchiseTabs";
 
 const OBFC_IDS = [4, 6, 8, 7, 9];
 
@@ -235,44 +236,9 @@ export default async function FranchisePage({
     padding: "18px",
   };
 
-  return (
-    <main>
-      <Link
-        href="/teams"
-        style={{
-          color: "#9da7b3",
-          textDecoration: "none",
-          fontSize: "13px",
-        }}
-      >
-        ← All Franchises
-      </Link>
-
-      <div style={{ marginTop: "28px" }}>
-        <p
-          style={{
-            fontSize: "12px",
-            fontWeight: "700",
-            letterSpacing: "1.5px",
-            marginBottom: "8px",
-          }}
-        >
-          {conference} · EST. 2022
-        </p>
-
-        <h1>{franchise.name}</h1>
-
-        <p
-          style={{
-            marginTop: "8px",
-            fontSize: "13px",
-          }}
-        >
-          {conferenceName}
-        </p>
-      </div>
-
-      <section style={{ marginTop: "32px" }}>
+  const overview = (
+    <>
+      <section style={{ marginTop: "24px" }}>
         <h2 style={{ fontSize: "21px" }}>
           SFL Career
         </h2>
@@ -485,6 +451,82 @@ export default async function FranchisePage({
           ))}
         </div>
       </section>
+    </>
+  );
+
+  const records = (
+    <section style={{ marginTop: "24px" }}>
+      <h2 style={{ fontSize: "21px" }}>
+        Team Records
+      </h2>
+
+      <div style={{ ...cardStyle, marginTop: "16px" }}>
+        <p style={{ lineHeight: "1.7" }}>
+          Franchise scoring records, biggest victories
+          and best seasons will appear here.
+        </p>
+      </div>
+    </section>
+  );
+
+  const legends = (
+    <section style={{ marginTop: "24px" }}>
+      <h2 style={{ fontSize: "21px" }}>
+        Player Legends
+      </h2>
+
+      <div style={{ ...cardStyle, marginTop: "16px" }}>
+        <p style={{ lineHeight: "1.7" }}>
+          The greatest players in franchise history,
+          ranked by points scored and games started
+          for this team, will appear here.
+        </p>
+      </div>
+    </section>
+  );
+
+  return (
+    <main>
+      <Link
+        href="/teams"
+        style={{
+          color: "#9da7b3",
+          textDecoration: "none",
+          fontSize: "13px",
+        }}
+      >
+        ← All Franchises
+      </Link>
+
+      <div style={{ marginTop: "28px" }}>
+        <p
+          style={{
+            fontSize: "12px",
+            fontWeight: "700",
+            letterSpacing: "1.5px",
+            marginBottom: "8px",
+          }}
+        >
+          {conference} · EST. 2022
+        </p>
+
+        <h1>{franchise.name}</h1>
+
+        <p
+          style={{
+            marginTop: "8px",
+            fontSize: "13px",
+          }}
+        >
+          {conferenceName}
+        </p>
+      </div>
+
+      <FranchiseTabs
+        overview={overview}
+        records={records}
+        legends={legends}
+      />
     </main>
   );
 }
