@@ -7,6 +7,7 @@ import {
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
 import FranchiseTabs from "./FranchiseTabs";
+import TeamRecords from "./TeamRecords";
 
 const OBFC_IDS = [4, 6, 8, 7, 9];
 
@@ -152,6 +153,18 @@ export default async function FranchisePage({
 
   const historicalData = await getHistoricalData();
 
+  const allMatchups = historicalData.flatMap(
+    (season) => season.matchups
+  );
+
+  const franchiseNames: Record<number, string> =
+    Object.fromEntries(
+      FRANCHISES.map((team) => [
+        team.rosterId,
+        team.name,
+      ])
+    );
+
   const seasons = historicalData
     .map((season) => {
       const year = season.league.season;
@@ -166,12 +179,22 @@ export default async function FranchisePage({
         rosterId
       );
 
+      // A completed regular season has a full
+      // Week 14 slate of five played matchups.
+      const week14Games = regularMatchups.filter(
+        (matchup) =>
+          matchup.week === 14 && isPlayed(matchup)
+      );
+
+      const completed = week14Games.length === 5;
+
       const finalist =
         FINALISTS[year]?.includes(rosterId) ?? false;
 
       return {
         year,
         ...record,
+        completed,
         champion: CHAMPIONS[year] === rosterId,
         finalist,
         conferenceChampion: finalist,
@@ -455,18 +478,20 @@ export default async function FranchisePage({
   );
 
   const records = (
-    <section style={{ marginTop: "24px" }}>
-      <h2 style={{ fontSize: "21px" }}>
-        Team Records
-      </h2>
-
-      <div style={{ ...cardStyle, marginTop: "16px" }}>
-        <p style={{ lineHeight: "1.7" }}>
-          Franchise scoring records, biggest victories
-          and best seasons will appear here.
-        </p>
-      </div>
-    </section>
+    <TeamRecords
+      rosterId={rosterId}
+      matchups={allMatchups}
+      seasons={seasons.map((season) => ({
+        year: season.year,
+        wins: season.wins,
+        losses: season.losses,
+        ties: season.ties,
+        games: season.games,
+        pointsFor: season.pointsFor,
+        completed: season.completed,
+      }))}
+      franchiseNames={franchiseNames}
+    />
   );
 
   const legends = (
