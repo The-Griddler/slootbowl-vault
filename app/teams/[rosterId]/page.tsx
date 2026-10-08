@@ -213,9 +213,16 @@ export default async function FranchisePage({
     (season) => season.finalist
   );
 
-  const conferenceTitles = seasons.filter(
-    (season) => season.conferenceChampion
-  );
+  const conferenceChampionshipAppearances =
+  historicalData.filter((season) =>
+    season.matchups.some(
+      (matchup) =>
+        matchup.week === 16 &&
+        matchup.phase === "Main Playoffs" &&
+        (matchup.rosterA === rosterId ||
+          matchup.rosterB === rosterId)
+    )
+  ).length;
 
   const cardStyle = {
     background: "#151b23",
@@ -315,8 +322,8 @@ export default async function FranchisePage({
           />
 
           <StatCard
-            label="Slootbowl Appearances"
-            value={appearances.length}
+            label="Conference Championship Appearances"
+            value={conferenceChampionshipAppearances}
           />
 
           <StatCard
