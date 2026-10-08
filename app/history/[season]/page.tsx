@@ -212,48 +212,7 @@ export default async function SeasonPage({
       return rookieSeason === seasonNumber;
     })
     .sort((a, b) => b.points - a.points);
-  const playerFirstSeason = new Map<string, number>();
-
-for (const historicalSeason of historicalData) {
-  const seasonNumber = Number(historicalSeason.league.season);
-
-  for (const matchup of historicalSeason.matchups) {
-    if (
-      matchup.phase !== "Regular Season" &&
-      matchup.phase !== "Main Playoffs"
-    ) {
-      continue;
-    }
-
-    for (const playerId of matchup.startersA) {
-      if (!playerFirstSeason.has(playerId)) {
-        playerFirstSeason.set(playerId, seasonNumber);
-      }
-    }
-
-    for (const playerId of matchup.startersB) {
-      if (!playerFirstSeason.has(playerId)) {
-        playerFirstSeason.set(playerId, seasonNumber);
-      }
-    }
-  }
-}
-
-const rookieCandidates = Array.from(playerTotals.entries())
-  .filter(([playerId]) => {
-    return playerFirstSeason.get(playerId) === seasonNumber;
-  })
-  .map(([playerId, points]) => ({
-    playerId,
-    points,
-  }));
-
-const roy =
-  rookieCandidates.length > 0
-    ? rookieCandidates.reduce((best, current) =>
-        current.points > best.points ? current : best
-      )
-    : null;
+  const roy = rookieCandidates[0];
   /*
    * Slootbowl MVP
    * Highest-scoring starter in the Slootbowl
