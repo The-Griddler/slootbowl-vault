@@ -5,9 +5,8 @@ import {
   calculateAllSloot,
   type AllSlootSelection,
 } from "../../lib/allSloot";
-import {
-  calculateAllSlootCareers,
-} from "../../lib/allSlootCareer";
+import { calculateAllSlootCareers } from "../../lib/allSlootCareer";
+import CareerHonours from "./CareerHonours";
 
 type PageProps = {
   searchParams: Promise<{
@@ -78,7 +77,9 @@ function TeamTable({
   selections: AllSlootSelection[];
 }) {
   if (selections.length === 0) {
-    return <p>No eligible players were found for this team.</p>;
+    return (
+      <p>No eligible players were found for this team.</p>
+    );
   }
 
   return (
@@ -132,7 +133,8 @@ function TeamTable({
                     marginTop: "4px",
                   }}
                 >
-                  {player.position} · {player.gamesStarted} starts
+                  {player.position} ·{" "}
+                  {player.gamesStarted} starts
                 </div>
               </div>
 
@@ -174,7 +176,8 @@ function TeamTable({
               >
                 {player.franchises.map((franchise) => {
                   const isPrimary =
-                    franchise.rosterId === player.primaryRosterId;
+                    franchise.rosterId ===
+                    player.primaryRosterId;
 
                   return (
                     <div
@@ -190,10 +193,14 @@ function TeamTable({
                       <div>
                         <span
                           style={{
-                            fontWeight: isPrimary ? "700" : "400",
+                            fontWeight: isPrimary
+                              ? "700"
+                              : "400",
                           }}
                         >
-                          {FRANCHISE_NAMES[franchise.rosterId] ??
+                          {FRANCHISE_NAMES[
+                            franchise.rosterId
+                          ] ??
                             `Roster ${franchise.rosterId}`}
                         </span>
 
@@ -217,7 +224,11 @@ function TeamTable({
                           flexShrink: 0,
                         }}
                       >
-                        <span style={{ fontWeight: "700" }}>
+                        <span
+                          style={{
+                            fontWeight: "700",
+                          }}
+                        >
                           {formatPoints(franchise.points)}
                         </span>
 
@@ -247,32 +258,37 @@ export default async function AllSlootPage({
 }: PageProps) {
   const params = await searchParams;
 
-  const [historicalData, playerDirectory] = await Promise.all([
-    getHistoricalData(),
-    getAllSlootPlayerDirectory(),
-  ]);
+  const [historicalData, playerDirectory] =
+    await Promise.all([
+      getHistoricalData(),
+      getAllSlootPlayerDirectory(),
+    ]);
 
   const seasons = historicalData
     .map((season) =>
       calculateAllSloot(season, playerDirectory)
     )
     .sort(
-      (a, b) => Number(b.season) - Number(a.season)
+      (a, b) =>
+        Number(b.season) - Number(a.season)
     );
 
   const currentYear = new Date().getUTCFullYear();
 
-  // Career honours only include completed seasons.
-  // Current-season awards remain provisional.
+  // Only completed seasons count towards
+  // official career honours.
   const completedSeasons = seasons.filter(
-    (season) => Number(season.season) < currentYear
+    (season) =>
+      Number(season.season) < currentYear
   );
 
-  const careers = calculateAllSlootCareers(completedSeasons);
+  const careers =
+    calculateAllSlootCareers(completedSeasons);
 
   const selectedSeason =
     seasons.find(
-      (season) => season.season === params.season
+      (season) =>
+        season.season === params.season
     ) ?? seasons[0];
 
   const selectedTeam = TEAM_OPTIONS.some(
@@ -282,7 +298,9 @@ export default async function AllSlootPage({
     : "first";
 
   const view =
-    params.view === "career" ? "career" : "annual";
+    params.view === "career"
+      ? "career"
+      : "annual";
 
   const selections =
     selectedTeam === "second"
@@ -292,9 +310,8 @@ export default async function AllSlootPage({
         : selectedSeason?.firstTeam ?? [];
 
   const isCurrentSeason =
-    Number(selectedSeason?.season) === currentYear;
-
-  const latestCompletedYear = completedSeasons[0]?.season;
+    Number(selectedSeason?.season) ===
+    currentYear;
 
   return (
     <main>
@@ -362,7 +379,8 @@ export default async function AllSlootPage({
                 key={season.season}
                 href={`/all-sloot?view=annual&season=${season.season}&team=${selectedTeam}`}
                 active={
-                  selectedSeason?.season === season.season
+                  selectedSeason?.season ===
+                  season.season
                 }
               >
                 {season.season}
@@ -380,8 +398,9 @@ export default async function AllSlootPage({
                 fontSize: "13px",
               }}
             >
-              Current season: selections are provisional
-              until the regular season finishes.
+              Current season: selections are
+              provisional until the regular
+              season finishes.
             </p>
           )}
 
@@ -395,9 +414,9 @@ export default async function AllSlootPage({
                 fontSize: "13px",
               }}
             >
-              Rookie eligibility is estimated from Sleeper
-              experience data and should be independently
-              verified.
+              Rookie eligibility is estimated
+              from Sleeper experience data and
+              should be independently verified.
             </p>
           )}
 
@@ -415,18 +434,25 @@ export default async function AllSlootPage({
                 href={`/all-sloot?view=annual&season=${
                   selectedSeason?.season ?? ""
                 }&team=${option.id}`}
-                active={selectedTeam === option.id}
+                active={
+                  selectedTeam === option.id
+                }
               >
                 {option.label}
               </NavLink>
             ))}
           </div>
 
-          <h2 style={{ marginBottom: "16px" }}>
+          <h2
+            style={{
+              marginBottom: "16px",
+            }}
+          >
             {selectedSeason?.season}{" "}
             {
               TEAM_OPTIONS.find(
-                (option) => option.id === selectedTeam
+                (option) =>
+                  option.id === selectedTeam
               )?.label
             }
           </h2>
@@ -434,192 +460,7 @@ export default async function AllSlootPage({
           <TeamTable selections={selections} />
         </>
       ) : (
-        <>
-          <h2 style={{ marginBottom: "8px" }}>
-            SFL Career Honours
-          </h2>
-
-          <p
-            style={{
-              fontSize: "13px",
-              color: MUTED,
-              marginBottom: "20px",
-            }}
-          >
-            All-time All-Sloot selections
-            {latestCompletedYear
-              ? ` through ${latestCompletedYear}`
-              : ""}
-            . Current-season selections are excluded
-            until the season is complete.
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gap: "12px",
-            }}
-          >
-            {careers.map((player, index) => (
-              <div
-                key={player.playerId}
-                style={{
-                  padding: "16px",
-                  border: BORDER,
-                  borderRadius: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "700",
-                        color: MUTED,
-                        marginBottom: "5px",
-                      }}
-                    >
-                      RANK #{index + 1} · {player.position}
-                    </div>
-
-                    <div
-                      style={{
-                        fontWeight: "800",
-                        fontSize: "17px",
-                      }}
-                    >
-                      {player.name}
-                    </div>
-
-                    <div
-                      style={{
-                        color: MUTED,
-                        fontSize: "12px",
-                        marginTop: "5px",
-                      }}
-                    >
-                      {player.seasonsHonoured} seasons honoured
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      textAlign: "right",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "24px",
-                        fontWeight: "800",
-                      }}
-                    >
-                      {player.totalHonours}
-                    </div>
-
-                    <div
-                      style={{
-                        color: MUTED,
-                        fontSize: "11px",
-                      }}
-                    >
-                      Total honours
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "8px",
-                    marginTop: "16px",
-                  }}
-                >
-                  {[
-                    {
-                      label: "First Team",
-                      value: player.firstTeamSelections,
-                    },
-                    {
-                      label: "Second Team",
-                      value: player.secondTeamSelections,
-                    },
-                    {
-                      label: "Rookie Team",
-                      value: player.rookieTeamSelections,
-                    },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      style={{
-                        background: "#202833",
-                        padding: "10px 6px",
-                        borderRadius: "8px",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: "800",
-                          fontSize: "20px",
-                        }}
-                      >
-                        {stat.value}
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: "10px",
-                          color: MUTED,
-                          marginTop: "4px",
-                        }}
-                      >
-                        {stat.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div
-                  style={{
-                    borderTop: BORDER,
-                    marginTop: "14px",
-                    paddingTop: "12px",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "6px",
-                  }}
-                >
-                  {player.awards.map((award) => (
-                    <span
-                      key={`${award.season}-${award.team}`}
-                      style={{
-                        fontSize: "11px",
-                        padding: "6px 8px",
-                        borderRadius: "7px",
-                        background: "#263244",
-                      }}
-                    >
-                      {award.season} · {award.team}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {careers.length === 0 && (
-              <p>No completed-season honours found.</p>
-            )}
-          </div>
-        </>
+        <CareerHonours careers={careers} />
       )}
     </main>
   );
