@@ -168,7 +168,7 @@ function TeamTable({
                             `Roster ${franchise.rosterId}`}
                         </span>
 
-                        {isPrimary && (
+                        {isPrimary && player.franchises.length > 1 && (
                           <span
                             style={{
                               color: "#687384",
