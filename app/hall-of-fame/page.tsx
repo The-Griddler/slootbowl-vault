@@ -19,6 +19,10 @@ import {
   calculateGradeCareers,
 } from "../../lib/seasonGrades";
 
+import { calculateLegacyScores } from "../../lib/legacyScore";
+
+import { getSlootbowlResults } from "../../lib/slootbowlResults";
+
 import HallOfFameLeaderboard from "./HallOfFameLeaderboard";
 
 export default async function HallOfFamePage() {
@@ -30,10 +34,9 @@ export default async function HallOfFamePage() {
     ]);
 
   const currentYear = new Date().getUTCFullYear();
-
   const completedThroughSeason = currentYear - 1;
 
-  // Build the player directory using Sleeper data.
+  // Build the player directory.
   const directory = Object.fromEntries(
     Object.entries(players).map(([id, player]) => [
       id,
@@ -50,25 +53,23 @@ export default async function HallOfFamePage() {
     ])
   );
 
-  // Only include completed SFL seasons.
+  // Only completed SFL seasons count.
   const completedSeasons = historicalData.filter(
     (season) =>
       Number(season.league.season) <=
       completedThroughSeason
   );
 
-  // Calculate historical All-Sloot selections.
+  // Calculate All-Sloot honours.
   const allSlootSeasons = completedSeasons.map(
-    (season) =>
-      calculateAllSloot(season, directory)
+    (season) => calculateAllSloot(season, directory)
   );
 
-  // Calculate each player's All-Sloot career honours.
   const honours = calculateAllSlootCareers(
     allSlootSeasons
   );
 
-  // Calculate provisional Hall of Fame scores.
+  // Existing provisional Hall of Fame rankings.
   const scores = calculateHallOfFameScores(
     records,
     directory,
@@ -76,8 +77,7 @@ export default async function HallOfFamePage() {
     completedThroughSeason
   );
 
-  // Calculate positional grades for every
-  // completed SFL season.
+  // Calculate historical seasonal grades.
   const seasonGrades =
     calculateHistoricalSeasonGrades(
       completedSeasons,
@@ -85,10 +85,32 @@ export default async function HallOfFamePage() {
       completedThroughSeason
     );
 
-  // Combine seasonal grades into player careers.
   const gradeCareers = calculateGradeCareers(
     seasonGrades
   );
+
+  // Retrieve verified Slootbowl results.
+  const championshipResults =
+    await getSlootbowlResults(
+      completedSeasons,
+      completedThroughSeason
+    );
+
+  // Calculate the complete Madden-style
+  // cumulative Legacy Points.
+  const legacyScores = calculateLegacyScores(
+    gradeCareers,
+    honours,
+    records,
+    directory,
+    completedThroughSeason,
+    championshipResults
+  );
+
+  // The current leaderboard will be replaced
+  // in the next step, once its new component
+  // is ready.
+  void legacyScores;
 
   return (
     <main
@@ -149,9 +171,9 @@ export default async function HallOfFamePage() {
         }}
       >
         Rankings include completed seasons through{" "}
-        {completedThroughSeason}. Championship bonuses,
-        retirement eligibility and automatic induction
-        are not yet applied.
+        {completedThroughSeason}. The cumulative
+        Legacy Points system is being prepared
+        and is not yet displayed.
       </p>
     </main>
   );
