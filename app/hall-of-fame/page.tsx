@@ -1,17 +1,24 @@
 
 import { getPlayerRecords } from "../../lib/playerRecords";
+
 import {
   getPlayers,
   getPlayerName,
 } from "../../lib/players";
+
 import { getHistoricalData } from "../../lib/sleeper";
+
 import { calculateAllSloot } from "../../lib/allSloot";
+
 import { calculateAllSlootCareers } from "../../lib/allSlootCareer";
+
 import { calculateHallOfFameScores } from "../../lib/hallOfFame";
+
 import {
   calculateHistoricalSeasonGrades,
   calculateGradeCareers,
 } from "../../lib/seasonGrades";
+
 import HallOfFameLeaderboard from "./HallOfFameLeaderboard";
 
 export default async function HallOfFamePage() {
@@ -23,8 +30,10 @@ export default async function HallOfFamePage() {
     ]);
 
   const currentYear = new Date().getUTCFullYear();
+
   const completedThroughSeason = currentYear - 1;
 
+  // Build the player directory using Sleeper data.
   const directory = Object.fromEntries(
     Object.entries(players).map(([id, player]) => [
       id,
@@ -41,21 +50,25 @@ export default async function HallOfFamePage() {
     ])
   );
 
+  // Only include completed SFL seasons.
   const completedSeasons = historicalData.filter(
     (season) =>
       Number(season.league.season) <=
       completedThroughSeason
   );
 
+  // Calculate historical All-Sloot selections.
   const allSlootSeasons = completedSeasons.map(
     (season) =>
       calculateAllSloot(season, directory)
   );
 
+  // Calculate each player's All-Sloot career honours.
   const honours = calculateAllSlootCareers(
     allSlootSeasons
   );
 
+  // Calculate provisional Hall of Fame scores.
   const scores = calculateHallOfFameScores(
     records,
     directory,
@@ -63,6 +76,8 @@ export default async function HallOfFamePage() {
     completedThroughSeason
   );
 
+  // Calculate positional grades for every
+  // completed SFL season.
   const seasonGrades =
     calculateHistoricalSeasonGrades(
       completedSeasons,
@@ -70,14 +85,10 @@ export default async function HallOfFamePage() {
       completedThroughSeason
     );
 
+  // Combine seasonal grades into player careers.
   const gradeCareers = calculateGradeCareers(
     seasonGrades
   );
-
-  // The current leaderboard still expects scores only.
-  // We'll pass the grade careers once its component
-  // has been updated in the next deployment.
-  void gradeCareers;
 
   return (
     <main
@@ -124,7 +135,10 @@ export default async function HallOfFamePage() {
         not official Hall of Fame inductions.
       </p>
 
-      <HallOfFameLeaderboard scores={scores} />
+      <HallOfFameLeaderboard
+        scores={scores}
+        gradeCareers={gradeCareers}
+      />
 
       <p
         style={{
