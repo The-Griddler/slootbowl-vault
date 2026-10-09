@@ -109,6 +109,9 @@ export function getAllSlootPlayers(
     }
   >();
 
+  // Prevent duplicate scoring in the same week.
+  const seenStarts = new Set<string>();
+
   for (const matchup of season.matchups) {
     if (
       matchup.phase !== "Regular Season" ||
@@ -147,7 +150,7 @@ export function getAllSlootPlayers(
           const key =
             `${playerId}:${matchup.week}`;
 
-          // Each player counts once per week.
+          // Count each player only once per week.
           if (seenStarts.has(key)) {
             return;
           }
