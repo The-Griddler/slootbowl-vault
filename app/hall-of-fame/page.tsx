@@ -12,8 +12,6 @@ import { calculateAllSloot } from "../../lib/allSloot";
 
 import { calculateAllSlootCareers } from "../../lib/allSlootCareer";
 
-import { calculateHallOfFameScores } from "../../lib/hallOfFame";
-
 import {
   calculateHistoricalSeasonGrades,
   calculateGradeCareers,
@@ -23,7 +21,7 @@ import { calculateLegacyScores } from "../../lib/legacyScore";
 
 import { getSlootbowlResults } from "../../lib/slootbowlResults";
 
-import HallOfFameLeaderboard from "./HallOfFameLeaderboard";
+import LegacyLeaderboard from "./LegacyLeaderboard";
 
 export default async function HallOfFamePage() {
   const [records, players, historicalData] =
@@ -34,9 +32,10 @@ export default async function HallOfFamePage() {
     ]);
 
   const currentYear = new Date().getUTCFullYear();
+
   const completedThroughSeason = currentYear - 1;
 
-  // Build the player directory.
+  // Build the Sleeper player directory.
   const directory = Object.fromEntries(
     Object.entries(players).map(([id, player]) => [
       id,
@@ -53,7 +52,7 @@ export default async function HallOfFamePage() {
     ])
   );
 
-  // Only completed SFL seasons count.
+  // Only completed SFL seasons are eligible.
   const completedSeasons = historicalData.filter(
     (season) =>
       Number(season.league.season) <=
@@ -69,14 +68,6 @@ export default async function HallOfFamePage() {
     allSlootSeasons
   );
 
-  // Existing provisional Hall of Fame rankings.
-  const scores = calculateHallOfFameScores(
-    records,
-    directory,
-    honours,
-    completedThroughSeason
-  );
-
   // Calculate historical seasonal grades.
   const seasonGrades =
     calculateHistoricalSeasonGrades(
@@ -89,15 +80,15 @@ export default async function HallOfFamePage() {
     seasonGrades
   );
 
-  // Retrieve verified Slootbowl results.
+  // Identify verified Slootbowl championship
+  // winners and runners-up.
   const championshipResults =
     await getSlootbowlResults(
       completedSeasons,
       completedThroughSeason
     );
 
-  // Calculate the complete Madden-style
-  // cumulative Legacy Points.
+  // Calculate cumulative SFL Legacy Points.
   const legacyScores = calculateLegacyScores(
     gradeCareers,
     honours,
@@ -106,11 +97,6 @@ export default async function HallOfFamePage() {
     completedThroughSeason,
     championshipResults
   );
-
-  // The current leaderboard will be replaced
-  // in the next step, once its new component
-  // is ready.
-  void legacyScores;
 
   return (
     <main
@@ -152,15 +138,47 @@ export default async function HallOfFamePage() {
         }}
       >
         The greatest players in Sluts Football League
-        history, ranked by their SFL achievements.
-        These are provisional candidate rankings,
-        not official Hall of Fame inductions.
+        history, ranked by cumulative Legacy Points
+        earned through seasonal greatness, All-Sloot
+        honours, career milestones and playoff
+        achievements.
       </p>
 
-      <HallOfFameLeaderboard
-        scores={scores}
-        gradeCareers={gradeCareers}
-      />
+      <div
+        style={{
+          marginBottom: "18px",
+          padding: "12px 14px",
+          border: "1px solid #263244",
+          borderRadius: "10px",
+          background: "#202833",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "12px",
+            fontWeight: 700,
+            marginBottom: "4px",
+          }}
+        >
+          SFL LEGACY RANKINGS
+        </div>
+
+        <div
+          style={{
+            color: "#9da7b3",
+            fontSize: "12px",
+            lineHeight: 1.6,
+          }}
+        >
+          Legacy Points accumulate throughout a
+          player's SFL career. Rankings are
+          provisional while we calibrate career
+          milestones and Hall of Fame induction
+          requirements.
+        </div>
+      </div>
+
+      <LegacyLeaderboard scores={legacyScores} />
 
       <p
         style={{
@@ -170,10 +188,12 @@ export default async function HallOfFamePage() {
           marginTop: "24px",
         }}
       >
-        Rankings include completed seasons through{" "}
-        {completedThroughSeason}. The cumulative
-        Legacy Points system is being prepared
-        and is not yet displayed.
+        Includes completed SFL seasons through{" "}
+        {completedThroughSeason}. Only official
+        regular-season and main-playoff performances
+        count. Toilet Bowl and consolation games
+        are excluded. Hall of Fame inductions
+        have not yet been activated.
       </p>
     </main>
   );
