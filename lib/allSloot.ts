@@ -1,18 +1,18 @@
 
-import type {
-  HistoricalSeason,
-} from "./sleeper";
+import type { HistoricalSeason } from "./sleeper";
 
-export type AllSlootPosition =
-  | "QB"
-  | "RB"
-  | "WR"
-  | "TE";
+export type AllSlootPosition = "QB" | "RB" | "WR" | "TE";
 
 export type AllSlootSlot =
   | AllSlootPosition
   | "FLEX"
   | "SUPERFLEX";
+
+export type AllSlootFranchise = {
+  rosterId: number;
+  points: number;
+  gamesStarted: number;
+};
 
 export type AllSlootPlayer = {
   playerId: string;
@@ -22,6 +22,12 @@ export type AllSlootPlayer = {
   gamesStarted: number;
   rosterIds: number[];
   rookieYear: number | null;
+
+  // All franchises represented, ordered by points scored.
+  franchises: AllSlootFranchise[];
+
+  // Franchise where the player scored the most starter points.
+  primaryRosterId: number | null;
 };
 
 export type AllSlootSelection = {
@@ -42,8 +48,10 @@ export type AllSlootPlayerInfo = {
   rookieYear?: number | null;
 };
 
-export type AllSlootPlayerDirectory =
-  Record<string, AllSlootPlayerInfo>;
+export type AllSlootPlayerDirectory = Record<
+  string,
+  AllSlootPlayerInfo
+>;
 
 const LINEUP: AllSlootSlot[] = [
   "QB",
@@ -74,14 +82,8 @@ function eligibleForSlot(
   position: AllSlootPosition,
   slot: AllSlootSlot
 ): boolean {
-  if (slot === "SUPERFLEX") {
-    return true;
-  }
-
-  if (slot === "FLEX") {
-    return position !== "QB";
-  }
-
+  if (slot === "SUPERFLEX") return true;
+  if (slot === "FLEX") return position !== "QB";
   return position === slot;
 }
 
@@ -96,20 +98,27 @@ function comparePlayers(
   );
 }
 
+type FranchiseAccumulator = {
+  points: number;
+  weeks: Set<number>;
+};
+
+type PlayerAccumulator = {
+  points: number;
+  weeks: Set<number>;
+  franchises: Map<number, FranchiseAccumulator>;
+};
+
 export function getAllSlootPlayers(
   season: HistoricalSeason,
   directory: AllSlootPlayerDirectory
 ): AllSlootPlayer[] {
   const totals = new Map<
     string,
-    {
-      points: number;
-      weeks: Set<number>;
-      rosterIds: Set<number>;
-    }
+    PlayerAccumulator
   >();
 
-  // Prevent duplicate scoring in the same week.
+  // Prevent a player being counted twice in one week.
   const seenStarts = new Set<string>();
 
   for (const matchup of season.matchups) {
@@ -135,52 +144,51 @@ export function getAllSlootPlayers(
     ];
 
     for (const team of teams) {
-      team.starters.forEach(
-        (playerId, index) => {
-          if (
-            !playerId ||
-            playerId === "0" ||
-            !Number.isFinite(
-              team.scores[index]
-            )
-          ) {
-            return;
-          }
-
-          const key =
-            `${playerId}:${matchup.week}`;
-
-          // Count each player only once per week.
-          if (seenStarts.has(key)) {
-            return;
-          }
-
-          seenStarts.add(key);
-
-          if (!totals.has(playerId)) {
-            totals.set(playerId, {
-              points: 0,
-              weeks: new Set(),
-              rosterIds: new Set(),
-            });
-          }
-
-          const total = totals.get(
-            playerId
-          )!;
-
-          total.points +=
-            team.scores[index];
-
-          total.weeks.add(
-            matchup.week
-          );
-
-          total.rosterIds.add(
-            team.rosterId
-          );
+      team.starters.forEach((playerId, index) => {
+        if (
+          !playerId ||
+          playerId === "0" ||
+          !Number.isFinite(team.scores[index])
+        ) {
+          return;
         }
-      );
+
+        const key = `${playerId}:${matchup.week}`;
+
+        if (seenStarts.has(key)) return;
+        seenStarts.add(key);
+
+        if (!totals.has(playerId)) {
+          totals.set(playerId, {
+            points: 0,
+            weeks: new Set<number>(),
+            franchises: new Map<
+              number,
+              FranchiseAccumulator
+            >(),
+          });
+        }
+
+        const total = totals.get(playerId)!;
+        const points = team.scores[index];
+
+        total.points += points;
+        total.weeks.add(matchup.week);
+
+        if (!total.franchises.has(team.rosterId)) {
+          total.franchises.set(team.rosterId, {
+            points: 0,
+            weeks: new Set<number>(),
+          });
+        }
+
+        const franchise = total.franchises.get(
+          team.rosterId
+        )!;
+
+        franchise.points += points;
+        franchise.weeks.add(matchup.week);
+      });
     }
   }
 
@@ -189,12 +197,24 @@ export function getAllSlootPlayers(
   for (const [playerId, total] of totals) {
     const info = directory[playerId];
 
-    if (
-      !info ||
-      !isPosition(info.position)
-    ) {
+    if (!info || !isPosition(info.position)) {
       continue;
     }
+
+    const franchises: AllSlootFranchise[] = [
+      ...total.franchises.entries(),
+    ]
+      .map(([rosterId, stats]) => ({
+        rosterId,
+        points: stats.points,
+        gamesStarted: stats.weeks.size,
+      }))
+      .sort(
+        (a, b) =>
+          b.points - a.points ||
+          b.gamesStarted - a.gamesStarted ||
+          a.rosterId - b.rosterId
+      );
 
     players.push({
       playerId,
@@ -202,11 +222,13 @@ export function getAllSlootPlayers(
       position: info.position,
       points: total.points,
       gamesStarted: total.weeks.size,
-      rosterIds: [
-        ...total.rosterIds,
-      ].sort((a, b) => a - b),
-      rookieYear:
-        info.rookieYear ?? null,
+      rosterIds: [...total.franchises.keys()].sort(
+        (a, b) => a - b
+      ),
+      rookieYear: info.rookieYear ?? null,
+      franchises,
+      primaryRosterId:
+        franchises[0]?.rosterId ?? null,
     });
   }
 
@@ -216,35 +238,20 @@ export function getAllSlootPlayers(
 function buildTeam(
   players: AllSlootPlayer[]
 ): AllSlootSelection[] {
-  const available = [
-    ...players,
-  ].sort(comparePlayers);
-
-  const selected =
-    new Set<string>();
-
-  const selections:
-    AllSlootSelection[] = [];
+  const available = [...players].sort(comparePlayers);
+  const selected = new Set<string>();
+  const selections: AllSlootSelection[] = [];
 
   for (const slot of LINEUP) {
     const player = available.find(
       (candidate) =>
-        !selected.has(
-          candidate.playerId
-        ) &&
-        eligibleForSlot(
-          candidate.position,
-          slot
-        )
+        !selected.has(candidate.playerId) &&
+        eligibleForSlot(candidate.position, slot)
     );
 
-    if (!player) {
-      continue;
-    }
+    if (!player) continue;
 
-    selected.add(
-      player.playerId
-    );
+    selected.add(player.playerId);
 
     selections.push({
       slot,
@@ -259,54 +266,36 @@ export function calculateAllSloot(
   season: HistoricalSeason,
   directory: AllSlootPlayerDirectory
 ): AllSlootSeason {
-  const players =
-    getAllSlootPlayers(
-      season,
-      directory
-    );
+  const players = getAllSlootPlayers(
+    season,
+    directory
+  );
 
-  const firstTeam =
-    buildTeam(players);
+  const firstTeam = buildTeam(players);
 
-  const firstTeamIds =
-    new Set(
-      firstTeam.map(
-        (selection) =>
-          selection.player.playerId
-      )
-    );
+  const firstTeamIds = new Set(
+    firstTeam.map(
+      (selection) => selection.player.playerId
+    )
+  );
 
-  const remainingPlayers =
+  const secondTeam = buildTeam(
     players.filter(
-      (player) =>
-        !firstTeamIds.has(
-          player.playerId
-        )
-    );
+      (player) => !firstTeamIds.has(player.playerId)
+    )
+  );
 
-  const secondTeam =
-    buildTeam(
-      remainingPlayers
-    );
-
-  const rookiePlayers =
+  const rookieTeam = buildTeam(
     players.filter(
       (player) =>
         player.rookieYear !== null &&
         player.rookieYear ===
-          Number(
-            season.league.season
-          )
-    );
-
-  const rookieTeam =
-    buildTeam(
-      rookiePlayers
-    );
+          Number(season.league.season)
+    )
+  );
 
   return {
-    season:
-      season.league.season,
+    season: season.league.season,
     firstTeam,
     secondTeam,
     rookieTeam,
