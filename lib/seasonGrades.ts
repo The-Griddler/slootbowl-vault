@@ -1,5 +1,6 @@
 
 import type { HistoricalSeason } from "./sleeper";
+
 import {
   getAllSlootPlayers,
   type AllSlootPlayerDirectory,
@@ -81,26 +82,49 @@ export function calculateSeasonGrades(
 
   for (const position of positions) {
     const ranked = players
-      .filter((player) => player.position === position)
+      .filter(
+        (player) => player.position === position
+      )
       .sort(
         (a, b) =>
           b.points - a.points ||
-          b.gamesStarted - a.gamesStarted ||
           a.playerId.localeCompare(b.playerId)
       );
 
+    let previousPoints: number | null = null;
+    let currentRank = 0;
+
     ranked.forEach((player, index) => {
-      const rank = index + 1;
+      // Competition ranking:
+      // 1, 2, 2, 4 rather than 1, 2, 3, 4.
+      //
+      // Fantasy scores are rounded to two
+      // decimal places for tie comparisons.
+      const points = Number(
+        player.points.toFixed(2)
+      );
+
+      if (
+        previousPoints === null ||
+        points !== previousPoints
+      ) {
+        currentRank = index + 1;
+      }
+
+      previousPoints = points;
 
       results.push({
         season: season.league.season,
         playerId: player.playerId,
         name: player.name,
         position,
-        rank,
-        points: Number(player.points.toFixed(2)),
+        rank: currentRank,
+        points,
         starts: player.gamesStarted,
-        grade: getSeasonGrade(position, rank),
+        grade: getSeasonGrade(
+          position,
+          currentRank
+        ),
       });
     });
   }
@@ -134,10 +158,11 @@ export function calculateGradeCareers(
 
     const career = careers.get(grade.playerId)!;
 
-    // Guard against duplicate historical seasons.
+    // Prevent duplicate historical seasons.
     if (
       career.seasons.some(
-        (existing) => existing.season === grade.season
+        (existing) =>
+          existing.season === grade.season
       )
     ) {
       continue;
@@ -163,13 +188,15 @@ export function calculateGradeCareers(
 
   for (const career of careers.values()) {
     career.seasons.sort(
-      (a, b) => Number(a.season) - Number(b.season)
+      (a, b) =>
+        Number(a.season) - Number(b.season)
     );
   }
 
   return [...careers.values()].sort(
     (a, b) =>
-      b.qualifyingSeasons - a.qualifyingSeasons ||
+      b.qualifyingSeasons -
+        a.qualifyingSeasons ||
       b.legendary - a.legendary ||
       b.elite - a.elite ||
       a.name.localeCompare(b.name)
@@ -187,7 +214,11 @@ export function calculateHistoricalSeasonGrades(
         Number(season.league.season) <=
         completedThroughSeason
     )
-    .flatMap((season) =>
-      calculateSeasonGrades(season, directory)
+    .flatMap(
+      (season) =>
+        calculateSeasonGrades(
+          season,
+          directory
+        )
     );
 }
