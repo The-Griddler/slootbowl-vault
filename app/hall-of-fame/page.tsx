@@ -1,10 +1,17 @@
 
 import { getPlayerRecords } from "../../lib/playerRecords";
-import { getPlayers, getPlayerName } from "../../lib/players";
+import {
+  getPlayers,
+  getPlayerName,
+} from "../../lib/players";
 import { getHistoricalData } from "../../lib/sleeper";
 import { calculateAllSloot } from "../../lib/allSloot";
 import { calculateAllSlootCareers } from "../../lib/allSlootCareer";
 import { calculateHallOfFameScores } from "../../lib/hallOfFame";
+import {
+  calculateHistoricalSeasonGrades,
+  calculateGradeCareers,
+} from "../../lib/seasonGrades";
 import HallOfFameLeaderboard from "./HallOfFameLeaderboard";
 
 export default async function HallOfFamePage() {
@@ -16,6 +23,7 @@ export default async function HallOfFamePage() {
     ]);
 
   const currentYear = new Date().getUTCFullYear();
+  const completedThroughSeason = currentYear - 1;
 
   const directory = Object.fromEntries(
     Object.entries(players).map(([id, player]) => [
@@ -24,7 +32,9 @@ export default async function HallOfFamePage() {
         name: getPlayerName(player),
         position: player.position,
         rookieYear:
-          typeof player.years_exp === "number"
+          typeof player.years_exp === "number" &&
+          Number.isFinite(player.years_exp) &&
+          player.years_exp >= 0
             ? currentYear - player.years_exp
             : null,
       },
@@ -32,11 +42,14 @@ export default async function HallOfFamePage() {
   );
 
   const completedSeasons = historicalData.filter(
-    (season) => Number(season.league.season) < currentYear
+    (season) =>
+      Number(season.league.season) <=
+      completedThroughSeason
   );
 
   const allSlootSeasons = completedSeasons.map(
-    (season) => calculateAllSloot(season, directory)
+    (season) =>
+      calculateAllSloot(season, directory)
   );
 
   const honours = calculateAllSlootCareers(
@@ -47,8 +60,24 @@ export default async function HallOfFamePage() {
     records,
     directory,
     honours,
-    currentYear - 1
+    completedThroughSeason
   );
+
+  const seasonGrades =
+    calculateHistoricalSeasonGrades(
+      completedSeasons,
+      directory,
+      completedThroughSeason
+    );
+
+  const gradeCareers = calculateGradeCareers(
+    seasonGrades
+  );
+
+  // The current leaderboard still expects scores only.
+  // We'll pass the grade careers once its component
+  // has been updated in the next deployment.
+  void gradeCareers;
 
   return (
     <main
@@ -106,9 +135,9 @@ export default async function HallOfFamePage() {
         }}
       >
         Rankings include completed seasons through{" "}
-        {currentYear - 1}. Championship bonuses,
-        retirement eligibility and automatic
-        induction are not yet applied.
+        {completedThroughSeason}. Championship bonuses,
+        retirement eligibility and automatic induction
+        are not yet applied.
       </p>
     </main>
   );
