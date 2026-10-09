@@ -36,6 +36,12 @@ const moreItems = [
     description: "Champions, awards and season archive",
   },
   {
+    href: "/all-sloot",
+    label: "All-Sloot Teams",
+    icon: "🏅",
+    description: "First Team, Second Team and Rookie Team honours",
+  },
+  {
     href: "/player-records",
     label: "Player Records",
     icon: "👤",
