@@ -1,4 +1,5 @@
-import { getMatchups, getRosters } from "../../lib/sleeper";
+
+import { getHistoricalData } from "../../lib/sleeper";
 
 const OFFICIAL_TEAM_NAMES: Record<number, string> = {
   1: "Mt Isa Ballbags",
@@ -28,14 +29,65 @@ const TEAM_DIVISIONS: Record<number, "OBFC" | "GPFC"> = {
 
 type MatchupsPageProps = {
   searchParams: Promise<{
+    season?: string;
     week?: string;
   }>;
 };
+
+function formatScore(score: number): string {
+  return score.toFixed(2);
+}
+
+function formatMargin(
+  firstScore: number,
+  secondScore: number
+): string {
+  return Math.abs(firstScore - secondScore).toFixed(2);
+}
+
+function getWeekLabel(week: number): string {
+  if (week === 15) return "Playoff Week 15";
+  if (week === 16) return "Playoff Week 16";
+  if (week === 17) return "Slootbowl Week";
+  return `Week ${week}`;
+}
 
 export default async function MatchupsPage({
   searchParams,
 }: MatchupsPageProps) {
   const params = await searchParams;
+
+  const historicalData = await getHistoricalData();
+
+  const completedThroughSeason =
+    new Date().getUTCFullYear() - 1;
+
+  const completedSeasons = historicalData
+    .filter(
+      (season) =>
+        Number(season.league.season) <=
+        completedThroughSeason
+    )
+    .sort(
+      (a, b) =>
+        Number(b.league.season) -
+        Number(a.league.season)
+    );
+
+  const availableSeasons = completedSeasons.map(
+    (season) => String(season.league.season)
+  );
+
+  const selectedSeason =
+    params.season &&
+    availableSeasons.includes(params.season)
+      ? params.season
+      : availableSeasons[0];
+
+  const seasonData = completedSeasons.find(
+    (season) =>
+      String(season.league.season) === selectedSeason
+  );
 
   const requestedWeek = Number(params.week);
 
@@ -44,432 +96,667 @@ export default async function MatchupsPage({
     requestedWeek >= 1 &&
     requestedWeek <= 17
       ? requestedWeek
-      : 3;
+      : 1;
 
-  const [matchups, rosters] = await Promise.all([
-    getMatchups(currentWeek),
-    getRosters(),
-  ]);
+  // Only official regular-season and main-playoff
+  // games belong in the historical archive.
+  const matchups = (seasonData?.matchups ?? [])
+    .filter(
+      (matchup) =>
+        matchup.week === currentWeek &&
+        (matchup.phase === "Regular Season" ||
+          matchup.phase === "Main Playoffs")
+    )
+    .sort((a, b) => a.rosterA - b.rosterA);
 
-  const rosterMap = new Map(
-    rosters.map((roster) => [roster.roster_id, roster])
-  );
+  const regularSeasonCount = (
+    seasonData?.matchups ?? []
+  ).filter(
+    (matchup) =>
+      matchup.phase === "Regular Season"
+  ).length;
 
-  const groupedMatchups = new Map<
-    number,
-    typeof matchups
-  >();
+  const playoffCount = (
+    seasonData?.matchups ?? []
+  ).filter(
+    (matchup) =>
+      matchup.phase === "Main Playoffs"
+  ).length;
 
-  matchups.forEach((matchup) => {
-    if (!groupedMatchups.has(matchup.matchup_id)) {
-      groupedMatchups.set(matchup.matchup_id, []);
-    }
-
-    groupedMatchups.get(matchup.matchup_id)!.push(matchup);
-  });
-
-  const matchupsList = Array.from(groupedMatchups.values());
+  function weekUrl(week: number): string {
+    return `/matchups?season=${selectedSeason}&week=${week}`;
+  }
 
   return (
-    <main>
-      <header
-        style={{
-          marginBottom: "24px",
-        }}
-      >
+    <main
+      style={{
+        maxWidth: "900px",
+        margin: "0 auto",
+        padding: "24px 16px 110px",
+      }}
+    >
+      <header style={{ marginBottom: "24px" }}>
         <p
           style={{
             fontSize: "12px",
-            fontWeight: "700",
+            fontWeight: 700,
             letterSpacing: "2px",
             color: "#687384",
             marginBottom: "6px",
           }}
         >
-          DYNASTY SLUTS
+          DYNASTY SLUTS · SFL ARCHIVES
         </p>
 
         <h1
           style={{
-            fontSize: "34px",
+            fontSize: "30px",
             margin: 0,
+            fontWeight: 800,
           }}
         >
-          Matchups
+          Matchup Archive
         </h1>
 
         <p
           style={{
-            marginTop: "6px",
+            color: "#9da7b3",
+            fontSize: "13px",
+            lineHeight: 1.6,
+            marginTop: "10px",
           }}
         >
-          2026 Season
+          Relive every official SFL regular-season
+          and main-playoff matchup. Explore historic
+          results, winning margins and championship
+          games from completed seasons.
         </p>
       </header>
 
-      <section
-        style={{
-          background: "#151b23",
-          border: "1px solid #27303b",
-          borderRadius: "18px",
-          padding: "16px",
-          marginBottom: "24px",
-        }}
-      >
-        <div
+      {availableSeasons.length === 0 ? (
+        <section
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "16px",
+            padding: "24px",
+            background: "#151b23",
+            border: "1px solid #27303b",
+            borderRadius: "16px",
           }}
         >
-          {currentWeek > 1 ? (
-            <a
-              href={`/matchups?week=${currentWeek - 1}`}
-              style={{
-                textDecoration: "none",
-                color: "#ffffff",
-                fontSize: "24px",
-                width: "44px",
-                height: "44px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ←
-            </a>
-          ) : (
-            <div style={{ width: "44px" }} />
-          )}
-
-          <div
+          No completed SFL seasons are available.
+        </section>
+      ) : (
+        <>
+          <section
             style={{
-              textAlign: "center",
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "18px",
+              padding: "16px",
+              marginBottom: "20px",
             }}
           >
             <div
               style={{
                 fontSize: "11px",
-                fontWeight: "700",
+                fontWeight: 700,
                 letterSpacing: "1.5px",
                 color: "#687384",
+                marginBottom: "12px",
               }}
             >
-              SELECTED WEEK
+              SELECT SEASON
             </div>
 
             <div
               style={{
-                fontSize: "22px",
-                fontWeight: "700",
-                marginTop: "2px",
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(75px, 1fr))",
+                gap: "8px",
               }}
             >
-              Week {currentWeek}
-            </div>
-          </div>
+              {availableSeasons.map((season) => {
+                const selected =
+                  season === selectedSeason;
 
-          {currentWeek < 17 ? (
-            <a
-              href={`/matchups?week=${currentWeek + 1}`}
+                return (
+                  <a
+                    key={season}
+                    href={`/matchups?season=${season}&week=1`}
+                    style={{
+                      textDecoration: "none",
+                      color: selected
+                        ? "#ffffff"
+                        : "#9da7b3",
+                      background: selected
+                        ? "#27303b"
+                        : "#0b0f14",
+                      border: selected
+                        ? "1px solid #687384"
+                        : "1px solid #27303b",
+                      borderRadius: "10px",
+                      padding: "12px 8px",
+                      textAlign: "center",
+                      fontSize: "14px",
+                      fontWeight: selected ? 800 : 500,
+                    }}
+                  >
+                    {season}
+                  </a>
+                );
+              })}
+            </div>
+
+            <div
               style={{
-                textDecoration: "none",
-                color: "#ffffff",
-                fontSize: "24px",
-                width: "44px",
-                height: "44px",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+                marginTop: "16px",
+              }}
+            >
+              <div
+                style={{
+                  background: "#202833",
+                  borderRadius: "10px",
+                  padding: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#9da7b3",
+                    fontSize: "11px",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Regular-Season Games
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "21px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {regularSeasonCount}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#202833",
+                  borderRadius: "10px",
+                  padding: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#9da7b3",
+                    fontSize: "11px",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Main-Playoff Games
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "21px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {playoffCount}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            style={{
+              background: "#151b23",
+              border: "1px solid #27303b",
+              borderRadius: "18px",
+              padding: "16px",
+              marginBottom: "24px",
+            }}
+          >
+            <div
+              style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
+                justifyContent: "space-between",
+                marginBottom: "16px",
               }}
             >
-              →
-            </a>
-          ) : (
-            <div style={{ width: "44px" }} />
-          )}
-        </div>
+              {currentWeek > 1 ? (
+                <a
+                  href={weekUrl(currentWeek - 1)}
+                  style={{
+                    color: "#ffffff",
+                    textDecoration: "none",
+                    fontSize: "24px",
+                    padding: "8px",
+                  }}
+                >
+                  ←
+                </a>
+              ) : (
+                <div style={{ width: "40px" }} />
+              )}
 
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: "700",
-            letterSpacing: "1.5px",
-            color: "#687384",
-            marginBottom: "10px",
-          }}
-        >
-          REGULAR SEASON
-        </div>
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    color: "#687384",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    letterSpacing: "1.5px",
+                  }}
+                >
+                  {selectedSeason} SEASON
+                </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "8px",
-            marginBottom: "20px",
-          }}
-        >
-          {Array.from({ length: 14 }, (_, index) => {
-            const week = index + 1;
-            const selected = week === currentWeek;
+                <div
+                  style={{
+                    fontSize: "21px",
+                    fontWeight: 800,
+                    marginTop: "4px",
+                  }}
+                >
+                  {getWeekLabel(currentWeek)}
+                </div>
+              </div>
 
-            return (
-              <a
-                key={week}
-                href={`/matchups?week=${week}`}
-                style={{
-                  textDecoration: "none",
-                  color: selected ? "#ffffff" : "#9da7b3",
-                  background: selected
-                    ? "#27303b"
-                    : "#0b0f14",
-                  border: selected
-                    ? "1px solid #687384"
-                    : "1px solid #27303b",
-                  borderRadius: "10px",
-                  height: "42px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                  fontWeight: selected ? "700" : "500",
-                }}
-              >
-                {week}
-              </a>
-            );
-          })}
-        </div>
+              {currentWeek < 17 ? (
+                <a
+                  href={weekUrl(currentWeek + 1)}
+                  style={{
+                    color: "#ffffff",
+                    textDecoration: "none",
+                    fontSize: "24px",
+                    padding: "8px",
+                  }}
+                >
+                  →
+                </a>
+              ) : (
+                <div style={{ width: "40px" }} />
+              )}
+            </div>
 
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: "700",
-            letterSpacing: "1.5px",
-            color: "#687384",
-            marginBottom: "10px",
-          }}
-        >
-          PLAYOFFS
-        </div>
+            <div
+              style={{
+                color: "#687384",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "1.5px",
+                marginBottom: "10px",
+              }}
+            >
+              REGULAR SEASON
+            </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "8px",
-          }}
-        >
-          {Array.from({ length: 3 }, (_, index) => {
-            const week = index + 15;
-            const selected = week === currentWeek;
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(7, minmax(0, 1fr))",
+                gap: "7px",
+                marginBottom: "20px",
+              }}
+            >
+              {Array.from(
+                { length: 14 },
+                (_, index) => index + 1
+              ).map((week) => {
+                const selected =
+                  week === currentWeek;
 
-            return (
-              <a
-                key={week}
-                href={`/matchups?week=${week}`}
-                style={{
-                  textDecoration: "none",
-                  color: selected ? "#ffffff" : "#9da7b3",
-                  background: selected
-                    ? "#27303b"
-                    : "#0b0f14",
-                  border: selected
-                    ? "1px solid #687384"
-                    : "1px solid #27303b",
-                  borderRadius: "10px",
-                  height: "42px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                  fontWeight: selected ? "700" : "500",
-                }}
-              >
-                Week {week}
-              </a>
-            );
-          })}
-        </div>
-      </section>
+                return (
+                  <a
+                    key={week}
+                    href={weekUrl(week)}
+                    style={{
+                      textDecoration: "none",
+                      color: selected
+                        ? "#ffffff"
+                        : "#9da7b3",
+                      background: selected
+                        ? "#27303b"
+                        : "#0b0f14",
+                      border: selected
+                        ? "1px solid #687384"
+                        : "1px solid #27303b",
+                      borderRadius: "9px",
+                      height: "40px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "13px",
+                      fontWeight: selected
+                        ? 800
+                        : 500,
+                    }}
+                  >
+                    {week}
+                  </a>
+                );
+              })}
+            </div>
 
-      {matchupsList.length === 0 ? (
-        <div
-          style={{
-            background: "#151b23",
-            border: "1px solid #27303b",
-            borderRadius: "18px",
-            padding: "24px",
-            textAlign: "center",
-          }}
-        >
-          <p>
-            No matchup data available for Week {currentWeek}.
-          </p>
-        </div>
-      ) : (
-        matchupsList.map((matchup, index) => {
-          const first = matchup[0];
-          const second = matchup[1];
+            <div
+              style={{
+                color: "#687384",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "1.5px",
+                marginBottom: "10px",
+              }}
+            >
+              MAIN PLAYOFFS
+            </div>
 
-          if (!first || !second) {
-            return null;
-          }
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(3, minmax(0, 1fr))",
+                gap: "8px",
+              }}
+            >
+              {[15, 16, 17].map((week) => {
+                const selected =
+                  week === currentWeek;
 
-          const firstRoster = rosterMap.get(first.roster_id);
-          const secondRoster = rosterMap.get(second.roster_id);
+                return (
+                  <a
+                    key={week}
+                    href={weekUrl(week)}
+                    style={{
+                      textDecoration: "none",
+                      color: selected
+                        ? "#ffffff"
+                        : "#9da7b3",
+                      background: selected
+                        ? "#27303b"
+                        : "#0b0f14",
+                      border: selected
+                        ? "1px solid #687384"
+                        : "1px solid #27303b",
+                      borderRadius: "9px",
+                      height: "42px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "13px",
+                      fontWeight: selected
+                        ? 800
+                        : 500,
+                    }}
+                  >
+                    Week {week}
+                  </a>
+                );
+              })}
+            </div>
+          </section>
 
-          const firstPoints = first.points ?? 0;
-          const secondPoints = second.points ?? 0;
+          <div
+            style={{
+              marginBottom: "14px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "19px",
+                fontWeight: 800,
+                margin: 0,
+              }}
+            >
+              {selectedSeason} · {getWeekLabel(currentWeek)}
+            </h2>
 
-          const firstWon = firstPoints > secondPoints;
-          const secondWon = secondPoints > firstPoints;
+            <span
+              style={{
+                fontSize: "12px",
+                color: "#9da7b3",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {matchups.length} games
+            </span>
+          </div>
 
-          const division =
-            TEAM_DIVISIONS[first.roster_id] ?? "GPFC";
-
-          return (
-            <article
-              key={first.matchup_id ?? index}
+          {matchups.length === 0 ? (
+            <div
               style={{
                 background: "#151b23",
                 border: "1px solid #27303b",
-                borderRadius: "20px",
-                padding: "18px",
-                marginBottom: "14px",
+                borderRadius: "18px",
+                padding: "24px",
+                color: "#9da7b3",
+                textAlign: "center",
+                fontSize: "13px",
               }}
             >
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: "700",
-                  letterSpacing: "1.5px",
-                  color: "#687384",
-                  marginBottom: "16px",
-                }}
-              >
-                {division}
-              </div>
+              No official matchups recorded for
+              this week.
+            </div>
+          ) : (
+            matchups.map((matchup, index) => {
+              const firstPoints = matchup.scoreA;
+              const secondPoints = matchup.scoreB;
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                }}
-              >
-                <div
+              const firstWon =
+                firstPoints > secondPoints;
+              const secondWon =
+                secondPoints > firstPoints;
+
+              const margin = formatMargin(
+                firstPoints,
+                secondPoints
+              );
+
+              const divisionA =
+                TEAM_DIVISIONS[matchup.rosterA];
+
+              const divisionB =
+                TEAM_DIVISIONS[matchup.rosterB];
+
+              const divisionLabel =
+                divisionA === divisionB
+                  ? divisionA
+                  : "INTERCONFERENCE";
+
+              const isSlootbowl =
+                matchup.phase === "Main Playoffs" &&
+                currentWeek === 17;
+
+              return (
+                <article
+                  key={`${selectedSeason}-${currentWeek}-${matchup.rosterA}-${matchup.rosterB}-${index}`}
                   style={{
-                    flex: 1,
-                    minWidth: 0,
+                    background: "#151b23",
+                    border: "1px solid #27303b",
+                    borderRadius: "18px",
+                    padding: "17px",
+                    marginBottom: "12px",
                   }}
                 >
                   <div
                     style={{
-                      fontSize: "16px",
-                      fontWeight: firstWon ? "700" : "500",
-                      lineHeight: 1.25,
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginBottom: "16px",
                     }}
                   >
-                    {OFFICIAL_TEAM_NAMES[first.roster_id] ??
-                      firstRoster?.roster_id ??
-                      "Unknown Team"}
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        letterSpacing: "1px",
+                        color: "#9da7b3",
+                      }}
+                    >
+                      {isSlootbowl
+                        ? "SLOOTBOWL WEEK"
+                        : matchup.phase ===
+                          "Main Playoffs"
+                        ? "MAIN PLAYOFFS"
+                        : divisionLabel}
+                    </span>
+
+                    <span
+                      style={{
+                        color: "#9da7b3",
+                        fontSize: "11px",
+                      }}
+                    >
+                      Final
+                    </span>
                   </div>
+
+                  {[
+                    {
+                      rosterId: matchup.rosterA,
+                      score: firstPoints,
+                      won: firstWon,
+                    },
+                    {
+                      rosterId: matchup.rosterB,
+                      score: secondPoints,
+                      won: secondWon,
+                    },
+                  ].map((team, teamIndex) => (
+                    <div
+                      key={team.rosterId}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent:
+                          "space-between",
+                        gap: "12px",
+                        padding:
+                          teamIndex === 0
+                            ? "0 0 14px"
+                            : "14px 0 0",
+                        borderBottom:
+                          teamIndex === 0
+                            ? "1px solid #27303b"
+                            : "none",
+                      }}
+                    >
+                      <div
+                        style={{
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "15px",
+                            fontWeight: team.won
+                              ? 800
+                              : 500,
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          {OFFICIAL_TEAM_NAMES[
+                            team.rosterId
+                          ] ??
+                            `Roster ${team.rosterId}`}
+                        </div>
+
+                        <div
+                          style={{
+                            color: team.won
+                              ? "#d6e6d8"
+                              : "#687384",
+                            fontSize: "11px",
+                            marginTop: "4px",
+                          }}
+                        >
+                          {firstPoints === secondPoints
+                            ? "TIE"
+                            : team.won
+                            ? "WIN"
+                            : "LOSS"}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "23px",
+                          fontWeight: team.won
+                            ? 800
+                            : 600,
+                          fontVariantNumeric:
+                            "tabular-nums",
+                          textAlign: "right",
+                        }}
+                      >
+                        {formatScore(team.score)}
+                      </div>
+                    </div>
+                  ))}
 
                   <div
                     style={{
+                      marginTop: "16px",
+                      paddingTop: "12px",
+                      borderTop: "1px solid #27303b",
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: "10px",
                       fontSize: "12px",
-                      color: "#687384",
-                      marginTop: "5px",
+                      color: "#9da7b3",
                     }}
                   >
-                    {firstWon
-                      ? "WIN"
-                      : secondWon
-                      ? "LOSS"
-                      : "TIE"}
+                    <span>
+                      {matchup.phase ===
+                      "Main Playoffs"
+                        ? "Official playoff game"
+                        : "Regular-season game"}
+                    </span>
+
+                    <strong
+                      style={{
+                        color: "#ffffff",
+                      }}
+                    >
+                      {firstPoints === secondPoints
+                        ? "Draw"
+                        : `Margin: ${margin}`}
+                    </strong>
                   </div>
-                </div>
+                </article>
+              );
+            })
+          )}
 
-                <div
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: "700",
-                    minWidth: "65px",
-                    textAlign: "right",
-                  }}
-                >
-                  {firstPoints.toFixed(1)}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  height: "1px",
-                  background: "#27303b",
-                  margin: "16px 0",
-                }}
-              />
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: secondWon ? "700" : "500",
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    {OFFICIAL_TEAM_NAMES[second.roster_id] ??
-                      secondRoster?.roster_id ??
-                      "Unknown Team"}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#687384",
-                      marginTop: "5px",
-                    }}
-                  >
-                    {secondWon
-                      ? "WIN"
-                      : firstWon
-                      ? "LOSS"
-                      : "TIE"}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: "700",
-                    minWidth: "65px",
-                    textAlign: "right",
-                  }}
-                >
-                  {secondPoints.toFixed(1)}
-                </div>
-              </div>
-            </article>
-          );
-        })
+          <p
+            style={{
+              color: "#687384",
+              fontSize: "12px",
+              lineHeight: 1.6,
+              marginTop: "24px",
+            }}
+          >
+            Historical results are sourced from
+            Sleeper. Only completed SFL seasons
+            are displayed. Toilet Bowl and
+            consolation matchups are excluded
+            from official records.
+          </p>
+        </>
       )}
     </main>
   );
