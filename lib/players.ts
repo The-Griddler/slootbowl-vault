@@ -1,4 +1,8 @@
 
+import type {
+  AllSlootPlayerDirectory,
+} from "./allSloot";
+
 export type SleeperPlayer = {
   player_id: string;
   first_name: string | null;
@@ -70,12 +74,15 @@ export function getPlayerName(
     return player.full_name;
   }
 
-  return [
-    player.first_name,
-    player.last_name,
-  ]
-    .filter(Boolean)
-    .join(" ") || "Unknown Player";
+  return (
+    [
+      player.first_name,
+      player.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ") ||
+    "Unknown Player"
+  );
 }
 
 export function getPlayerPosition(
@@ -103,4 +110,40 @@ export async function getPlayerNames(
   }
 
   return names;
+}
+
+// All-Sloot player directory.
+// Provides player names, positions and
+// estimated NFL rookie seasons.
+
+export async function getAllSlootPlayerDirectory(): Promise<
+  AllSlootPlayerDirectory
+> {
+  const players = await getPlayers();
+
+  const directory: AllSlootPlayerDirectory = {};
+
+  for (const [playerId, player] of Object.entries(
+    players
+  )) {
+    let rookieYear: number | null = null;
+
+    if (
+      typeof player.years_exp === "number" &&
+      Number.isFinite(player.years_exp) &&
+      player.years_exp >= 0
+    ) {
+      rookieYear =
+        new Date().getUTCFullYear() -
+        player.years_exp;
+    }
+
+    directory[playerId] = {
+      name: getPlayerName(player),
+      position: player.position,
+      rookieYear,
+    };
+  }
+
+  return directory;
 }
