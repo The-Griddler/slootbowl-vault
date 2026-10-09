@@ -36,16 +36,25 @@ const moreItems = [
     description: "Champions, awards and season archive",
   },
   {
+    href: "/legacy",
+    label: "League Legacy Tracker",
+    icon: "🌟",
+    description:
+      "All-time player rankings and career Legacy Points",
+  },
+  {
     href: "/all-sloot",
     label: "All-Sloot Teams",
     icon: "🏅",
-    description: "First Team, Second Team and Rookie Team honours",
+    description:
+      "First Team, Second Team and Rookie Team honours",
   },
   {
     href: "/player-records",
     label: "Player Records",
     icon: "👤",
-    description: "Individual player statistics and records",
+    description:
+      "Individual player statistics and records",
   },
 ];
 
@@ -198,7 +207,8 @@ export default function BottomNav() {
           left: 0,
           right: 0,
           height: "72px",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          paddingBottom:
+            "env(safe-area-inset-bottom, 0px)",
           boxSizing: "content-box",
           background: "#11161d",
           borderTop: "1px solid #27303b",
@@ -222,7 +232,9 @@ export default function BottomNav() {
               onClick={() => setMoreOpen(false)}
               style={{
                 textDecoration: "none",
-                color: active ? "#ffffff" : "#687384",
+                color: active
+                  ? "#ffffff"
+                  : "#687384",
                 display: "flex",
                 flex: 1,
                 flexDirection: "column",
@@ -251,14 +263,18 @@ export default function BottomNav() {
 
         <button
           type="button"
-          onClick={() => setMoreOpen((open) => !open)}
+          onClick={() =>
+            setMoreOpen((open) => !open)
+          }
           aria-expanded={moreOpen}
           aria-label="More navigation options"
           style={{
             flex: 1,
             border: "none",
             background: "transparent",
-            color: moreActive ? "#ffffff" : "#687384",
+            color: moreActive
+              ? "#ffffff"
+              : "#687384",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
