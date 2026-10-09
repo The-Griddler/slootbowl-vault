@@ -2,18 +2,50 @@
 "use client";
 
 import { useState } from "react";
-import type { HallOfFameScore } from "../../lib/hallOfFame";
+
+import type {
+  HallOfFameScore,
+} from "../../lib/hallOfFame";
+
+import type {
+  SFLPlayerGradeCareer,
+  SFLSeasonGrade,
+} from "../../lib/seasonGrades";
 
 type Props = {
   scores: HallOfFameScore[];
+  gradeCareers?: SFLPlayerGradeCareer[];
 };
+
+const MUTED = "#9da7b3";
+const BORDER = "1px solid #263244";
 
 function formatPoints(value: number): string {
   return value.toFixed(2);
 }
 
+function gradeColor(
+  grade: SFLSeasonGrade
+): string {
+  switch (grade) {
+    case "Legendary":
+      return "#f5c76a";
+    case "Elite":
+      return "#85b9ff";
+    case "Great":
+      return "#80d4a0";
+    case "Good":
+      return "#d2b5fa";
+    case "Ordinary":
+      return "#aab3c0";
+    default:
+      return "#778391";
+  }
+}
+
 export default function HallOfFameLeaderboard({
   scores,
+  gradeCareers = [],
 }: Props) {
   const [expandedPlayer, setExpandedPlayer] =
     useState<string | null>(null);
@@ -24,11 +56,18 @@ export default function HallOfFameLeaderboard({
     ? scores
     : scores.slice(0, 20);
 
+  const gradesByPlayer = new Map(
+    gradeCareers.map((career) => [
+      career.playerId,
+      career,
+    ])
+  );
+
   return (
     <section>
       <div
         style={{
-          border: "1px solid #263244",
+          border: BORDER,
           borderRadius: "12px",
           overflow: "hidden",
         }}
@@ -41,7 +80,7 @@ export default function HallOfFameLeaderboard({
             gap: "8px",
             padding: "12px",
             background: "#202833",
-            color: "#9da7b3",
+            color: MUTED,
             fontSize: "11px",
             fontWeight: 700,
           }}
@@ -57,11 +96,15 @@ export default function HallOfFameLeaderboard({
           const expanded =
             expandedPlayer === player.playerId;
 
+          const career = gradesByPlayer.get(
+            player.playerId
+          );
+
           return (
             <div
               key={player.playerId}
               style={{
-                borderTop: "1px solid #263244",
+                borderTop: BORDER,
               }}
             >
               <button
@@ -99,7 +142,7 @@ export default function HallOfFameLeaderboard({
                 >
                   <span
                     style={{
-                      color: "#9da7b3",
+                      color: MUTED,
                       fontSize: "11px",
                       minWidth: "19px",
                     }}
@@ -120,7 +163,7 @@ export default function HallOfFameLeaderboard({
 
                     <div
                       style={{
-                        color: "#9da7b3",
+                        color: MUTED,
                         fontSize: "11px",
                         marginTop: "3px",
                       }}
@@ -143,7 +186,7 @@ export default function HallOfFameLeaderboard({
 
                 <span
                   style={{
-                    color: "#9da7b3",
+                    color: MUTED,
                     fontSize: "12px",
                     textAlign: "center",
                   }}
@@ -157,7 +200,7 @@ export default function HallOfFameLeaderboard({
                   style={{
                     background: "#151b23",
                     padding: "14px",
-                    borderTop: "1px solid #263244",
+                    borderTop: BORDER,
                   }}
                 >
                   <p
@@ -167,7 +210,7 @@ export default function HallOfFameLeaderboard({
                       marginBottom: "14px",
                     }}
                   >
-                    Hall of Fame Score:{" "}
+                    Provisional Hall of Fame Score:{" "}
                     {player.totalScore.toFixed(2)} / 100
                   </p>
 
@@ -195,12 +238,15 @@ export default function HallOfFameLeaderboard({
                   ].map((category) => (
                     <div
                       key={category.label}
-                      style={{ marginBottom: "12px" }}
+                      style={{
+                        marginBottom: "12px",
+                      }}
                     >
                       <div
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
+                          gap: "8px",
                           fontSize: "12px",
                           marginBottom: "6px",
                         }}
@@ -237,7 +283,7 @@ export default function HallOfFameLeaderboard({
 
                   <div
                     style={{
-                      borderTop: "1px solid #263244",
+                      borderTop: BORDER,
                       paddingTop: "12px",
                       marginTop: "14px",
                       display: "grid",
@@ -246,45 +292,186 @@ export default function HallOfFameLeaderboard({
                       fontSize: "12px",
                     }}
                   >
-                    <div>
-                      <div style={{ color: "#9da7b3" }}>
-                        Regular Season Points
-                      </div>
-                      <strong>
-                        {formatPoints(
+                    {[
+                      {
+                        label: "Regular Season Points",
+                        value: formatPoints(
                           player.regularSeasonPoints
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#9da7b3" }}>
-                        Regular Season Starts
-                      </div>
-                      <strong>
-                        {player.regularSeasonStarts}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#9da7b3" }}>
-                        Playoff Points
-                      </div>
-                      <strong>
-                        {formatPoints(
+                        ),
+                      },
+                      {
+                        label: "Regular Season Starts",
+                        value: player.regularSeasonStarts,
+                      },
+                      {
+                        label: "Playoff Points",
+                        value: formatPoints(
                           player.playoffPoints
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#9da7b3" }}>
-                        Playoff Starts
+                        ),
+                      },
+                      {
+                        label: "Playoff Starts",
+                        value: player.playoffStarts,
+                      },
+                    ].map((stat) => (
+                      <div key={stat.label}>
+                        <div style={{ color: MUTED }}>
+                          {stat.label}
+                        </div>
+                        <strong>{stat.value}</strong>
                       </div>
-                      <strong>
-                        {player.playoffStarts}
-                      </strong>
-                    </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: BORDER,
+                      marginTop: "18px",
+                      paddingTop: "16px",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        fontSize: "14px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      SFL Seasonal Grades
+                    </h3>
+
+                    {career ? (
+                      <>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(3, minmax(0, 1fr))",
+                            gap: "8px",
+                            marginBottom: "14px",
+                          }}
+                        >
+                          {[
+                            {
+                              label: "Legendary",
+                              value: career.legendary,
+                            },
+                            {
+                              label: "Elite",
+                              value: career.elite,
+                            },
+                            {
+                              label: "Great",
+                              value: career.great,
+                            },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              style={{
+                                background: "#202833",
+                                borderRadius: "8px",
+                                padding: "10px 6px",
+                                textAlign: "center",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: "20px",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {item.value}
+                              </div>
+                              <div
+                                style={{
+                                  color: MUTED,
+                                  fontSize: "11px",
+                                }}
+                              >
+                                {item.label}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          <strong>
+                            {career.qualifyingSeasons}
+                          </strong>{" "}
+                          qualifying great seasons
+                        </p>
+
+                        <div
+                          style={{
+                            border: BORDER,
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {career.seasons.map(
+                            (season, index) => (
+                              <div
+                                key={season.season}
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "48px 1fr auto",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  padding: "10px",
+                                  borderTop:
+                                    index === 0
+                                      ? "none"
+                                      : BORDER,
+                                  fontSize: "12px",
+                                }}
+                              >
+                                <strong>
+                                  {season.season}
+                                </strong>
+
+                                <span
+                                  style={{
+                                    color: MUTED,
+                                  }}
+                                >
+                                  {season.position} #
+                                  {season.rank} ·{" "}
+                                  {season.points.toFixed(2)}{" "}
+                                  pts
+                                </span>
+
+                                <span
+                                  style={{
+                                    color: gradeColor(
+                                      season.grade
+                                    ),
+                                    fontWeight: 700,
+                                    fontSize: "11px",
+                                  }}
+                                >
+                                  {season.grade}
+                                </span>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p
+                        style={{
+                          color: MUTED,
+                          fontSize: "12px",
+                        }}
+                      >
+                        No completed-season grades
+                        available.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -304,7 +491,7 @@ export default function HallOfFameLeaderboard({
             width: "100%",
             marginTop: "16px",
             padding: "14px",
-            border: "1px solid #263244",
+            border: BORDER,
             borderRadius: "10px",
             background: "#202833",
             color: "#ffffff",
