@@ -8,17 +8,30 @@ import type {
   AllSlootCareerPlayer,
 } from "./allSlootCareer";
 
-// SFL Legacy Points — Version 1
+import type {
+  AllSlootPlayerDirectory,
+} from "./allSloot";
+
+import type {
+  PlayerRecords,
+} from "./playerRecords";
+
+import {
+  calculateLegacyMilestones,
+  type LegacyMilestone,
+} from "./legacyMilestones";
+
+// SFL Legacy Points
 //
-// Legacy Points accumulate through achievements.
-// Players never lose points for poor seasons.
+// Points accumulate through career achievements.
+// Poor seasons do not deduct previously earned points.
 //
-// This initial version awards points for:
+// Current categories:
 // 1. Seasonal grades
-// 2. All-Sloot selections
+// 2. All-Sloot honours
+// 3. Career scoring milestones
 //
-// Career milestones and playoff achievements
-// will be added in subsequent versions.
+// Playoff legacy will be added separately.
 
 export const LEGACY_POINTS = {
   seasonalGrades: {
@@ -41,7 +54,7 @@ export type LegacyScore = {
   name: string;
   position: string;
 
-  // Points by category
+  // Legacy Points breakdown
   seasonalGradePoints: number;
   allSlootHonoursPoints: number;
   careerMilestonePoints: number;
@@ -49,7 +62,7 @@ export type LegacyScore = {
 
   totalLegacyPoints: number;
 
-  // Career achievements
+  // Seasonal achievements
   legendarySeasons: number;
   eliteSeasons: number;
   greatSeasons: number;
@@ -58,11 +71,20 @@ export type LegacyScore = {
 
   qualifyingGreatSeasons: number;
 
+  // All-Sloot honours
   firstTeamSelections: number;
   secondTeamSelections: number;
   rookieTeamSelections: number;
 
-  // Detailed seasonal history
+  // Career production
+  regularSeasonPoints: number;
+  regularSeasonStarts: number;
+  seasonsPlayed: number;
+
+  // Milestone achievements
+  milestones: LegacyMilestone[];
+
+  // Seasonal history
   seasonalGrades: {
     season: string;
     grade: SFLSeasonGrade;
@@ -73,7 +95,10 @@ export type LegacyScore = {
 
 export function calculateLegacyScores(
   gradeCareers: SFLPlayerGradeCareer[],
-  allSlootCareers: AllSlootCareerPlayer[]
+  allSlootCareers: AllSlootCareerPlayer[],
+  records?: PlayerRecords,
+  directory?: AllSlootPlayerDirectory,
+  completedThroughSeason?: number
 ): LegacyScore[] {
   const honoursByPlayer = new Map(
     allSlootCareers.map((player) => [
@@ -89,10 +114,32 @@ export function calculateLegacyScores(
     ])
   );
 
-  // Include players with grades, honours, or both.
+  // Calculate milestones only when the required
+  // records and player directory are supplied.
+  const milestoneCareers =
+    records &&
+    directory &&
+    completedThroughSeason !== undefined
+      ? calculateLegacyMilestones(
+          records,
+          directory,
+          completedThroughSeason
+        )
+      : [];
+
+  const milestonesByPlayer = new Map(
+    milestoneCareers.map((player) => [
+      player.playerId,
+      player,
+    ])
+  );
+
+  // Include anyone with at least one recorded
+  // seasonal grade, honour or milestone career.
   const playerIds = new Set<string>([
     ...gradesByPlayer.keys(),
     ...honoursByPlayer.keys(),
+    ...milestonesByPlayer.keys(),
   ]);
 
   const results: LegacyScore[] = [];
@@ -100,6 +147,8 @@ export function calculateLegacyScores(
   for (const playerId of playerIds) {
     const grades = gradesByPlayer.get(playerId);
     const honours = honoursByPlayer.get(playerId);
+    const milestoneCareer =
+      milestonesByPlayer.get(playerId);
 
     const seasonalGrades =
       grades?.seasons.map((season) => ({
@@ -134,8 +183,10 @@ export function calculateLegacyScores(
       rookieTeamSelections *
         LEGACY_POINTS.allSlootHonours.rookieTeam;
 
-    // Reserved for upcoming scoring features.
-    const careerMilestonePoints = 0;
+    const careerMilestonePoints =
+      milestoneCareer?.totalMilestonePoints ?? 0;
+
+    // Reserved for the playoff scoring engine.
     const playoffLegacyPoints = 0;
 
     const totalLegacyPoints =
@@ -146,13 +197,17 @@ export function calculateLegacyScores(
 
     results.push({
       playerId,
+
       name:
         grades?.name ??
         honours?.name ??
+        milestoneCareer?.name ??
         playerId,
+
       position:
         grades?.position ??
         honours?.position ??
+        milestoneCareer?.position ??
         "Unknown",
 
       seasonalGradePoints,
@@ -173,6 +228,20 @@ export function calculateLegacyScores(
       firstTeamSelections,
       secondTeamSelections,
       rookieTeamSelections,
+
+      regularSeasonPoints:
+        milestoneCareer?.regularSeasonPoints ?? 0,
+
+      regularSeasonStarts:
+        milestoneCareer?.regularSeasonStarts ?? 0,
+
+      seasonsPlayed:
+        milestoneCareer?.seasonsPlayed ??
+        grades?.seasons.length ??
+        0,
+
+      milestones:
+        milestoneCareer?.milestones ?? [],
 
       seasonalGrades,
     });
