@@ -9,18 +9,20 @@ import type {
   AllSlootPosition,
 } from "./allSloot";
 
-// Provisional thresholds.
-// These will be calibrated against real SFL
-// career totals before official induction.
+// SFL career scoring milestones.
+// Only regular-season points scored while
+// selected in a starting lineup count.
+//
+// Bonuses are cumulative across all tiers.
 
 export const LEGACY_MILESTONES: Record<
   AllSlootPosition,
   readonly number[]
 > = {
-  QB: [750, 1500, 2500, 3500, 5000],
-  RB: [500, 1000, 1750, 2500, 3500],
-  WR: [500, 1000, 1750, 2500, 3500],
-  TE: [300, 650, 1100, 1600, 2250],
+  QB: [400, 800, 1200, 1600, 2200],
+  RB: [250, 500, 750, 1000, 1400],
+  WR: [250, 500, 750, 1000, 1400],
+  TE: [175, 350, 525, 700, 1000],
 };
 
 export const MILESTONE_BONUSES = [
@@ -149,7 +151,8 @@ export function calculateLegacyMilestones(
       continue;
     }
 
-    const thresholds = LEGACY_MILESTONES[player.position];
+    const thresholds =
+      LEGACY_MILESTONES[player.position];
 
     const milestones: LegacyMilestone[] = [];
 
