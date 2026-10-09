@@ -21,17 +21,22 @@ import {
   type LegacyMilestone,
 } from "./legacyMilestones";
 
+import {
+  calculatePlayoffLegacy,
+  type PlayoffLegacyAward,
+  type SlootbowlResult,
+} from "./legacyPlayoffs";
+
 // SFL Legacy Points
 //
 // Points accumulate through career achievements.
-// Poor seasons do not deduct previously earned points.
+// Poor seasons never deduct previously earned points.
 //
-// Current categories:
+// Categories:
 // 1. Seasonal grades
 // 2. All-Sloot honours
 // 3. Career scoring milestones
-//
-// Playoff legacy will be added separately.
+// 4. Playoff achievements
 
 export const LEGACY_POINTS = {
   seasonalGrades: {
@@ -81,10 +86,10 @@ export type LegacyScore = {
   regularSeasonStarts: number;
   seasonsPlayed: number;
 
-  // Milestone achievements
+  // Detailed achievements
   milestones: LegacyMilestone[];
+  playoffAwards: PlayoffLegacyAward[];
 
-  // Seasonal history
   seasonalGrades: {
     season: string;
     grade: SFLSeasonGrade;
@@ -98,7 +103,8 @@ export function calculateLegacyScores(
   allSlootCareers: AllSlootCareerPlayer[],
   records?: PlayerRecords,
   directory?: AllSlootPlayerDirectory,
-  completedThroughSeason?: number
+  completedThroughSeason?: number,
+  championshipResults: SlootbowlResult[] = []
 ): LegacyScore[] {
   const honoursByPlayer = new Map(
     allSlootCareers.map((player) => [
@@ -114,18 +120,27 @@ export function calculateLegacyScores(
     ])
   );
 
-  // Calculate milestones only when the required
-  // records and player directory are supplied.
-  const milestoneCareers =
-    records &&
-    directory &&
-    completedThroughSeason !== undefined
-      ? calculateLegacyMilestones(
-          records,
-          directory,
-          completedThroughSeason
-        )
-      : [];
+  const hasPlayerData =
+    records !== undefined &&
+    directory !== undefined &&
+    completedThroughSeason !== undefined;
+
+  const milestoneCareers = hasPlayerData
+    ? calculateLegacyMilestones(
+        records,
+        directory,
+        completedThroughSeason
+      )
+    : [];
+
+  const playoffCareers = hasPlayerData
+    ? calculatePlayoffLegacy(
+        records,
+        directory,
+        completedThroughSeason,
+        championshipResults
+      )
+    : [];
 
   const milestonesByPlayer = new Map(
     milestoneCareers.map((player) => [
@@ -134,12 +149,19 @@ export function calculateLegacyScores(
     ])
   );
 
-  // Include anyone with at least one recorded
-  // seasonal grade, honour or milestone career.
+  const playoffsByPlayer = new Map(
+    playoffCareers.map((player) => [
+      player.playerId,
+      player,
+    ])
+  );
+
+  // Include players with at least one SFL record.
   const playerIds = new Set<string>([
     ...gradesByPlayer.keys(),
     ...honoursByPlayer.keys(),
     ...milestonesByPlayer.keys(),
+    ...playoffsByPlayer.keys(),
   ]);
 
   const results: LegacyScore[] = [];
@@ -149,6 +171,8 @@ export function calculateLegacyScores(
     const honours = honoursByPlayer.get(playerId);
     const milestoneCareer =
       milestonesByPlayer.get(playerId);
+    const playoffCareer =
+      playoffsByPlayer.get(playerId);
 
     const seasonalGrades =
       grades?.seasons.map((season) => ({
@@ -186,8 +210,8 @@ export function calculateLegacyScores(
     const careerMilestonePoints =
       milestoneCareer?.totalMilestonePoints ?? 0;
 
-    // Reserved for the playoff scoring engine.
-    const playoffLegacyPoints = 0;
+    const playoffLegacyPoints =
+      playoffCareer?.totalPlayoffLegacyPoints ?? 0;
 
     const totalLegacyPoints =
       seasonalGradePoints +
@@ -202,12 +226,14 @@ export function calculateLegacyScores(
         grades?.name ??
         honours?.name ??
         milestoneCareer?.name ??
+        playoffCareer?.name ??
         playerId,
 
       position:
         grades?.position ??
         honours?.position ??
         milestoneCareer?.position ??
+        playoffCareer?.position ??
         "Unknown",
 
       seasonalGradePoints,
@@ -242,6 +268,9 @@ export function calculateLegacyScores(
 
       milestones:
         milestoneCareer?.milestones ?? [],
+
+      playoffAwards:
+        playoffCareer?.awards ?? [],
 
       seasonalGrades,
     });
