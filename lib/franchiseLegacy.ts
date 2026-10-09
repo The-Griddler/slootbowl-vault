@@ -26,8 +26,6 @@ type CareerAccumulator = {
   rosterId: number;
   weeks: Set<string>;
   seasons: Set<string>;
-  starts: number;
-  starterPoints: number;
 };
 
 function calculateLoyaltyPoints(
@@ -36,29 +34,34 @@ function calculateLoyaltyPoints(
   let total = 0;
 
   for (let week = 1; week <= rosterWeeks; week++) {
-    if (week <= 17) {
-      total += 10;
-    } else if (week <= 34) {
-      total += 15;
-    } else if (week <= 51) {
-      total += 20;
-    } else if (week <= 68) {
-      total += 25;
-    } else {
-      total += 30;
-    }
+    if (week <= 17) total += 10;
+    else if (week <= 34) total += 15;
+    else if (week <= 51) total += 20;
+    else if (week <= 68) total += 25;
+    else total += 30;
   }
 
   return total;
 }
 
-function isPlayed(
-  matchup: SleeperMatchup
+function hasRecordedResult(
+  roster: SleeperMatchup
 ): boolean {
   return (
-    typeof matchup.points === "number" &&
-    Number.isFinite(matchup.points) &&
-    matchup.points !== 0
+    typeof roster.points === "number" &&
+    Number.isFinite(roster.points) &&
+    roster.points > 0
+  );
+}
+
+function isLeagueWeekComplete(
+  rosters: SleeperMatchup[]
+): boolean {
+  // Require a recorded result for all 10 teams,
+  // not just one or two early score updates.
+  return (
+    rosters.length === 10 &&
+    rosters.every(hasRecordedResult)
   );
 }
 
@@ -70,17 +73,90 @@ export async function getFranchisePlayerCareers():
       getHistoricalData(),
     ]);
 
-  const currentSeason = Math.max(
+  if (leagues.length === 0) return [];
+
+  const latestSeason = Math.max(
     ...leagues.map((league) =>
       Number(league.season)
     )
   );
 
-  // Official starting appearances are taken
-  // from the existing historical classification.
-  // This excludes Toilet Bowl, placement and
-  // consolation performances.
-  const officialStarts = new Map<
+  const careers = new Map<
+    string,
+    CareerAccumulator
+  >();
+
+  // Process weekly membership.
+  for (const league of leagues) {
+    const year = Number(league.season);
+
+    const weeklyData = await Promise.all(
+      Array.from({ length: 17 }, (_, index) =>
+        getMatchups(index + 1, league.league_id)
+      )
+    );
+
+    for (
+      let weekIndex = 0;
+      weekIndex < weeklyData.length;
+      weekIndex++
+    ) {
+      const week = weekIndex + 1;
+      const rosters = weeklyData[weekIndex];
+
+      // Historical completed seasons:
+      // count all available Weeks 1-17.
+      //
+      // Latest season:
+      // require all 10 teams to have a score.
+      if (
+        year === latestSeason &&
+        !isLeagueWeekComplete(rosters)
+      ) {
+        continue;
+      }
+
+      const weekKey = `${league.season}-${week}`;
+
+      for (const rawRoster of rosters) {
+        const roster = rawRoster as WeeklyRoster;
+
+        if (!Array.isArray(roster.players)) {
+          continue;
+        }
+
+        const uniquePlayers = new Set(
+          roster.players.filter(
+            (id) => id && id !== "0"
+          )
+        );
+
+        for (const playerId of uniquePlayers) {
+          const key =
+            `${roster.roster_id}:${playerId}`;
+
+          let career = careers.get(key);
+
+          if (!career) {
+            career = {
+              playerId,
+              rosterId: roster.roster_id,
+              weeks: new Set<string>(),
+              seasons: new Set<string>(),
+            };
+
+            careers.set(key, career);
+          }
+
+          career.weeks.add(weekKey);
+          career.seasons.add(league.season);
+        }
+      }
+    }
+  }
+
+  // Count official starts and points separately.
+  const officialPerformance = new Map<
     string,
     { starts: number; points: number }
   >();
@@ -121,100 +197,20 @@ export async function getFranchisePlayerCareers():
             return;
           }
 
-          const key = `${rosterId}:${playerId}`;
-          const previous = officialStarts.get(key) ?? {
-            starts: 0,
-            points: 0,
-          };
+          const key =
+            `${rosterId}:${playerId}`;
 
-          officialStarts.set(key, {
+          const previous =
+            officialPerformance.get(key) ?? {
+              starts: 0,
+              points: 0,
+            };
+
+          officialPerformance.set(key, {
             starts: previous.starts + 1,
             points: previous.points + value,
           });
         });
-      }
-    }
-  }
-
-  const careers = new Map<
-    string,
-    CareerAccumulator
-  >();
-
-  for (const league of leagues) {
-    const year = Number(league.season);
-    const completedSeason = year < currentSeason;
-
-    const weeklyData = await Promise.all(
-      Array.from({ length: 17 }, (_, index) =>
-        getMatchups(index + 1, league.league_id)
-      )
-    );
-
-    for (
-      let weekIndex = 0;
-      weekIndex < weeklyData.length;
-      weekIndex++
-    ) {
-      const week = weekIndex + 1;
-      const rosters = weeklyData[weekIndex];
-
-      // Completed historical seasons count
-      // Weeks 1-17. Current season weeks
-      // must contain actual recorded scores.
-      if (
-        !completedSeason &&
-        !rosters.some(isPlayed)
-      ) {
-        continue;
-      }
-
-      const weekKey = `${league.season}-${week}`;
-
-      for (const rawRoster of rosters) {
-        const roster = rawRoster as WeeklyRoster;
-
-        // For the ongoing season, only credit
-        // teams with a recorded matchup result.
-        if (
-          !completedSeason &&
-          !isPlayed(roster)
-        ) {
-          continue;
-        }
-
-        if (!Array.isArray(roster.players)) {
-          continue;
-        }
-
-        for (const playerId of new Set(
-          roster.players
-        )) {
-          if (!playerId || playerId === "0") {
-            continue;
-          }
-
-          const key =
-            `${roster.roster_id}:${playerId}`;
-
-          let career = careers.get(key);
-
-          if (!career) {
-            career = {
-              playerId,
-              rosterId: roster.roster_id,
-              weeks: new Set<string>(),
-              seasons: new Set<string>(),
-              starts: 0,
-              starterPoints: 0,
-            };
-
-            careers.set(key, career);
-          }
-
-          career.weeks.add(weekKey);
-          career.seasons.add(league.season);
-        }
       }
     }
   }
@@ -224,7 +220,7 @@ export async function getFranchisePlayerCareers():
       const rosterWeeks = career.weeks.size;
 
       const performance =
-        officialStarts.get(
+        officialPerformance.get(
           `${career.rosterId}:${career.playerId}`
         );
 
