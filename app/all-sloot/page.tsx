@@ -1,12 +1,6 @@
 
-import {
-  getHistoricalData,
-} from "../../lib/sleeper";
-
-import {
-  getAllSlootPlayerDirectory,
-} from "../../lib/players";
-
+import { getHistoricalData } from "../../lib/sleeper";
+import { getAllSlootPlayerDirectory } from "../../lib/players";
 import {
   calculateAllSloot,
   type AllSlootSelection,
@@ -20,23 +14,25 @@ type PageProps = {
 };
 
 const TEAM_OPTIONS = [
-  {
-    id: "first",
-    label: "First Team",
-  },
-  {
-    id: "second",
-    label: "Second Team",
-  },
-  {
-    id: "rookie",
-    label: "Rookie Team",
-  },
+  { id: "first", label: "First Team" },
+  { id: "second", label: "Second Team" },
+  { id: "rookie", label: "Rookie Team" },
 ];
 
-function formatPoints(
-  points: number
-): string {
+const FRANCHISE_NAMES: Record<number, string> = {
+  1: "Mt Isa Ballbags",
+  2: "Cambridge Cum Sluts",
+  3: "Grimsby Chode Chokers",
+  4: "Isle of Wight Happy Endings",
+  5: "Grays Town Fingerblasters",
+  6: "Lincoln Nonces",
+  7: "Kalamata Dirty Vegans",
+  8: "Weybiza BAB's",
+  9: "East Rutherford Shitlickers",
+  10: "Chad Moist Discharge",
+};
+
+function formatPoints(points: number): string {
   return points.toFixed(2);
 }
 
@@ -47,37 +43,29 @@ function TeamTable({
 }) {
   if (selections.length === 0) {
     return (
-      <p>
-        No eligible players were found for
-        this team.
-      </p>
+      <p>No eligible players were found for this team.</p>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: "10px",
-      }}
-    >
-      {selections.map(
-        (selection, index) => (
+    <div style={{ display: "grid", gap: "10px" }}>
+      {selections.map((selection) => {
+        const player = selection.player;
+
+        return (
           <div
-            key={`${selection.slot}-${selection.player.playerId}`}
+            key={`${selection.slot}-${player.playerId}`}
             style={{
               padding: "14px",
-              border:
-                "1px solid #263244",
+              border: "1px solid #263244",
               borderRadius: "12px",
             }}
           >
             <div
               style={{
                 display: "flex",
-                justifyContent:
-                  "space-between",
-                alignItems: "center",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
                 gap: "12px",
               }}
             >
@@ -87,8 +75,7 @@ function TeamTable({
                     fontSize: "11px",
                     color: "#687384",
                     fontWeight: "700",
-                    letterSpacing:
-                      "1px",
+                    letterSpacing: "1px",
                     marginBottom: "5px",
                   }}
                 >
@@ -101,7 +88,7 @@ function TeamTable({
                     fontSize: "16px",
                   }}
                 >
-                  {selection.player.name}
+                  {player.name}
                 </div>
 
                 <div
@@ -111,10 +98,7 @@ function TeamTable({
                     marginTop: "4px",
                   }}
                 >
-                  {selection.player.position}
-                  {" · "}
-                  {selection.player.gamesStarted}
-                  {" starts"}
+                  {player.position} · {player.gamesStarted} starts
                 </div>
               </div>
 
@@ -130,9 +114,7 @@ function TeamTable({
                     fontSize: "18px",
                   }}
                 >
-                  {formatPoints(
-                    selection.player.points
-                  )}
+                  {formatPoints(player.points)}
                 </div>
 
                 <div
@@ -145,9 +127,87 @@ function TeamTable({
                 </div>
               </div>
             </div>
+
+            {player.franchises.length > 0 && (
+              <div
+                style={{
+                  marginTop: "14px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid #263244",
+                  display: "grid",
+                  gap: "8px",
+                }}
+              >
+                {player.franchises.map((franchise) => {
+                  const isPrimary =
+                    franchise.rosterId ===
+                    player.primaryRosterId;
+
+                  return (
+                    <div
+                      key={franchise.rosterId}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontWeight: isPrimary
+                              ? "700"
+                              : "400",
+                          }}
+                        >
+                          {FRANCHISE_NAMES[
+                            franchise.rosterId
+                          ] ??
+                            `Roster ${franchise.rosterId}`}
+                        </span>
+
+                        {isPrimary && (
+                          <span
+                            style={{
+                              color: "#687384",
+                              marginLeft: "6px",
+                              fontSize: "10px",
+                            }}
+                          >
+                            PRIMARY
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          textAlign: "right",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span style={{ fontWeight: "700" }}>
+                          {formatPoints(franchise.points)}
+                        </span>
+
+                        <span
+                          style={{
+                            color: "#687384",
+                            marginLeft: "6px",
+                          }}
+                        >
+                          ({franchise.gamesStarted} starts)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -157,58 +217,43 @@ export default async function AllSlootPage({
 }: PageProps) {
   const params = await searchParams;
 
-  const [
-    historicalData,
-    playerDirectory,
-  ] = await Promise.all([
-    getHistoricalData(),
-    getAllSlootPlayerDirectory(),
-  ]);
+  const [historicalData, playerDirectory] =
+    await Promise.all([
+      getHistoricalData(),
+      getAllSlootPlayerDirectory(),
+    ]);
 
   const seasons = historicalData
     .map((season) =>
-      calculateAllSloot(
-        season,
-        playerDirectory
-      )
+      calculateAllSloot(season, playerDirectory)
     )
     .sort(
       (a, b) =>
-        Number(b.season) -
-        Number(a.season)
+        Number(b.season) - Number(a.season)
     );
-
-  const requestedSeason =
-    params.season;
 
   const selectedSeason =
     seasons.find(
-      (season) =>
-        season.season ===
-        requestedSeason
+      (season) => season.season === params.season
     ) ?? seasons[0];
 
-  const selectedTeam =
-    TEAM_OPTIONS.some(
-      (option) =>
-        option.id === params.team
-    )
-      ? params.team
-      : "first";
+  const selectedTeam = TEAM_OPTIONS.some(
+    (option) => option.id === params.team
+  )
+    ? params.team
+    : "first";
 
   const selections =
     selectedTeam === "second"
       ? selectedSeason?.secondTeam ?? []
       : selectedTeam === "rookie"
-      ? selectedSeason?.rookieTeam ?? []
-      : selectedSeason?.firstTeam ?? [];
+        ? selectedSeason?.rookieTeam ?? []
+        : selectedSeason?.firstTeam ?? [];
 
-  const latestSeason =
-    seasons[0]?.season;
+  const latestSeason = seasons[0]?.season;
 
   const isCurrentSeason =
-    selectedSeason?.season ===
-    latestSeason;
+    selectedSeason?.season === latestSeason;
 
   return (
     <main>
@@ -232,8 +277,8 @@ export default async function AllSlootPage({
           marginBottom: "24px",
         }}
       >
-        The SFL&apos;s annual recognition
-        of its best performers.
+        The SFL&apos;s annual recognition of its best
+        performers.
       </p>
 
       <div
@@ -249,18 +294,15 @@ export default async function AllSlootPage({
             key={season.season}
             href={`/all-sloot?season=${season.season}&team=${selectedTeam}`}
             style={{
-              padding:
-                "9px 14px",
+              padding: "9px 14px",
               borderRadius: "10px",
               textDecoration: "none",
               fontWeight: "700",
               background:
-                selectedSeason?.season ===
-                season.season
+                selectedSeason?.season === season.season
                   ? "#263244"
                   : "transparent",
-              border:
-                "1px solid #263244",
+              border: "1px solid #263244",
               color: "inherit",
             }}
           >
@@ -279,9 +321,8 @@ export default async function AllSlootPage({
             fontSize: "13px",
           }}
         >
-          Current season: these selections
-          are provisional until the
-          regular season finishes.
+          Current season: these selections are
+          provisional until the regular season finishes.
         </p>
       )}
 
@@ -292,14 +333,12 @@ export default async function AllSlootPage({
             borderRadius: "10px",
             marginBottom: "20px",
             fontSize: "13px",
-            border:
-              "1px solid #263244",
+            border: "1px solid #263244",
           }}
         >
-          Rookie eligibility is currently
-          estimated from Sleeper player
-          experience data. These results
-          require historical verification.
+          Rookie eligibility is currently estimated from
+          Sleeper player experience data. Historical
+          eligibility should be verified.
         </p>
       )}
 
@@ -311,50 +350,38 @@ export default async function AllSlootPage({
           flexWrap: "wrap",
         }}
       >
-        {TEAM_OPTIONS.map(
-          (option) => (
-            <a
-              key={option.id}
-              href={`/all-sloot?season=${selectedSeason?.season}&team=${option.id}`}
-              style={{
-                padding:
-                  "10px 14px",
-                borderRadius: "10px",
-                textDecoration:
-                  "none",
-                fontWeight: "700",
-                background:
-                  selectedTeam ===
-                  option.id
-                    ? "#263244"
-                    : "transparent",
-                border:
-                  "1px solid #263244",
-                color: "inherit",
-              }}
-            >
-              {option.label}
-            </a>
-          )
-        )}
+        {TEAM_OPTIONS.map((option) => (
+          <a
+            key={option.id}
+            href={`/all-sloot?season=${selectedSeason?.season}&team=${option.id}`}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              textDecoration: "none",
+              fontWeight: "700",
+              background:
+                selectedTeam === option.id
+                  ? "#263244"
+                  : "transparent",
+              border: "1px solid #263244",
+              color: "inherit",
+            }}
+          >
+            {option.label}
+          </a>
+        ))}
       </div>
 
-      <h2
-        style={{
-          marginBottom: "16px",
-        }}
-      >
+      <h2 style={{ marginBottom: "16px" }}>
         {selectedSeason?.season}{" "}
-        {TEAM_OPTIONS.find(
-          (option) =>
-            option.id ===
-            selectedTeam
-        )?.label}
+        {
+          TEAM_OPTIONS.find(
+            (option) => option.id === selectedTeam
+          )?.label
+        }
       </h2>
 
-      <TeamTable
-        selections={selections}
-      />
+      <TeamTable selections={selections} />
     </main>
   );
 }
