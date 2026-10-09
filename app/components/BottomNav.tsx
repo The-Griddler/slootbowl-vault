@@ -12,14 +12,14 @@ const mainItems = [
     icon: "🏠",
   },
   {
-    href: "/matchups",
-    label: "Matchups",
-    icon: "🏈",
-  },
-  {
     href: "/teams",
     label: "Teams",
     icon: "🛡️",
+  },
+  {
+    href: "/history",
+    label: "History",
+    icon: "🏆",
   },
   {
     href: "/records",
@@ -30,10 +30,11 @@ const mainItems = [
 
 const moreItems = [
   {
-    href: "/history",
-    label: "League History",
-    icon: "🏆",
-    description: "Champions, awards and season archive",
+    href: "/matchups",
+    label: "Matchup Archive",
+    icon: "🏈",
+    description:
+      "Historic SFL results, playoff games and classic matchups",
   },
   {
     href: "/legacy",
@@ -106,6 +107,9 @@ export default function BottomNav() {
               borderRadius: "20px",
               zIndex: 99,
               boxShadow: "0 -8px 40px rgba(0,0,0,0.35)",
+              maxHeight:
+                "calc(100dvh - 120px)",
+              overflowY: "auto",
             }}
           >
             <div
