@@ -1,3 +1,4 @@
+
 export type Franchise = {
   rosterId: number;
   name: string;
@@ -56,4 +57,29 @@ export function getFranchiseName(
     )?.name ??
     `Roster ${rosterId}`
   );
+}
+
+/**
+ * Returns the name a franchise used
+ * during a particular SFL season.
+ *
+ * Historical name changes belong here.
+ * The roster ID never changes.
+ *
+ * Other pages can continue using
+ * getFranchiseName() for current names.
+ */
+export function getHistoricalFranchiseName(
+  rosterId: number,
+  season: string | number
+): string {
+  const year = Number(season);
+
+  // The Ballbags relocated/renamed
+  // ahead of the 2026 SFL season.
+  if (rosterId === 1 && year <= 2025) {
+    return "Perth Ballbags";
+  }
+
+  return getFranchiseName(rosterId);
 }
