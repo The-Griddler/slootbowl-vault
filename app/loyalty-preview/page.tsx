@@ -1,19 +1,82 @@
 
 import { FRANCHISES } from "../../lib/franchises";
+
+import { getHistoricalData } from "../../lib/sleeper";
+
 import {
   getFranchisePlayerCareers,
 } from "../../lib/franchiseLegacy";
+
 import {
   calculateFranchiseLegacyScores,
 } from "../../lib/franchiseLegacyScore";
-import { getPlayerNames } from "../../lib/players";
+
+import {
+  getPlayerNames,
+  getAllSlootPlayerDirectory,
+} from "../../lib/players";
+
+import {
+  calculateHistoricalSeasonGrades,
+} from "../../lib/seasonGrades";
+
+import {
+  calculateAllSloot,
+} from "../../lib/allSloot";
+
+import {
+  calculateAllSlootCareers,
+} from "../../lib/allSlootCareer";
 
 export default async function LoyaltyPreviewPage() {
-  const careers =
-    await getFranchisePlayerCareers();
+  const [
+    careers,
+    historicalData,
+    playerDirectory,
+  ] = await Promise.all([
+    getFranchisePlayerCareers(),
+    getHistoricalData(),
+    getAllSlootPlayerDirectory(),
+  ]);
 
+  const currentYear = new Date().getUTCFullYear();
+  const completedThroughSeason = currentYear - 1;
+
+  // Use the existing SFL seasonal grading system.
+  // Current-season grades are not official.
+  const seasonalGrades =
+    calculateHistoricalSeasonGrades(
+      historicalData,
+      playerDirectory,
+      completedThroughSeason
+    );
+
+  // Reuse the existing All-Sloot selections.
+  // Only completed seasons earn career honours.
+  const completedAllSlootSeasons = historicalData
+    .filter(
+      (season) =>
+        Number(season.league.season) <=
+        completedThroughSeason
+    )
+    .map((season) =>
+      calculateAllSloot(season, playerDirectory)
+    );
+
+  const allSlootCareers =
+    calculateAllSlootCareers(
+      completedAllSlootSeasons
+    );
+
+  // Combine loyalty, starts, production
+  // and franchise-attributed achievements.
   const rankings =
-    calculateFranchiseLegacyScores(careers);
+    calculateFranchiseLegacyScores(
+      careers,
+      historicalData,
+      seasonalGrades,
+      allSlootCareers
+    );
 
   const topPlayers = FRANCHISES.flatMap(
     (franchise) =>
@@ -26,9 +89,13 @@ export default async function LoyaltyPreviewPage() {
   );
 
   const playerNames = await getPlayerNames(
-    [...new Set(
-      topPlayers.map((player) => player.playerId)
-    )]
+    [
+      ...new Set(
+        topPlayers.map(
+          (player) => player.playerId
+        )
+      ),
+    ]
   );
 
   const format = (value: number) =>
@@ -36,8 +103,17 @@ export default async function LoyaltyPreviewPage() {
       maximumFractionDigits: 0,
     });
 
+  const cellStyle = {
+    padding: "11px 8px",
+    whiteSpace: "nowrap" as const,
+  };
+
   return (
-    <main style={{ padding: "24px 12px 110px" }}>
+    <main
+      style={{
+        padding: "24px 12px 110px",
+      }}
+    >
       <h1>Franchise Legends Preview</h1>
 
       <p
@@ -48,10 +124,27 @@ export default async function LoyaltyPreviewPage() {
           marginTop: 10,
         }}
       >
-        Experimental rankings combining franchise
-        loyalty, official starts and fantasy
-        production. Seasonal awards and
-        championships are not included yet.
+        Experimental franchise rankings combining
+        roster loyalty, official starts, fantasy
+        production, seasonal grades and All-Sloot
+        honours. Slootbowl championship bonuses
+        are not included yet.
+      </p>
+
+      <p
+        style={{
+          color: "#9da7b3",
+          fontSize: 12,
+          lineHeight: 1.6,
+          marginTop: 10,
+        }}
+      >
+        Seasonal achievements are awarded to the
+        franchise where a player recorded the most
+        official starts that season. Tiebreakers:
+        fantasy points, roster weeks, then lowest
+        roster ID. Only completed seasons receive
+        achievement bonuses.
       </p>
 
       {FRANCHISES.map((franchise) => {
@@ -65,9 +158,15 @@ export default async function LoyaltyPreviewPage() {
         return (
           <section
             key={franchise.rosterId}
-            style={{ marginTop: 36 }}
+            style={{
+              marginTop: 36,
+            }}
           >
-            <h2 style={{ fontSize: 19 }}>
+            <h2
+              style={{
+                fontSize: 19,
+              }}
+            >
               {franchise.name}
             </h2>
 
@@ -97,6 +196,9 @@ export default async function LoyaltyPreviewPage() {
                       "Loyalty",
                       "Starts Pts",
                       "Production",
+                      "Grades",
+                      "All-Sloot",
+                      "Achievements",
                       "Total",
                     ].map((heading) => (
                       <th
@@ -117,62 +219,94 @@ export default async function LoyaltyPreviewPage() {
                 </thead>
 
                 <tbody>
-                  {leaders.map((player, index) => (
-                    <tr
-                      key={player.playerId}
-                      style={{
-                        borderBottom:
-                          "1px solid #27303b",
-                      }}
-                    >
-                      <td style={{ padding: "11px 8px" }}>
-                        {index + 1}
-                      </td>
-
-                      <td
+                  {leaders.map(
+                    (player, index) => (
+                      <tr
+                        key={player.playerId}
                         style={{
-                          padding: "11px 8px",
-                          fontWeight: 700,
-                          minWidth: 130,
+                          borderBottom:
+                            "1px solid #27303b",
                         }}
                       >
-                        {playerNames[player.playerId] ??
-                          player.playerId}
-                      </td>
+                        <td style={cellStyle}>
+                          {index + 1}
+                        </td>
 
-                      <td style={{ padding: "11px 8px" }}>
-                        {player.rosterWeeks}
-                      </td>
+                        <td
+                          style={{
+                            ...cellStyle,
+                            fontWeight: 700,
+                            minWidth: 130,
+                          }}
+                        >
+                          {playerNames[
+                            player.playerId
+                          ] ?? player.playerId}
+                        </td>
 
-                      <td style={{ padding: "11px 8px" }}>
-                        {player.starts}
-                      </td>
+                        <td style={cellStyle}>
+                          {player.rosterWeeks}
+                        </td>
 
-                      <td style={{ padding: "11px 8px" }}>
-                        {format(player.loyaltyPoints)}
-                      </td>
+                        <td style={cellStyle}>
+                          {player.starts}
+                        </td>
 
-                      <td style={{ padding: "11px 8px" }}>
-                        {format(player.startPoints)}
-                      </td>
+                        <td style={cellStyle}>
+                          {format(
+                            player.loyaltyPoints
+                          )}
+                        </td>
 
-                      <td style={{ padding: "11px 8px" }}>
-                        {format(player.productionPoints)}
-                      </td>
+                        <td style={cellStyle}>
+                          {format(
+                            player.startPoints
+                          )}
+                        </td>
 
-                      <td
-                        style={{
-                          padding: "11px 8px",
-                          fontWeight: 800,
-                          color: "#eab308",
-                        }}
-                      >
-                        {format(
-                          player.totalFranchiseLegacyPoints
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        <td style={cellStyle}>
+                          {format(
+                            player.productionPoints
+                          )}
+                        </td>
+
+                        <td style={cellStyle}>
+                          {format(
+                            player.seasonalGradePoints
+                          )}
+                        </td>
+
+                        <td style={cellStyle}>
+                          {format(
+                            player.allSlootHonoursPoints
+                          )}
+                        </td>
+
+                        <td
+                          style={{
+                            ...cellStyle,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {format(
+                            player.achievementPoints
+                          )}
+                        </td>
+
+                        <td
+                          style={{
+                            ...cellStyle,
+                            fontWeight: 800,
+                            color: "#eab308",
+                          }}
+                        >
+                          {format(
+                            player.totalFranchiseLegacyPoints
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
