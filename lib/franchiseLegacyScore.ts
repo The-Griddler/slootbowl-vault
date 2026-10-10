@@ -207,12 +207,17 @@ export function calculateFranchiseLegacyScores(
   const gradePoints = new Map<string, number>();
   const honoursPoints = new Map<string, number>();
 
-  const championshipMap = new Map(
+  // Explicit string keys prevent the
+  // TypeScript template-literal key error.
+  const championshipMap = new Map<
+    string,
+    FranchiseChampionship
+  >(
     franchiseChampionships.map(
       (championship) => [
         `${championship.rosterId}:${championship.playerId}`,
         championship,
-      ] as const
+      ]
     )
   );
 
