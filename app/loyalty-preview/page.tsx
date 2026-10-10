@@ -3,31 +3,42 @@ import { FRANCHISES } from "../../lib/franchises";
 import {
   getFranchisePlayerCareers,
 } from "../../lib/franchiseLegacy";
+import {
+  calculateFranchiseLegacyScores,
+} from "../../lib/franchiseLegacyScore";
 import { getPlayerNames } from "../../lib/players";
 
 export default async function LoyaltyPreviewPage() {
   const careers =
     await getFranchisePlayerCareers();
 
-  const topCareers = FRANCHISES.flatMap(
+  const rankings =
+    calculateFranchiseLegacyScores(careers);
+
+  const topPlayers = FRANCHISES.flatMap(
     (franchise) =>
-      careers
+      rankings
         .filter(
-          (career) =>
-            career.rosterId === franchise.rosterId
+          (player) =>
+            player.rosterId === franchise.rosterId
         )
         .slice(0, 15)
   );
 
   const playerNames = await getPlayerNames(
     [...new Set(
-      topCareers.map((career) => career.playerId)
+      topPlayers.map((player) => player.playerId)
     )]
   );
 
+  const format = (value: number) =>
+    value.toLocaleString("en-AU", {
+      maximumFractionDigits: 0,
+    });
+
   return (
     <main style={{ padding: "24px 12px 110px" }}>
-      <h1>Franchise Loyalty Preview</h1>
+      <h1>Franchise Legends Preview</h1>
 
       <p
         style={{
@@ -37,17 +48,17 @@ export default async function LoyaltyPreviewPage() {
           marginTop: 10,
         }}
       >
-        Experimental franchise service rankings.
-        Includes bench players. Loyalty points
-        are provisional and do not yet include
-        performance or achievements.
+        Experimental rankings combining franchise
+        loyalty, official starts and fantasy
+        production. Seasonal awards and
+        championships are not included yet.
       </p>
 
       {FRANCHISES.map((franchise) => {
-        const leaders = careers
+        const leaders = rankings
           .filter(
-            (career) =>
-              career.rosterId === franchise.rosterId
+            (player) =>
+              player.rosterId === franchise.rosterId
           )
           .slice(0, 15);
 
@@ -82,9 +93,11 @@ export default async function LoyaltyPreviewPage() {
                       "#",
                       "Player",
                       "Weeks",
-                      "Seasons",
                       "Starts",
                       "Loyalty",
+                      "Starts Pts",
+                      "Production",
+                      "Total",
                     ].map((heading) => (
                       <th
                         key={heading}
@@ -94,6 +107,7 @@ export default async function LoyaltyPreviewPage() {
                           borderBottom:
                             "1px solid #27303b",
                           color: "#9da7b3",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {heading}
@@ -103,9 +117,9 @@ export default async function LoyaltyPreviewPage() {
                 </thead>
 
                 <tbody>
-                  {leaders.map((career, index) => (
+                  {leaders.map((player, index) => (
                     <tr
-                      key={career.playerId}
+                      key={player.playerId}
                       style={{
                         borderBottom:
                           "1px solid #27303b",
@@ -122,29 +136,40 @@ export default async function LoyaltyPreviewPage() {
                           minWidth: 130,
                         }}
                       >
-                        {playerNames[career.playerId] ??
-                          career.playerId}
+                        {playerNames[player.playerId] ??
+                          player.playerId}
                       </td>
 
                       <td style={{ padding: "11px 8px" }}>
-                        {career.rosterWeeks}
+                        {player.rosterWeeks}
                       </td>
 
                       <td style={{ padding: "11px 8px" }}>
-                        {career.seasonsRepresented}
+                        {player.starts}
                       </td>
 
                       <td style={{ padding: "11px 8px" }}>
-                        {career.starts}
+                        {format(player.loyaltyPoints)}
+                      </td>
+
+                      <td style={{ padding: "11px 8px" }}>
+                        {format(player.startPoints)}
+                      </td>
+
+                      <td style={{ padding: "11px 8px" }}>
+                        {format(player.productionPoints)}
                       </td>
 
                       <td
                         style={{
                           padding: "11px 8px",
                           fontWeight: 800,
+                          color: "#eab308",
                         }}
                       >
-                        {career.loyaltyPoints.toLocaleString()}
+                        {format(
+                          player.totalFranchiseLegacyPoints
+                        )}
                       </td>
                     </tr>
                   ))}
