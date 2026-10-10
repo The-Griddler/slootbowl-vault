@@ -229,14 +229,9 @@ function seasonCategories(
     suffix: "games",
   };
 
+  // Playoffs: only the two meaningful season totals.
   if (competition === "mainPlayoffs") {
-    return [
-      mostWins,
-      mostPoints,
-      mostAgainst,
-      over150,
-      under100,
-    ];
+    return [mostPoints, mostAgainst];
   }
 
   return [
@@ -314,16 +309,6 @@ function careerCategories(
       suffix: "wins",
     },
     {
-      key: "fewestWins",
-      title: "Fewest Career Wins",
-      description: "The franchises with the fewest victories.",
-      record: records.fewestWins,
-      leaderboard: leaders.fewestWins,
-      metric: r => r.wins,
-      format: r => `${r.wins}`,
-      suffix: "wins",
-    },
-    {
       key: "mostPointsFor",
       title: "Most Career Points",
       description: "The greatest cumulative scoring totals.",
@@ -349,16 +334,6 @@ function careerCategories(
       description: "The greatest cumulative scoring advantages.",
       record: records.bestPointDifferential,
       leaderboard: leaders.bestPointDifferential,
-      metric: r => r.pointDifferential,
-      format: r => differential(r.pointDifferential),
-      suffix: "pts",
-    },
-    {
-      key: "worstPointDifferential",
-      title: "Worst Career Point Differential",
-      description: "The greatest cumulative scoring deficits.",
-      record: records.worstPointDifferential,
-      leaderboard: leaders.worstPointDifferential,
       metric: r => r.pointDifferential,
       format: r => differential(r.pointDifferential),
       suffix: "pts",
