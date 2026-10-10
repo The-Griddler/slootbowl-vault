@@ -1,12 +1,16 @@
 
 import {
   getHistoricalData,
-  HistoricalMatchup,
+  type HistoricalMatchup,
 } from "./sleeper";
 
 export type RecordPhase =
   | "Regular Season"
   | "Main Playoffs";
+
+export type Competition =
+  | "regularSeason"
+  | "mainPlayoffs";
 
 export type TeamPerformance = {
   season: string;
@@ -74,6 +78,36 @@ export type AllTimeRecordSet = {
   worstPointDifferential: AllTimeFranchiseRecord | null;
 };
 
+// Ranked lists use the same keys as the
+// existing single-record objects.
+//
+// A tied tenth-place performance is included,
+// so a leaderboard can contain more than ten
+// entries when records are tied.
+
+export type RecordLeaderboardSet = {
+  [K in keyof RecordSet]: LeagueRecord[];
+};
+
+export type SeasonLeaderboardSet = {
+  [K in keyof SeasonRecordSet]: SeasonRecord[];
+};
+
+export type AllTimeLeaderboardSet = {
+  [K in keyof AllTimeRecordSet]:
+    AllTimeFranchiseRecord[];
+};
+
+export type CompetitionLeaderboards = {
+  regularSeason: RecordLeaderboardSet;
+  mainPlayoffs: RecordLeaderboardSet;
+};
+
+export type SeasonCompetitionLeaderboards = {
+  regularSeason: SeasonLeaderboardSet;
+  mainPlayoffs: SeasonLeaderboardSet;
+};
+
 export type FilteredSeasonRecords = {
   individualGame: {
     regularSeason: RecordSet;
@@ -83,17 +117,61 @@ export type FilteredSeasonRecords = {
     regularSeason: SeasonRecordSet;
     mainPlayoffs: SeasonRecordSet;
   };
-};
 
-export type AllTimeRecords = FilteredSeasonRecords & {
-  allTime: AllTimeRecordSet;
-  bySeason: Record<string, FilteredSeasonRecords>;
-  availableSeasons: string[];
-  completedSeasons: {
-    regularSeason: string[];
-    mainPlayoffs: string[];
+  // New: ranked results for the interface.
+  leaderboards: {
+    individualGame: CompetitionLeaderboards;
+    season: SeasonCompetitionLeaderboards;
   };
 };
+
+export type AllTimeRecords =
+  FilteredSeasonRecords & {
+    allTime: AllTimeRecordSet;
+
+    allTimeLeaderboards:
+      AllTimeLeaderboardSet;
+
+    bySeason: Record<
+      string,
+      FilteredSeasonRecords
+    >;
+
+    availableSeasons: string[];
+
+    completedSeasons: {
+      regularSeason: string[];
+      mainPlayoffs: string[];
+    };
+  };
+
+const LEADERBOARD_LIMIT = 10;
+
+// Scores are stored to two decimal places
+// for comparison purposes. This prevents
+// floating-point accumulation errors from
+// incorrectly separating tied records.
+
+function rounded(value: number): number {
+  return Math.round(
+    (value + Number.EPSILON) * 100
+  ) / 100;
+}
+
+function isValidPerformance(
+  matchup: HistoricalMatchup
+): boolean {
+  return (
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
+    (
+      matchup.scoreA !== 0 ||
+      matchup.scoreB !== 0
+    )
+  );
+}
 
 function buildPerformances(
   matchups: HistoricalMatchup[]
@@ -105,6 +183,10 @@ function buildPerformances(
       matchup.phase !== "Regular Season" &&
       matchup.phase !== "Main Playoffs"
     ) {
+      continue;
+    }
+
+    if (!isValidPerformance(matchup)) {
       continue;
     }
 
@@ -137,80 +219,257 @@ function toLeagueRecord(
 ): LeagueRecord {
   return {
     ...performance,
-    margin: Math.abs(
-      performance.score - performance.opponentScore
+    margin: rounded(
+      Math.abs(
+        performance.score -
+        performance.opponentScore
+      )
     ),
   };
 }
 
-function highest<T>(
-  records: T[],
-  value: (record: T) => number
-): T | null {
-  return records.reduce<T | null>(
-    (best, current) =>
-      best === null || value(current) > value(best)
-        ? current
-        : best,
-    null
+// For matchup-level records, retain only
+// one perspective of each actual game.
+//
+// The key includes season, week, phase
+// and both roster IDs. The phase prevents
+// unrelated competitions being merged.
+
+function uniqueGames(
+  records: LeagueRecord[]
+): LeagueRecord[] {
+  const seen = new Set<string>();
+
+  return records.filter((record) => {
+    const first = Math.min(
+      record.rosterId,
+      record.opponentRosterId
+    );
+
+    const second = Math.max(
+      record.rosterId,
+      record.opponentRosterId
+    );
+
+    const key = [
+      record.season,
+      record.week,
+      record.phase,
+      first,
+      second,
+    ].join("|");
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function compareChronologically(
+  a: {
+    season: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  },
+  b: {
+    season: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  }
+): number {
+  return (
+    Number(a.season) -
+      Number(b.season) ||
+    (a.week ?? 0) - (b.week ?? 0) ||
+    a.rosterId - b.rosterId ||
+    (a.opponentRosterId ?? 0) -
+      (b.opponentRosterId ?? 0)
   );
 }
 
-function lowest<T>(
+// Return the top ten ranks, including
+// everyone tied with the tenth entry.
+//
+// The secondary sort is chronological,
+// so tied records display consistently.
+
+function rankRecords<
+  T extends {
+    season?: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  }
+>(
   records: T[],
-  value: (record: T) => number
-): T | null {
-  return records.reduce<T | null>(
-    (best, current) =>
-      best === null || value(current) < value(best)
-        ? current
-        : best,
-    null
+  value: (record: T) => number,
+  direction: "highest" | "lowest",
+  limit = LEADERBOARD_LIMIT
+): T[] {
+  const sorted = [...records].sort(
+    (a, b) => {
+      const difference =
+        rounded(value(a)) -
+        rounded(value(b));
+
+      if (difference !== 0) {
+        return direction === "highest"
+          ? -difference
+          : difference;
+      }
+
+      return compareChronologically(
+        {
+          season: a.season ?? "0",
+          week: a.week,
+          rosterId: a.rosterId,
+          opponentRosterId:
+            a.opponentRosterId,
+        },
+        {
+          season: b.season ?? "0",
+          week: b.week,
+          rosterId: b.rosterId,
+          opponentRosterId:
+            b.opponentRosterId,
+        }
+      );
+    }
+  );
+
+  if (sorted.length <= limit) {
+    return sorted;
+  }
+
+  const cutoff = rounded(
+    value(sorted[limit - 1])
+  );
+
+  return sorted.filter(
+    (record, index) =>
+      index < limit ||
+      rounded(value(record)) === cutoff
   );
 }
 
-function calculateRecordSet(
+function firstOrNull<T>(
+  records: T[]
+): T | null {
+  return records[0] ?? null;
+}
+
+function calculateGameLeaderboards(
   performances: TeamPerformance[]
-): RecordSet {
-  const records = performances.map(toLeagueRecord);
+): RecordLeaderboardSet {
+  const records =
+    performances.map(toLeagueRecord);
+
+  const games = uniqueGames(records);
 
   const winningGames = records.filter(
-    (r) => r.score > r.opponentScore
+    (record) =>
+      record.score > record.opponentScore
   );
 
   const losingGames = records.filter(
-    (r) => r.score < r.opponentScore
+    (record) =>
+      record.score < record.opponentScore
   );
 
   return {
-    highestTeamScore: highest(records, (r) => r.score),
-    lowestTeamScore: lowest(records, (r) => r.score),
+    highestTeamScore: rankRecords(
+      records,
+      (record) => record.score,
+      "highest"
+    ),
 
-    biggestWinningMargin: highest(
+    lowestTeamScore: rankRecords(
+      records,
+      (record) => record.score,
+      "lowest"
+    ),
+
+    biggestWinningMargin: rankRecords(
       winningGames,
-      (r) => r.margin
+      (record) => record.margin,
+      "highest"
     ),
 
-    closestGame: lowest(records, (r) => r.margin),
-
-    highestCombinedScore: highest(
-      records,
-      (r) => r.score + r.opponentScore
+    closestGame: rankRecords(
+      games,
+      (record) => record.margin,
+      "lowest"
     ),
 
-    lowestCombinedScore: lowest(
-      records,
-      (r) => r.score + r.opponentScore
+    highestCombinedScore: rankRecords(
+      games,
+      (record) =>
+        record.score +
+        record.opponentScore,
+      "highest"
     ),
 
-    highestLosingScore: highest(
+    lowestCombinedScore: rankRecords(
+      games,
+      (record) =>
+        record.score +
+        record.opponentScore,
+      "lowest"
+    ),
+
+    highestLosingScore: rankRecords(
       losingGames,
-      (r) => r.score
+      (record) => record.score,
+      "highest"
     ),
 
-    lowestWinningScore: lowest(
+    lowestWinningScore: rankRecords(
       winningGames,
-      (r) => r.score
+      (record) => record.score,
+      "lowest"
+    ),
+  };
+}
+
+function firstGameRecords(
+  leaders: RecordLeaderboardSet
+): RecordSet {
+  return {
+    highestTeamScore: firstOrNull(
+      leaders.highestTeamScore
+    ),
+
+    lowestTeamScore: firstOrNull(
+      leaders.lowestTeamScore
+    ),
+
+    biggestWinningMargin: firstOrNull(
+      leaders.biggestWinningMargin
+    ),
+
+    closestGame: firstOrNull(
+      leaders.closestGame
+    ),
+
+    highestCombinedScore: firstOrNull(
+      leaders.highestCombinedScore
+    ),
+
+    lowestCombinedScore: firstOrNull(
+      leaders.lowestCombinedScore
+    ),
+
+    highestLosingScore: firstOrNull(
+      leaders.highestLosingScore
+    ),
+
+    lowestWinningScore: firstOrNull(
+      leaders.lowestWinningScore
     ),
   };
 }
@@ -218,11 +477,14 @@ function calculateRecordSet(
 function buildSeasonRecords(
   performances: TeamPerformance[]
 ): SeasonRecord[] {
-  const seasons = new Map<string, SeasonRecord>();
+  const seasons =
+    new Map<string, SeasonRecord>();
 
   for (const performance of performances) {
-    const key =
-      `${performance.season}-${performance.rosterId}`;
+    const key = [
+      performance.season,
+      performance.rosterId,
+    ].join("|");
 
     let record = seasons.get(key);
 
@@ -241,60 +503,129 @@ function buildSeasonRecords(
       seasons.set(key, record);
     }
 
-    if (performance.score > performance.opponentScore) {
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
       record.wins++;
     } else if (
-      performance.score < performance.opponentScore
+      performance.score <
+      performance.opponentScore
     ) {
       record.losses++;
     } else {
       record.ties++;
     }
 
-    record.pointsFor += performance.score;
-    record.pointsAgainst += performance.opponentScore;
-    record.pointDifferential +=
-      performance.score - performance.opponentScore;
+    record.pointsFor = rounded(
+      record.pointsFor +
+      performance.score
+    );
+
+    record.pointsAgainst = rounded(
+      record.pointsAgainst +
+      performance.opponentScore
+    );
+
+    record.pointDifferential = rounded(
+      record.pointsFor -
+      record.pointsAgainst
+    );
   }
 
   return Array.from(seasons.values());
 }
 
-function calculateSeasonRecordSet(
+function calculateSeasonLeaderboards(
   records: SeasonRecord[]
+): SeasonLeaderboardSet {
+  return {
+    mostWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "highest"
+    ),
+
+    fewestWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "lowest"
+    ),
+
+    mostPointsFor: rankRecords(
+      records,
+      (record) => record.pointsFor,
+      "highest"
+    ),
+
+    fewestPointsFor: rankRecords(
+      records,
+      (record) => record.pointsFor,
+      "lowest"
+    ),
+
+    mostPointsAgainst: rankRecords(
+      records,
+      (record) => record.pointsAgainst,
+      "highest"
+    ),
+
+    fewestPointsAgainst: rankRecords(
+      records,
+      (record) => record.pointsAgainst,
+      "lowest"
+    ),
+
+    bestPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "highest"
+    ),
+
+    worstPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "lowest"
+    ),
+  };
+}
+
+function firstSeasonRecords(
+  leaders: SeasonLeaderboardSet
 ): SeasonRecordSet {
   return {
-    mostWins: highest(records, (r) => r.wins),
-    fewestWins: lowest(records, (r) => r.wins),
-
-    mostPointsFor: highest(
-      records,
-      (r) => r.pointsFor
+    mostWins: firstOrNull(
+      leaders.mostWins
     ),
 
-    fewestPointsFor: lowest(
-      records,
-      (r) => r.pointsFor
+    fewestWins: firstOrNull(
+      leaders.fewestWins
     ),
 
-    mostPointsAgainst: highest(
-      records,
-      (r) => r.pointsAgainst
+    mostPointsFor: firstOrNull(
+      leaders.mostPointsFor
     ),
 
-    fewestPointsAgainst: lowest(
-      records,
-      (r) => r.pointsAgainst
+    fewestPointsFor: firstOrNull(
+      leaders.fewestPointsFor
     ),
 
-    bestPointDifferential: highest(
-      records,
-      (r) => r.pointDifferential
+    mostPointsAgainst: firstOrNull(
+      leaders.mostPointsAgainst
     ),
 
-    worstPointDifferential: lowest(
-      records,
-      (r) => r.pointDifferential
+    fewestPointsAgainst: firstOrNull(
+      leaders.fewestPointsAgainst
+    ),
+
+    bestPointDifferential: firstOrNull(
+      leaders.bestPointDifferential
+    ),
+
+    worstPointDifferential: firstOrNull(
+      leaders.worstPointDifferential
     ),
   };
 }
@@ -308,7 +639,9 @@ function buildAllTimeFranchiseRecords(
   >();
 
   for (const performance of performances) {
-    let record = franchises.get(performance.rosterId);
+    let record = franchises.get(
+      performance.rosterId
+    );
 
     if (!record) {
       record = {
@@ -321,76 +654,137 @@ function buildAllTimeFranchiseRecords(
         pointDifferential: 0,
       };
 
-      franchises.set(performance.rosterId, record);
+      franchises.set(
+        performance.rosterId,
+        record
+      );
     }
 
-    if (performance.score > performance.opponentScore) {
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
       record.wins++;
     } else if (
-      performance.score < performance.opponentScore
+      performance.score <
+      performance.opponentScore
     ) {
       record.losses++;
     } else {
       record.ties++;
     }
 
-    record.pointsFor += performance.score;
-    record.pointsAgainst += performance.opponentScore;
-    record.pointDifferential +=
-      performance.score - performance.opponentScore;
+    record.pointsFor = rounded(
+      record.pointsFor +
+      performance.score
+    );
+
+    record.pointsAgainst = rounded(
+      record.pointsAgainst +
+      performance.opponentScore
+    );
+
+    record.pointDifferential = rounded(
+      record.pointsFor -
+      record.pointsAgainst
+    );
   }
 
   return Array.from(franchises.values());
 }
 
-function calculateAllTimeRecordSet(
+function calculateAllTimeLeaderboards(
   records: AllTimeFranchiseRecord[]
-): AllTimeRecordSet {
+): AllTimeLeaderboardSet {
   return {
-    mostWins: highest(records, (r) => r.wins),
-    fewestWins: lowest(records, (r) => r.wins),
-
-    mostPointsFor: highest(
+    mostWins: rankRecords(
       records,
-      (r) => r.pointsFor
+      (record) => record.wins,
+      "highest"
     ),
 
-    mostPointsAgainst: highest(
+    fewestWins: rankRecords(
       records,
-      (r) => r.pointsAgainst
+      (record) => record.wins,
+      "lowest"
     ),
 
-    bestPointDifferential: highest(
+    mostPointsFor: rankRecords(
       records,
-      (r) => r.pointDifferential
+      (record) => record.pointsFor,
+      "highest"
     ),
 
-    worstPointDifferential: lowest(
+    mostPointsAgainst: rankRecords(
       records,
-      (r) => r.pointDifferential
+      (record) => record.pointsAgainst,
+      "highest"
+    ),
+
+    bestPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "highest"
+    ),
+
+    worstPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "lowest"
     ),
   };
 }
 
-/*
- * A regular season is complete when all five
- * Week 14 matchups have final scores.
- *
- * The main playoffs are complete when the
- * Week 17 Slootbowl has a final score.
- *
- * Historical seasons are checked using their
- * actual matchup data, not the calendar year.
- */
+function firstAllTimeRecords(
+  leaders: AllTimeLeaderboardSet
+): AllTimeRecordSet {
+  return {
+    mostWins: firstOrNull(
+      leaders.mostWins
+    ),
+
+    fewestWins: firstOrNull(
+      leaders.fewestWins
+    ),
+
+    mostPointsFor: firstOrNull(
+      leaders.mostPointsFor
+    ),
+
+    mostPointsAgainst: firstOrNull(
+      leaders.mostPointsAgainst
+    ),
+
+    bestPointDifferential: firstOrNull(
+      leaders.bestPointDifferential
+    ),
+
+    worstPointDifferential: firstOrNull(
+      leaders.worstPointDifferential
+    ),
+  };
+}
+
+// Completion rules remain compatible
+// with the existing Records page.
+//
+// Regular season:
+// Five scored matchups in Week 14.
+//
+// Main playoffs:
+// A scored championship matchup in Week 17.
+//
+// The source does not expose a definitive
+// NFL game-final flag, so these checks
+// cannot independently verify that a live
+// scoring week has officially finished.
 
 function isFinalScore(
   matchup: HistoricalMatchup
 ): boolean {
-  return (
-    Number.isFinite(matchup.scoreA) &&
-    Number.isFinite(matchup.scoreB) &&
-    (matchup.scoreA !== 0 || matchup.scoreB !== 0)
-  );
+  return isValidPerformance(matchup);
 }
 
 function isRegularSeasonComplete(
@@ -417,47 +811,149 @@ function arePlayoffsComplete(
   );
 }
 
-export async function getAllTimeRecords(): Promise<AllTimeRecords> {
-  const seasons = await getHistoricalData();
+function buildFilteredRecords(
+  regularPerformances: TeamPerformance[],
+  playoffPerformances: TeamPerformance[],
+  regularSeasonRecords: SeasonRecord[],
+  playoffSeasonRecords: SeasonRecord[]
+): FilteredSeasonRecords {
+  const regularGameLeaders =
+    calculateGameLeaderboards(
+      regularPerformances
+    );
 
-  const allPerformances = seasons.flatMap((season) =>
-    buildPerformances(season.matchups)
+  const playoffGameLeaders =
+    calculateGameLeaderboards(
+      playoffPerformances
+    );
+
+  const regularSeasonLeaders =
+    calculateSeasonLeaderboards(
+      regularSeasonRecords
+    );
+
+  const playoffSeasonLeaders =
+    calculateSeasonLeaderboards(
+      playoffSeasonRecords
+    );
+
+  return {
+    individualGame: {
+      regularSeason: firstGameRecords(
+        regularGameLeaders
+      ),
+
+      mainPlayoffs: firstGameRecords(
+        playoffGameLeaders
+      ),
+    },
+
+    season: {
+      regularSeason: firstSeasonRecords(
+        regularSeasonLeaders
+      ),
+
+      mainPlayoffs: firstSeasonRecords(
+        playoffSeasonLeaders
+      ),
+    },
+
+    leaderboards: {
+      individualGame: {
+        regularSeason:
+          regularGameLeaders,
+
+        mainPlayoffs:
+          playoffGameLeaders,
+      },
+
+      season: {
+        regularSeason:
+          regularSeasonLeaders,
+
+        mainPlayoffs:
+          playoffSeasonLeaders,
+      },
+    },
+  };
+}
+
+export async function getAllTimeRecords():
+  Promise<AllTimeRecords> {
+  const seasons =
+    await getHistoricalData();
+
+  const allPerformances = seasons.flatMap(
+    (season) =>
+      buildPerformances(
+        season.matchups
+      )
   );
 
-  const regularSeason = allPerformances.filter(
-    (p) => p.phase === "Regular Season"
-  );
+  const regularSeason =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase ===
+        "Regular Season"
+    );
 
-  const mainPlayoffs = allPerformances.filter(
-    (p) => p.phase === "Main Playoffs"
-  );
+  const mainPlayoffs =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase ===
+        "Main Playoffs"
+    );
 
   const availableSeasons = Array.from(
     new Set(
-      seasons.map((season) => season.league.season)
+      seasons.map(
+        (season) =>
+          season.league.season
+      )
     )
-  ).sort((a, b) => Number(b) - Number(a));
+  ).sort(
+    (a, b) =>
+      Number(b) - Number(a)
+  );
 
-  const completedRegularSeasons = seasons
-    .filter((season) =>
-      isRegularSeasonComplete(season.matchups)
-    )
-    .map((season) => season.league.season);
+  const completedRegularSeasons =
+    seasons
+      .filter((season) =>
+        isRegularSeasonComplete(
+          season.matchups
+        )
+      )
+      .map(
+        (season) =>
+          season.league.season
+      );
 
-  const completedPlayoffSeasons = seasons
-    .filter((season) =>
-      arePlayoffsComplete(season.matchups)
-    )
-    .map((season) => season.league.season);
+  const completedPlayoffSeasons =
+    seasons
+      .filter((season) =>
+        arePlayoffsComplete(
+          season.matchups
+        )
+      )
+      .map(
+        (season) =>
+          season.league.season
+      );
 
   const completedRegularPerformances =
-    regularSeason.filter((p) =>
-      completedRegularSeasons.includes(p.season)
+    regularSeason.filter(
+      (performance) =>
+        completedRegularSeasons.includes(
+          performance.season
+        )
     );
 
   const completedPlayoffPerformances =
-    mainPlayoffs.filter((p) =>
-      completedPlayoffSeasons.includes(p.season)
+    mainPlayoffs.filter(
+      (performance) =>
+        completedPlayoffSeasons.includes(
+          performance.season
+        )
     );
 
   const bySeason: Record<
@@ -466,62 +962,65 @@ export async function getAllTimeRecords(): Promise<AllTimeRecords> {
   > = {};
 
   for (const year of availableSeasons) {
-    const yearRegular = regularSeason.filter(
-      (p) => p.season === year
+    const yearRegular =
+      regularSeason.filter(
+        (performance) =>
+          performance.season === year
+      );
+
+    const yearPlayoffs =
+      mainPlayoffs.filter(
+        (performance) =>
+          performance.season === year
+      );
+
+    bySeason[year] = buildFilteredRecords(
+      yearRegular,
+      yearPlayoffs,
+      buildSeasonRecords(yearRegular),
+      buildSeasonRecords(yearPlayoffs)
     );
-
-    const yearPlayoffs = mainPlayoffs.filter(
-      (p) => p.season === year
-    );
-
-    bySeason[year] = {
-      individualGame: {
-        regularSeason: calculateRecordSet(yearRegular),
-        mainPlayoffs: calculateRecordSet(yearPlayoffs),
-      },
-
-      season: {
-        regularSeason: calculateSeasonRecordSet(
-          buildSeasonRecords(yearRegular)
-        ),
-
-        mainPlayoffs: calculateSeasonRecordSet(
-          buildSeasonRecords(yearPlayoffs)
-        ),
-      },
-    };
   }
 
+  const allTimeLeaders =
+    calculateAllTimeLeaderboards(
+      buildAllTimeFranchiseRecords(
+        allPerformances
+      )
+    );
+
+  const filteredRecords =
+    buildFilteredRecords(
+      regularSeason,
+      mainPlayoffs,
+      buildSeasonRecords(
+        completedRegularPerformances
+      ),
+      buildSeasonRecords(
+        completedPlayoffPerformances
+      )
+    );
+
   return {
-    individualGame: {
-      regularSeason: calculateRecordSet(regularSeason),
-      mainPlayoffs: calculateRecordSet(mainPlayoffs),
-    },
+    ...filteredRecords,
 
-    season: {
-      regularSeason: calculateSeasonRecordSet(
-        buildSeasonRecords(
-          completedRegularPerformances
-        )
-      ),
-
-      mainPlayoffs: calculateSeasonRecordSet(
-        buildSeasonRecords(
-          completedPlayoffPerformances
-        )
-      ),
-    },
-
-    allTime: calculateAllTimeRecordSet(
-      buildAllTimeFranchiseRecords(allPerformances)
+    allTime: firstAllTimeRecords(
+      allTimeLeaders
     ),
 
+    allTimeLeaderboards:
+      allTimeLeaders,
+
     bySeason,
+
     availableSeasons,
 
     completedSeasons: {
-      regularSeason: completedRegularSeasons,
-      mainPlayoffs: completedPlayoffSeasons,
+      regularSeason:
+        completedRegularSeasons,
+
+      mainPlayoffs:
+        completedPlayoffSeasons,
     },
   };
 }
