@@ -4,6 +4,8 @@ import {
   type HistoricalMatchup,
 } from "./sleeper";
 
+import { getSlootbowlResults } from "./slootbowlResults";
+
 export type RecordPhase =
   | "Regular Season"
   | "Main Playoffs";
@@ -96,6 +98,61 @@ export type AllTimeLeaderboardSet = {
     AllTimeFranchiseRecord[];
 };
 
+/*
+ * Stage 4: Slootbowl, playoff and streak records.
+ *
+ * These are additional exports. Existing RecordsTabs
+ * properties remain unchanged.
+ */
+
+export type FranchiseAchievement = {
+  rosterId: number;
+  championships: number;
+  championshipSeasons: string[];
+  slootbowlAppearances: number;
+  slootbowlSeasons: string[];
+  runnerUpFinishes: number;
+  runnerUpSeasons: string[];
+  playoffAppearances: number;
+  playoffSeasons: string[];
+  playoffWins: number;
+  playoffLosses: number;
+  playoffTies: number;
+};
+
+export type AchievementLeaderboards = {
+  championships: FranchiseAchievement[];
+  slootbowlAppearances: FranchiseAchievement[];
+  runnerUpFinishes: FranchiseAchievement[];
+  playoffAppearances: FranchiseAchievement[];
+  playoffWins: FranchiseAchievement[];
+  playoffLosses: FranchiseAchievement[];
+};
+
+export type StreakRecord = {
+  rosterId: number;
+  competition: Competition;
+  result: "win" | "loss";
+  length: number;
+  startSeason: string;
+  startWeek: number;
+  endSeason: string;
+  endWeek: number;
+};
+
+export type StreakLeaderboards = {
+  regularSeasonWinning: StreakRecord[];
+  regularSeasonLosing: StreakRecord[];
+  mainPlayoffsWinning: StreakRecord[];
+  mainPlayoffsLosing: StreakRecord[];
+};
+
+export type HistoricalAchievements = {
+  franchises: FranchiseAchievement[];
+  leaderboards: AchievementLeaderboards;
+  streaks: StreakLeaderboards;
+};
+
 export type CompetitionLeaderboards = {
   regularSeason: RecordLeaderboardSet;
   mainPlayoffs: RecordLeaderboardSet;
@@ -135,14 +192,18 @@ export type AllTimeRecords =
       regularSeason: string[];
       mainPlayoffs: string[];
     };
+    historicalAchievements:
+      HistoricalAchievements;
   };
 
 const LEADERBOARD_LIMIT = 10;
 
 function rounded(value: number): number {
-  return Math.round(
-    (value + Number.EPSILON) * 100
-  ) / 100;
+  return (
+    Math.round(
+      (value + Number.EPSILON) * 100
+    ) / 100
+  );
 }
 
 function isValidPerformance(
@@ -408,11 +469,13 @@ function calculateGameLeaderboards(
       "lowest"
     ),
 
-    mostPointsConcededInVictory: rankRecords(
-      winningGames,
-      (record) => record.opponentScore,
-      "highest"
-    ),
+    mostPointsConcededInVictory:
+      rankRecords(
+        winningGames,
+        (record) =>
+          record.opponentScore,
+        "highest"
+      ),
   };
 }
 
@@ -452,9 +515,10 @@ function firstGameRecords(
       leaders.lowestWinningScore
     ),
 
-    mostPointsConcededInVictory: firstOrNull(
-      leaders.mostPointsConcededInVictory
-    ),
+    mostPointsConcededInVictory:
+      firstOrNull(
+        leaders.mostPointsConcededInVictory
+      ),
   };
 }
 
@@ -781,23 +845,17 @@ function firstAllTimeRecords(
   };
 }
 
-function isFinalScore(
-  matchup: HistoricalMatchup
-): boolean {
-  return isValidPerformance(matchup);
-}
-
 function isRegularSeasonComplete(
   matchups: HistoricalMatchup[]
 ): boolean {
-  const finalWeek = matchups.filter(
-    (matchup) =>
-      matchup.week === 14 &&
-      matchup.phase === "Regular Season" &&
-      isFinalScore(matchup)
+  return (
+    matchups.filter(
+      (matchup) =>
+        matchup.week === 14 &&
+        matchup.phase === "Regular Season" &&
+        isValidPerformance(matchup)
+    ).length === 5
   );
-
-  return finalWeek.length === 5;
 }
 
 function arePlayoffsComplete(
@@ -807,7 +865,7 @@ function arePlayoffsComplete(
     (matchup) =>
       matchup.week === 17 &&
       matchup.phase === "Main Playoffs" &&
-      isFinalScore(matchup)
+      isValidPerformance(matchup)
   );
 }
 
@@ -878,17 +936,434 @@ function buildFilteredRecords(
   };
 }
 
+/*
+ * HISTORICAL ACHIEVEMENTS
+ *
+ * Playoff appearances are derived from
+ * participation in a main winners-bracket
+ * matchup, not the number of games played.
+ *
+ * A team with a bye still qualifies because
+ * it appears in a subsequent bracket round.
+ */
+
+function buildFranchiseAchievements(
+  performances: TeamPerformance[],
+  championshipResults: {
+    season: string;
+    championRosterId: number;
+    runnerUpRosterId: number;
+  }[]
+): FranchiseAchievement[] {
+  const franchises = new Map<
+    number,
+    FranchiseAchievement
+  >();
+
+  function ensure(
+    rosterId: number
+  ): FranchiseAchievement {
+    const existing =
+      franchises.get(rosterId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const created: FranchiseAchievement = {
+      rosterId,
+      championships: 0,
+      championshipSeasons: [],
+      slootbowlAppearances: 0,
+      slootbowlSeasons: [],
+      runnerUpFinishes: 0,
+      runnerUpSeasons: [],
+      playoffAppearances: 0,
+      playoffSeasons: [],
+      playoffWins: 0,
+      playoffLosses: 0,
+      playoffTies: 0,
+    };
+
+    franchises.set(rosterId, created);
+
+    return created;
+  }
+
+  for (const performance of performances) {
+    ensure(performance.rosterId);
+  }
+
+  const playoffAppearances =
+    new Map<number, Set<string>>();
+
+  for (const performance of performances) {
+    if (
+      performance.phase !==
+      "Main Playoffs"
+    ) {
+      continue;
+    }
+
+    const franchise = ensure(
+      performance.rosterId
+    );
+
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
+      franchise.playoffWins++;
+    } else if (
+      performance.score <
+      performance.opponentScore
+    ) {
+      franchise.playoffLosses++;
+    } else {
+      franchise.playoffTies++;
+    }
+
+    let years = playoffAppearances.get(
+      performance.rosterId
+    );
+
+    if (!years) {
+      years = new Set<string>();
+
+      playoffAppearances.set(
+        performance.rosterId,
+        years
+      );
+    }
+
+    years.add(performance.season);
+  }
+
+  for (const [rosterId, years] of
+    playoffAppearances.entries()) {
+    const franchise = ensure(rosterId);
+
+    franchise.playoffSeasons =
+      Array.from(years).sort(
+        (a, b) => Number(a) - Number(b)
+      );
+
+    franchise.playoffAppearances =
+      franchise.playoffSeasons.length;
+  }
+
+  for (const result of championshipResults) {
+    const champion = ensure(
+      result.championRosterId
+    );
+
+    const runnerUp = ensure(
+      result.runnerUpRosterId
+    );
+
+    champion.championships++;
+    champion.slootbowlAppearances++;
+
+    champion.championshipSeasons.push(
+      result.season
+    );
+
+    champion.slootbowlSeasons.push(
+      result.season
+    );
+
+    runnerUp.runnerUpFinishes++;
+    runnerUp.slootbowlAppearances++;
+
+    runnerUp.runnerUpSeasons.push(
+      result.season
+    );
+
+    runnerUp.slootbowlSeasons.push(
+      result.season
+    );
+  }
+
+  return Array.from(franchises.values())
+    .sort(
+      (a, b) =>
+        a.rosterId - b.rosterId
+    );
+}
+
+function calculateAchievementLeaderboards(
+  franchises: FranchiseAchievement[]
+): AchievementLeaderboards {
+  return {
+    championships: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.championships > 0
+      ),
+      (record) => record.championships,
+      "highest"
+    ),
+
+    slootbowlAppearances: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.slootbowlAppearances > 0
+      ),
+      (record) =>
+        record.slootbowlAppearances,
+      "highest"
+    ),
+
+    runnerUpFinishes: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.runnerUpFinishes > 0
+      ),
+      (record) =>
+        record.runnerUpFinishes,
+      "highest"
+    ),
+
+    playoffAppearances: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffAppearances > 0
+      ),
+      (record) =>
+        record.playoffAppearances,
+      "highest"
+    ),
+
+    playoffWins: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffWins > 0
+      ),
+      (record) =>
+        record.playoffWins,
+      "highest"
+    ),
+
+    playoffLosses: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffLosses > 0
+      ),
+      (record) =>
+        record.playoffLosses,
+      "highest"
+    ),
+  };
+}
+
+/*
+ * STREAKS
+ *
+ * Each franchise has its own chronological
+ * sequence for each competition.
+ *
+ * Ties break both winning and losing streaks.
+ *
+ * Streaks may cross season boundaries, but
+ * regular season and main playoffs never mix.
+ *
+ * Every uninterrupted run is stored, rather
+ * than just the longest run per franchise.
+ * This lets the leaderboard show genuine
+ * historical top-ten streaks.
+ */
+
+function buildStreaks(
+  performances: TeamPerformance[],
+  competition: Competition,
+  result: "win" | "loss"
+): StreakRecord[] {
+  const requiredPhase: RecordPhase =
+    competition === "regularSeason"
+      ? "Regular Season"
+      : "Main Playoffs";
+
+  const byFranchise = new Map<
+    number,
+    TeamPerformance[]
+  >();
+
+  for (const performance of performances) {
+    if (
+      performance.phase !== requiredPhase
+    ) {
+      continue;
+    }
+
+    const games =
+      byFranchise.get(
+        performance.rosterId
+      ) ?? [];
+
+    games.push(performance);
+
+    byFranchise.set(
+      performance.rosterId,
+      games
+    );
+  }
+
+  const streaks: StreakRecord[] = [];
+
+  for (const [rosterId, games] of
+    byFranchise.entries()) {
+    games.sort(
+      (a, b) =>
+        Number(a.season) -
+          Number(b.season) ||
+        a.week - b.week
+    );
+
+    let start: TeamPerformance | null =
+      null;
+
+    let end: TeamPerformance | null =
+      null;
+
+    let length = 0;
+
+    function finishStreak() {
+      if (
+        start === null ||
+        end === null ||
+        length === 0
+      ) {
+        return;
+      }
+
+      streaks.push({
+        rosterId,
+        competition,
+        result,
+        length,
+        startSeason: start.season,
+        startWeek: start.week,
+        endSeason: end.season,
+        endWeek: end.week,
+      });
+
+      start = null;
+      end = null;
+      length = 0;
+    }
+
+    for (const game of games) {
+      const won =
+        game.score >
+        game.opponentScore;
+
+      const lost =
+        game.score <
+        game.opponentScore;
+
+      const matches =
+        result === "win"
+          ? won
+          : lost;
+
+      if (!matches) {
+        finishStreak();
+        continue;
+      }
+
+      if (length === 0) {
+        start = game;
+      }
+
+      end = game;
+      length++;
+    }
+
+    finishStreak();
+  }
+
+  return streaks;
+}
+
+function rankStreaks(
+  streaks: StreakRecord[]
+): StreakRecord[] {
+  const sorted = [...streaks].sort(
+    (a, b) =>
+      b.length - a.length ||
+      Number(a.startSeason) -
+        Number(b.startSeason) ||
+      a.startWeek - b.startWeek ||
+      a.rosterId - b.rosterId
+  );
+
+  if (
+    sorted.length <=
+    LEADERBOARD_LIMIT
+  ) {
+    return sorted;
+  }
+
+  const cutoff =
+    sorted[LEADERBOARD_LIMIT - 1].length;
+
+  return sorted.filter(
+    (streak, index) =>
+      index < LEADERBOARD_LIMIT ||
+      streak.length === cutoff
+  );
+}
+
+function calculateStreakLeaderboards(
+  performances: TeamPerformance[]
+): StreakLeaderboards {
+  return {
+    regularSeasonWinning: rankStreaks(
+      buildStreaks(
+        performances,
+        "regularSeason",
+        "win"
+      )
+    ),
+
+    regularSeasonLosing: rankStreaks(
+      buildStreaks(
+        performances,
+        "regularSeason",
+        "loss"
+      )
+    ),
+
+    mainPlayoffsWinning: rankStreaks(
+      buildStreaks(
+        performances,
+        "mainPlayoffs",
+        "win"
+      )
+    ),
+
+    mainPlayoffsLosing: rankStreaks(
+      buildStreaks(
+        performances,
+        "mainPlayoffs",
+        "loss"
+      )
+    ),
+  };
+}
+
 export async function getAllTimeRecords():
   Promise<AllTimeRecords> {
   const seasons =
     await getHistoricalData();
 
-  const allPerformances = seasons.flatMap(
-    (season) =>
-      buildPerformances(
-        season.matchups
-      )
-  );
+  const allPerformances =
+    seasons.flatMap(
+      (season) =>
+        buildPerformances(
+          season.matchups
+        )
+    );
 
   const regularSeason =
     allPerformances.filter(
@@ -904,17 +1379,18 @@ export async function getAllTimeRecords():
         "Main Playoffs"
     );
 
-  const availableSeasons = Array.from(
-    new Set(
-      seasons.map(
-        (season) =>
-          season.league.season
+  const availableSeasons =
+    Array.from(
+      new Set(
+        seasons.map(
+          (season) =>
+            season.league.season
+        )
       )
-    )
-  ).sort(
-    (a, b) =>
-      Number(b) - Number(a)
-  );
+    ).sort(
+      (a, b) =>
+        Number(b) - Number(a)
+    );
 
   const completedRegularSeasons =
     seasons
@@ -974,12 +1450,17 @@ export async function getAllTimeRecords():
           performance.season === year
       );
 
-    bySeason[year] = buildFilteredRecords(
-      yearRegular,
-      yearPlayoffs,
-      buildSeasonRecords(yearRegular),
-      buildSeasonRecords(yearPlayoffs)
-    );
+    bySeason[year] =
+      buildFilteredRecords(
+        yearRegular,
+        yearPlayoffs,
+        buildSeasonRecords(
+          yearRegular
+        ),
+        buildSeasonRecords(
+          yearPlayoffs
+        )
+      );
   }
 
   const allTimeLeaders =
@@ -1000,6 +1481,65 @@ export async function getAllTimeRecords():
         completedPlayoffPerformances
       )
     );
+
+  /*
+   * Only seasons with completed main
+   * playoffs are eligible for verified
+   * Slootbowl championship results.
+   */
+
+  const completedThroughSeason =
+    completedPlayoffSeasons.length > 0
+      ? Math.max(
+          ...completedPlayoffSeasons.map(
+            Number
+          )
+        )
+      : 0;
+
+  const verifiedSlootbowls =
+    completedThroughSeason > 0
+      ? await getSlootbowlResults(
+          seasons,
+          completedThroughSeason
+        )
+      : [];
+
+  const championshipResults =
+    verifiedSlootbowls
+      .filter((result) =>
+        completedPlayoffSeasons.includes(
+          String(result.season)
+        )
+      )
+      .map((result) => ({
+        season: String(result.season),
+        championRosterId:
+          result.championRosterId,
+        runnerUpRosterId:
+          result.runnerUpRosterId,
+      }));
+
+  const franchises =
+    buildFranchiseAchievements(
+      allPerformances,
+      championshipResults
+    );
+
+  const historicalAchievements:
+    HistoricalAchievements = {
+      franchises,
+
+      leaderboards:
+        calculateAchievementLeaderboards(
+          franchises
+        ),
+
+      streaks:
+        calculateStreakLeaderboards(
+          allPerformances
+        ),
+    };
 
   return {
     ...filteredRecords,
@@ -1022,5 +1562,7 @@ export async function getAllTimeRecords():
       mainPlayoffs:
         completedPlayoffSeasons,
     },
+
+    historicalAchievements,
   };
 }
