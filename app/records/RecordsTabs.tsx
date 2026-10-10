@@ -133,7 +133,8 @@ function buildGameCategories(
         "The biggest shootouts in SFL history.",
       record: records.highestCombinedScore,
       leaderboard: leaders.highestCombinedScore,
-      metric: (r) => r.score + r.opponentScore,
+      metric: (r) =>
+        r.score + r.opponentScore,
       format: (r) =>
         formatPoints(r.score + r.opponentScore),
       suffix: "pts",
@@ -145,7 +146,8 @@ function buildGameCategories(
         "Two teams united in offensive incompetence.",
       record: records.lowestCombinedScore,
       leaderboard: leaders.lowestCombinedScore,
-      metric: (r) => r.score + r.opponentScore,
+      metric: (r) =>
+        r.score + r.opponentScore,
       format: (r) =>
         formatPoints(r.score + r.opponentScore),
       suffix: "pts",
@@ -170,6 +172,19 @@ function buildGameCategories(
       leaderboard: leaders.lowestWinningScore,
       metric: (r) => r.score,
       format: (r) => formatPoints(r.score),
+      suffix: "pts",
+    },
+    {
+      key: "mostPointsConcededInVictory",
+      title: "Most Points Conceded in a Victory",
+      description:
+        "The highest opponent scores overcome in victory. Winning the hard way.",
+      record: records.mostPointsConcededInVictory,
+      leaderboard:
+        leaders.mostPointsConcededInVictory,
+      metric: (r) => r.opponentScore,
+      format: (r) =>
+        formatPoints(r.opponentScore),
       suffix: "pts",
     },
   ];
@@ -211,8 +226,31 @@ function buildSeasonCategories(
       record: records.mostPointsAgainst,
       leaderboard: leaders.mostPointsAgainst,
       metric: (r) => r.pointsAgainst,
-      format: (r) => formatPoints(r.pointsAgainst),
+      format: (r) =>
+        formatPoints(r.pointsAgainst),
       suffix: "pts",
+    },
+    {
+      key: "mostGamesOver150",
+      title: "Most 150+ Point Games",
+      description:
+        "The most games scoring at least 150 points in a single season.",
+      record: records.mostGamesOver150,
+      leaderboard: leaders.mostGamesOver150,
+      metric: (r) => r.gamesOver150,
+      format: (r) => `${r.gamesOver150}`,
+      suffix: "games",
+    },
+    {
+      key: "mostGames100OrFewer",
+      title: "Most Games Scoring 100 or Fewer",
+      description:
+        "The most games scoring 100 points or less in a single season.",
+      record: records.mostGames100OrFewer,
+      leaderboard: leaders.mostGames100OrFewer,
+      metric: (r) => r.games100OrFewer,
+      format: (r) => `${r.games100OrFewer}`,
+      suffix: "games",
     },
   ];
 
@@ -254,7 +292,8 @@ function buildSeasonCategories(
       record: records.fewestPointsAgainst,
       leaderboard: leaders.fewestPointsAgainst,
       metric: (r) => r.pointsAgainst,
-      format: (r) => formatPoints(r.pointsAgainst),
+      format: (r) =>
+        formatPoints(r.pointsAgainst),
       suffix: "pts",
     },
     {
@@ -281,6 +320,8 @@ function buildSeasonCategories(
         formatDifferential(r.pointDifferential),
       suffix: "pts",
     },
+    categories[3],
+    categories[4],
   ];
 }
 
@@ -330,7 +371,8 @@ function buildAllTimeCategories(
       record: records.mostPointsAgainst,
       leaderboard: leaders.mostPointsAgainst,
       metric: (r) => r.pointsAgainst,
-      format: (r) => formatPoints(r.pointsAgainst),
+      format: (r) =>
+        formatPoints(r.pointsAgainst),
       suffix: "pts",
     },
     {
@@ -418,7 +460,9 @@ export default function RecordsTabs({
             }
             style={selectStyle}
           >
-            <option value="all">All Seasons</option>
+            <option value="all">
+              All Seasons
+            </option>
 
             {records.availableSeasons.map((year) => (
               <option key={year} value={year}>
@@ -427,12 +471,16 @@ export default function RecordsTabs({
             ))}
           </select>
 
-          <p style={subheadingStyle}>COMPETITION</p>
+          <p style={subheadingStyle}>
+            COMPETITION
+          </p>
 
           <div style={competitionTabsStyle}>
             <TabButton
               label="Regular Season"
-              active={competition === "regularSeason"}
+              active={
+                competition === "regularSeason"
+              }
               onClick={() =>
                 setCompetition("regularSeason")
               }
@@ -440,7 +488,9 @@ export default function RecordsTabs({
 
             <TabButton
               label="Main Playoffs"
-              active={competition === "mainPlayoffs"}
+              active={
+                competition === "mainPlayoffs"
+              }
               onClick={() =>
                 setCompetition("mainPlayoffs")
               }
@@ -450,10 +500,10 @@ export default function RecordsTabs({
           {activeTab === "season" &&
             !isSeasonComplete && (
               <p style={noticeStyle}>
-                Season in Progress — these totals are
-                provisional and are excluded from
-                all-season records until this
-                competition is complete.
+                Season in Progress — these totals
+                are provisional and are excluded
+                from all-season records until
+                this competition is complete.
               </p>
             )}
         </div>
@@ -465,7 +515,9 @@ export default function RecordsTabs({
           title="Individual Game"
           subtitle="The greatest performances, closest finishes and most spectacular disasters."
           categories={buildGameCategories(
-            filteredRecords.individualGame[competition],
+            filteredRecords.individualGame[
+              competition
+            ],
             filteredRecords.leaderboards.individualGame[
               competition
             ]
@@ -484,7 +536,9 @@ export default function RecordsTabs({
           title="Season Long"
           subtitle="The best and worst campaigns across SFL history."
           categories={buildSeasonCategories(
-            filteredRecords.season[competition],
+            filteredRecords.season[
+              competition
+            ],
             filteredRecords.leaderboards.season[
               competition
             ],
@@ -569,7 +623,8 @@ function ExpandableRecordCard<
   detailLabel: (record: T) => string;
   metaLabel: (record: T) => string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] =
+    useState(false);
 
   const {
     record,
@@ -594,7 +649,8 @@ function ExpandableRecordCard<
       ) === leadingValue
   );
 
-  const isJointRecord = jointHolders.length > 1;
+  const isJointRecord =
+    jointHolders.length > 1;
 
   let previousMetric: number | null = null;
   let previousRank = 0;
@@ -647,8 +703,8 @@ function ExpandableRecordCard<
 
       {isJointRecord && (
         <p style={jointNoticeStyle}>
-          {jointHolders.length} performances share
-          this record.
+          {jointHolders.length} performances
+          share this record.
         </p>
       )}
 
@@ -679,59 +735,65 @@ function ExpandableRecordCard<
                 HISTORICAL LEADERBOARD
               </p>
 
-              {leaderboard.map((entry, index) => {
-                const currentMetric = Math.round(
-                  (
-                    metric(entry) +
-                    Number.EPSILON
-                  ) * 100
-                );
+              {leaderboard.map(
+                (entry, index) => {
+                  const currentMetric =
+                    Math.round(
+                      (
+                        metric(entry) +
+                        Number.EPSILON
+                      ) * 100
+                    );
 
-                const rank =
-                  previousMetric === currentMetric
-                    ? previousRank
-                    : index + 1;
+                  const rank =
+                    previousMetric === currentMetric
+                      ? previousRank
+                      : index + 1;
 
-                previousMetric = currentMetric;
-                previousRank = rank;
+                  previousMetric =
+                    currentMetric;
 
-                return (
-                  <div
-                    key={`${category.key}-${index}`}
-                    style={{
-                      ...leaderboardRowStyle,
-                      borderBottom:
-                        index === leaderboard.length - 1
-                          ? "none"
-                          : "1px solid #27303b",
-                    }}
-                  >
-                    <div style={rankStyle}>
-                      {rank}
-                    </div>
+                  previousRank = rank;
 
-                    <div style={leaderboardInfoStyle}>
-                      <p style={leaderboardTeamStyle}>
-                        {primaryLabel(entry)}
-                      </p>
+                  return (
+                    <div
+                      key={`${category.key}-${index}`}
+                      style={{
+                        ...leaderboardRowStyle,
+                        borderBottom:
+                          index ===
+                          leaderboard.length - 1
+                            ? "none"
+                            : "1px solid #27303b",
+                      }}
+                    >
+                      <div style={rankStyle}>
+                        {rank}
+                      </div>
 
-                      <p style={leaderboardDetailStyle}>
-                        {detailLabel(entry)}
-                      </p>
-
-                      {metaLabel(entry) && (
-                        <p style={leaderboardMetaStyle}>
-                          {metaLabel(entry)}
+                      <div style={leaderboardInfoStyle}>
+                        <p style={leaderboardTeamStyle}>
+                          {primaryLabel(entry)}
                         </p>
-                      )}
-                    </div>
 
-                    <div style={leaderboardValueStyle}>
-                      {format(entry)}
+                        <p style={leaderboardDetailStyle}>
+                          {detailLabel(entry)}
+                        </p>
+
+                        {metaLabel(entry) && (
+                          <p style={leaderboardMetaStyle}>
+                            {metaLabel(entry)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div style={leaderboardValueStyle}>
+                        {format(entry)}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
 
               <p style={leaderboardFootnoteStyle}>
                 Top ten performances, including
