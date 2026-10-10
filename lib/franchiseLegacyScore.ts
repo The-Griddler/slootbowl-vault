@@ -15,9 +15,14 @@ import type {
   AllSlootCareerPlayer,
 } from "./allSlootCareer";
 
+import type {
+  FranchiseChampionship,
+} from "./franchiseChampionships";
+
 export const FRANCHISE_LEGACY_POINTS = {
   start: 5,
   starterFantasyPoint: 0.5,
+  slootbowlChampionship: 150,
 
   seasonalGrades: {
     Legendary: 150,
@@ -52,8 +57,12 @@ export type FranchiseLegacyScore = {
 
   seasonalGradePoints: number;
   allSlootHonoursPoints: number;
-  achievementPoints: number;
 
+  championships: number;
+  championshipSeasons: string[];
+  championshipPoints: number;
+
+  achievementPoints: number;
   totalFranchiseLegacyPoints: number;
 };
 
@@ -75,8 +84,6 @@ function buildSeasonalContributions(
     SeasonalContribution
   >();
 
-  // Start with roster membership so players
-  // with zero starts are still represented.
   for (const career of careers) {
     for (const [
       season,
@@ -98,7 +105,6 @@ function buildSeasonalContributions(
     }
   }
 
-  // Add official starts and production.
   for (const season of historicalSeasons) {
     for (const matchup of season.matchups) {
       if (
@@ -189,7 +195,8 @@ export function calculateFranchiseLegacyScores(
   careers: FranchisePlayerCareer[],
   historicalSeasons: HistoricalSeason[] = [],
   seasonalGrades: SFLPlayerSeasonGrade[] = [],
-  allSlootCareers: AllSlootCareerPlayer[] = []
+  allSlootCareers: AllSlootCareerPlayer[] = [],
+  franchiseChampionships: FranchiseChampionship[] = []
 ): FranchiseLegacyScore[] {
   const contributions =
     buildSeasonalContributions(
@@ -200,7 +207,15 @@ export function calculateFranchiseLegacyScores(
   const gradePoints = new Map<string, number>();
   const honoursPoints = new Map<string, number>();
 
-  // Attribute seasonal grades.
+  const championshipMap = new Map(
+    franchiseChampionships.map(
+      (championship) => [
+        `${championship.rosterId}:${championship.playerId}`,
+        championship,
+      ] as const
+    )
+  );
+
   for (const grade of seasonalGrades) {
     const rosterId = findAwardFranchise(
       grade.playerId,
@@ -223,7 +238,6 @@ export function calculateFranchiseLegacyScores(
     );
   }
 
-  // Attribute All-Sloot honours.
   for (const player of allSlootCareers) {
     for (const award of player.awards) {
       const rosterId = findAwardFranchise(
@@ -273,9 +287,23 @@ export function calculateFranchiseLegacyScores(
       const allSlootHonoursPoints =
         honoursPoints.get(key) ?? 0;
 
+      const championship =
+        championshipMap.get(key);
+
+      const championships =
+        championship?.championships ?? 0;
+
+      const championshipSeasons =
+        championship?.championshipSeasons ?? [];
+
+      const championshipPoints =
+        championships *
+        FRANCHISE_LEGACY_POINTS.slootbowlChampionship;
+
       const achievementPoints =
         seasonalGradePoints +
-        allSlootHonoursPoints;
+        allSlootHonoursPoints +
+        championshipPoints;
 
       return {
         playerId: career.playerId,
@@ -295,6 +323,11 @@ export function calculateFranchiseLegacyScores(
 
         seasonalGradePoints,
         allSlootHonoursPoints,
+
+        championships,
+        championshipSeasons,
+        championshipPoints,
+
         achievementPoints,
 
         totalFranchiseLegacyPoints:
