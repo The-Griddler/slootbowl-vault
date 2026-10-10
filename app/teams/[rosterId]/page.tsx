@@ -1,18 +1,50 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import { FRANCHISES } from "../../../lib/franchises";
+
 import {
   getHistoricalData,
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
-import { getPlayerNames } from "../../../lib/players";
+
+import {
+  getPlayerNames,
+  getAllSlootPlayerDirectory,
+} from "../../../lib/players";
+
 import {
   getLoveTriangleHistory,
 } from "../../../lib/loveTriangle";
+
 import {
   isLoveTriangleTeam,
 } from "../../../lib/rivalries";
+
+import {
+  getFranchisePlayerCareers,
+} from "../../../lib/franchiseLegacy";
+
+import {
+  calculateFranchiseLegacyScores,
+} from "../../../lib/franchiseLegacyScore";
+
+import {
+  getFranchiseChampionships,
+} from "../../../lib/franchiseChampionships";
+
+import {
+  calculateHistoricalSeasonGrades,
+} from "../../../lib/seasonGrades";
+
+import {
+  calculateAllSloot,
+} from "../../../lib/allSloot";
+
+import {
+  calculateAllSlootCareers,
+} from "../../../lib/allSlootCareer";
 
 import FranchiseTabs from "./FranchiseTabs";
 import TeamRecords from "./TeamRecords";
@@ -171,25 +203,24 @@ export default async function FranchisePage({
       ? "George Barnes Memorial Trophy"
       : "Ryan Birr Memorial Shield";
 
-  // Load every available SFL season.
-  const historicalData =
-    await getHistoricalData();
+  // =====================================
+  // HISTORICAL SFL DATA
+  // =====================================
+
+  const [
+    historicalData,
+    franchiseCareers,
+    playerDirectory,
+  ] = await Promise.all([
+    getHistoricalData(),
+    getFranchisePlayerCareers(),
+    getAllSlootPlayerDirectory(),
+  ]);
 
   const allMatchups = historicalData.flatMap(
     (season) => season.matchups
   );
 
-  // Calculate the Love Triangle competition
-  // across every historical season.
-  const loveTriangleHistory =
-    getLoveTriangleHistory(
-      allMatchups,
-      historicalData.map(
-        (season) => season.league.season
-      )
-    );
-
-  // Only games involving this franchise.
   const franchiseMatchups =
     allMatchups.filter(
       (matchup) =>
@@ -197,8 +228,85 @@ export default async function FranchisePage({
         matchup.rosterB === rosterId
     );
 
-  // Resolve historical starting players.
-  const playerIds =
+  // =====================================
+  // FRANCHISE LEGENDS SCORING
+  // =====================================
+
+  const currentYear =
+    new Date().getUTCFullYear();
+
+  const completedThroughSeason =
+    currentYear - 1;
+
+  // Seasonal grades are official only
+  // for completed SFL seasons.
+  const seasonalGrades =
+    calculateHistoricalSeasonGrades(
+      historicalData,
+      playerDirectory,
+      completedThroughSeason
+    );
+
+  // Calculate All-Sloot honours using
+  // completed seasons only.
+  const completedAllSlootSeasons =
+    historicalData
+      .filter(
+        (season) =>
+          Number(season.league.season) <=
+          completedThroughSeason
+      )
+      .map((season) =>
+        calculateAllSloot(
+          season,
+          playerDirectory
+        )
+      );
+
+  const allSlootCareers =
+    calculateAllSlootCareers(
+      completedAllSlootSeasons
+    );
+
+  // Award championships to every player
+  // on the winning championship-week
+  // roster, including bench players.
+  const franchiseChampionships =
+    await getFranchiseChampionships(
+      historicalData,
+      completedThroughSeason
+    );
+
+  // Use exactly the same scoring engine
+  // as the Franchise Legends preview.
+  const allFranchiseLegends =
+    calculateFranchiseLegacyScores(
+      franchiseCareers,
+      historicalData,
+      seasonalGrades,
+      allSlootCareers,
+      franchiseChampionships
+    );
+
+  // Only the current franchise's
+  // five highest-ranked legends.
+  const franchiseLegends =
+    allFranchiseLegends
+      .filter(
+        (player) =>
+          player.rosterId === rosterId
+      )
+      .slice(0, 5);
+
+  // =====================================
+  // PLAYER NAMES
+  // =====================================
+
+  // Include existing starting players
+  // AND the top five Franchise Legends.
+  // This ensures bench-only legends
+  // also have their names displayed.
+  const startingPlayerIds =
     franchiseMatchups.flatMap(
       (matchup) =>
         matchup.rosterA === rosterId
@@ -206,8 +314,32 @@ export default async function FranchisePage({
           : matchup.startersB
     );
 
+  const legendPlayerIds =
+    franchiseLegends.map(
+      (player) => player.playerId
+    );
+
+  const playerIds = [
+    ...new Set([
+      ...startingPlayerIds,
+      ...legendPlayerIds,
+    ]),
+  ];
+
   const playerNames =
     await getPlayerNames(playerIds);
+
+  // =====================================
+  // LOVE TRIANGLE HISTORY
+  // =====================================
+
+  const loveTriangleHistory =
+    getLoveTriangleHistory(
+      allMatchups,
+      historicalData.map(
+        (season) => season.league.season
+      )
+    );
 
   const franchiseNames: Record<
     number,
@@ -219,7 +351,10 @@ export default async function FranchisePage({
     ])
   );
 
-  // Build regular-season franchise history.
+  // =====================================
+  // REGULAR-SEASON FRANCHISE HISTORY
+  // =====================================
+
   const seasons = historicalData
     .map((season) => {
       const year = season.league.season;
@@ -276,7 +411,10 @@ export default async function FranchisePage({
         Number(a.year)
     );
 
-  // SFL regular-season career totals.
+  // =====================================
+  // SFL CAREER RECORD
+  // =====================================
+
   const career = seasons.reduce(
     (total, season) => ({
       wins:
@@ -667,6 +805,9 @@ export default async function FranchisePage({
       }
       playerNames={
         playerNames
+      }
+      franchiseLegends={
+        franchiseLegends
       }
     />
   );
