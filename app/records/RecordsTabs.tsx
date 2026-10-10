@@ -1,1120 +1,1568 @@
 
-"use client";
+import {
+  getHistoricalData,
+  type HistoricalMatchup,
+} from "./sleeper";
 
-import { useState } from "react";
+import { getSlootbowlResults } from "./slootbowlResults";
 
-import type {
-  AllTimeRecords,
-  AllTimeFranchiseRecord,
-  LeagueRecord,
-  RecordSet,
-  SeasonRecord,
-  SeasonRecordSet,
-  AllTimeRecordSet,
-  RecordLeaderboardSet,
-  SeasonLeaderboardSet,
-  AllTimeLeaderboardSet,
-} from "../../lib/records";
+export type RecordPhase =
+  | "Regular Season"
+  | "Main Playoffs";
 
-import { getFranchiseName } from "../../lib/franchises";
+export type Competition =
+  | "regularSeason"
+  | "mainPlayoffs";
 
-type RecordsTab = "games" | "season" | "allTime";
-type Competition = "regularSeason" | "mainPlayoffs";
-
-type RecordCategory<T> = {
-  key: string;
-  title: string;
-  description: string;
-  record: T | null;
-  leaderboard: T[];
-  metric: (record: T) => number;
-  format: (record: T) => string;
-  suffix?: string;
+export type TeamPerformance = {
+  season: string;
+  week: number;
+  phase: RecordPhase;
+  rosterId: number;
+  score: number;
+  opponentRosterId: number;
+  opponentScore: number;
 };
 
-const formatPoints = (value: number) =>
-  value.toFixed(2);
+export type LeagueRecord = TeamPerformance & {
+  margin: number;
+};
 
-const formatDifferential = (value: number) =>
-  value >= 0
-    ? `+${value.toFixed(2)}`
-    : value.toFixed(2);
+export type SeasonRecord = {
+  season: string;
+  rosterId: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  pointDifferential: number;
+  gamesOver150: number;
+  games100OrFewer: number;
+};
 
-function franchiseName(rosterId: number) {
-  return getFranchiseName(rosterId);
-}
+export type RecordSet = {
+  highestTeamScore: LeagueRecord | null;
+  lowestTeamScore: LeagueRecord | null;
+  biggestWinningMargin: LeagueRecord | null;
+  closestGame: LeagueRecord | null;
+  highestCombinedScore: LeagueRecord | null;
+  lowestCombinedScore: LeagueRecord | null;
+  highestLosingScore: LeagueRecord | null;
+  lowestWinningScore: LeagueRecord | null;
+  mostPointsConcededInVictory: LeagueRecord | null;
+};
 
-function matchupLabel(record: LeagueRecord) {
+export type SeasonRecordSet = {
+  mostWins: SeasonRecord | null;
+  fewestWins: SeasonRecord | null;
+  mostPointsFor: SeasonRecord | null;
+  fewestPointsFor: SeasonRecord | null;
+  mostPointsAgainst: SeasonRecord | null;
+  fewestPointsAgainst: SeasonRecord | null;
+  bestPointDifferential: SeasonRecord | null;
+  worstPointDifferential: SeasonRecord | null;
+  mostGamesOver150: SeasonRecord | null;
+  mostGames100OrFewer: SeasonRecord | null;
+};
+
+export type AllTimeFranchiseRecord = {
+  rosterId: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  pointDifferential: number;
+};
+
+export type AllTimeRecordSet = {
+  mostWins: AllTimeFranchiseRecord | null;
+  fewestWins: AllTimeFranchiseRecord | null;
+  mostPointsFor: AllTimeFranchiseRecord | null;
+  mostPointsAgainst: AllTimeFranchiseRecord | null;
+  bestPointDifferential: AllTimeFranchiseRecord | null;
+  worstPointDifferential: AllTimeFranchiseRecord | null;
+};
+
+export type RecordLeaderboardSet = {
+  [K in keyof RecordSet]: LeagueRecord[];
+};
+
+export type SeasonLeaderboardSet = {
+  [K in keyof SeasonRecordSet]: SeasonRecord[];
+};
+
+export type AllTimeLeaderboardSet = {
+  [K in keyof AllTimeRecordSet]:
+    AllTimeFranchiseRecord[];
+};
+
+/*
+ * Stage 4: Slootbowl, playoff and streak records.
+ *
+ * These are additional exports. Existing RecordsTabs
+ * properties remain unchanged.
+ */
+
+export type FranchiseAchievement = {
+  rosterId: number;
+  championships: number;
+  championshipSeasons: string[];
+  slootbowlAppearances: number;
+  slootbowlSeasons: string[];
+  runnerUpFinishes: number;
+  runnerUpSeasons: string[];
+  playoffAppearances: number;
+  playoffSeasons: string[];
+  playoffWins: number;
+  playoffLosses: number;
+  playoffTies: number;
+};
+
+export type AchievementLeaderboards = {
+  championships: FranchiseAchievement[];
+  slootbowlAppearances: FranchiseAchievement[];
+  runnerUpFinishes: FranchiseAchievement[];
+  playoffAppearances: FranchiseAchievement[];
+  playoffWins: FranchiseAchievement[];
+  playoffLosses: FranchiseAchievement[];
+};
+
+export type StreakRecord = {
+  rosterId: number;
+  competition: Competition;
+  result: "win" | "loss";
+  length: number;
+  startSeason: string;
+  startWeek: number;
+  endSeason: string;
+  endWeek: number;
+};
+
+export type StreakLeaderboards = {
+  regularSeasonWinning: StreakRecord[];
+  regularSeasonLosing: StreakRecord[];
+  mainPlayoffsWinning: StreakRecord[];
+  mainPlayoffsLosing: StreakRecord[];
+};
+
+export type HistoricalAchievements = {
+  franchises: FranchiseAchievement[];
+  leaderboards: AchievementLeaderboards;
+  streaks: StreakLeaderboards;
+};
+
+export type CompetitionLeaderboards = {
+  regularSeason: RecordLeaderboardSet;
+  mainPlayoffs: RecordLeaderboardSet;
+};
+
+export type SeasonCompetitionLeaderboards = {
+  regularSeason: SeasonLeaderboardSet;
+  mainPlayoffs: SeasonLeaderboardSet;
+};
+
+export type FilteredSeasonRecords = {
+  individualGame: {
+    regularSeason: RecordSet;
+    mainPlayoffs: RecordSet;
+  };
+  season: {
+    regularSeason: SeasonRecordSet;
+    mainPlayoffs: SeasonRecordSet;
+  };
+  leaderboards: {
+    individualGame: CompetitionLeaderboards;
+    season: SeasonCompetitionLeaderboards;
+  };
+};
+
+export type AllTimeRecords =
+  FilteredSeasonRecords & {
+    allTime: AllTimeRecordSet;
+    allTimeLeaderboards:
+      AllTimeLeaderboardSet;
+    bySeason: Record<
+      string,
+      FilteredSeasonRecords
+    >;
+    availableSeasons: string[];
+    completedSeasons: {
+      regularSeason: string[];
+      mainPlayoffs: string[];
+    };
+    historicalAchievements:
+      HistoricalAchievements;
+  };
+
+const LEADERBOARD_LIMIT = 10;
+
+function rounded(value: number): number {
   return (
-    `${franchiseName(record.rosterId)} ` +
-    `${record.score.toFixed(2)} vs ` +
-    `${franchiseName(record.opponentRosterId)} ` +
-    `${record.opponentScore.toFixed(2)}`
+    Math.round(
+      (value + Number.EPSILON) * 100
+    ) / 100
   );
 }
 
-function gameDescription(record: LeagueRecord) {
+function isValidPerformance(
+  matchup: HistoricalMatchup
+): boolean {
   return (
-    `${record.season} · Week ${record.week} · ` +
-    record.phase
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
+    (
+      matchup.scoreA !== 0 ||
+      matchup.scoreB !== 0
+    )
   );
 }
 
-function seasonDescription(record: SeasonRecord) {
-  return (
-    `${record.season} · ` +
-    `${record.wins}W-${record.losses}L` +
-    (record.ties ? `-${record.ties}T` : "")
-  );
-}
+function buildPerformances(
+  matchups: HistoricalMatchup[]
+): TeamPerformance[] {
+  const performances: TeamPerformance[] = [];
 
-function careerDescription(
-  record: AllTimeFranchiseRecord
-) {
-  return (
-    `${record.wins}W-${record.losses}L` +
-    (record.ties ? `-${record.ties}T` : "")
-  );
-}
+  for (const matchup of matchups) {
+    if (
+      matchup.phase !== "Regular Season" &&
+      matchup.phase !== "Main Playoffs"
+    ) {
+      continue;
+    }
 
-function buildGameCategories(
-  records: RecordSet,
-  leaders: RecordLeaderboardSet
-): RecordCategory<LeagueRecord>[] {
-  return [
-    {
-      key: "highestTeamScore",
-      title: "Highest Team Score",
-      description:
-        "The greatest single-game team performances.",
-      record: records.highestTeamScore,
-      leaderboard: leaders.highestTeamScore,
-      metric: (r) => r.score,
-      format: (r) => formatPoints(r.score),
-      suffix: "pts",
-    },
-    {
-      key: "lowestTeamScore",
-      title: "Lowest Team Score",
-      description:
-        "The most miserable single-game totals.",
-      record: records.lowestTeamScore,
-      leaderboard: leaders.lowestTeamScore,
-      metric: (r) => r.score,
-      format: (r) => formatPoints(r.score),
-      suffix: "pts",
-    },
-    {
-      key: "biggestWinningMargin",
-      title: "Biggest Winning Margin",
-      description:
-        "The most comprehensive demolitions.",
-      record: records.biggestWinningMargin,
-      leaderboard: leaders.biggestWinningMargin,
-      metric: (r) => r.margin,
-      format: (r) => formatPoints(r.margin),
-      suffix: "pts",
-    },
-    {
-      key: "closestGame",
-      title: "Closest Game",
-      description:
-        "Matches decided by the smallest margins.",
-      record: records.closestGame,
-      leaderboard: leaders.closestGame,
-      metric: (r) => r.margin,
-      format: (r) => formatPoints(r.margin),
-      suffix: "pts",
-    },
-    {
-      key: "highestCombinedScore",
-      title: "Highest Combined Score",
-      description:
-        "The biggest shootouts in SFL history.",
-      record: records.highestCombinedScore,
-      leaderboard: leaders.highestCombinedScore,
-      metric: (r) =>
-        r.score + r.opponentScore,
-      format: (r) =>
-        formatPoints(r.score + r.opponentScore),
-      suffix: "pts",
-    },
-    {
-      key: "lowestCombinedScore",
-      title: "Lowest Combined Score",
-      description:
-        "Two teams united in offensive incompetence.",
-      record: records.lowestCombinedScore,
-      leaderboard: leaders.lowestCombinedScore,
-      metric: (r) =>
-        r.score + r.opponentScore,
-      format: (r) =>
-        formatPoints(r.score + r.opponentScore),
-      suffix: "pts",
-    },
-    {
-      key: "highestLosingScore",
-      title: "Highest Losing Score",
-      description:
-        "Outstanding performances rewarded with defeat.",
-      record: records.highestLosingScore,
-      leaderboard: leaders.highestLosingScore,
-      metric: (r) => r.score,
-      format: (r) => formatPoints(r.score),
-      suffix: "pts",
-    },
-    {
-      key: "lowestWinningScore",
-      title: "Lowest Winning Score",
-      description:
-        "Proof that sometimes both teams deserve to lose.",
-      record: records.lowestWinningScore,
-      leaderboard: leaders.lowestWinningScore,
-      metric: (r) => r.score,
-      format: (r) => formatPoints(r.score),
-      suffix: "pts",
-    },
-    {
-      key: "mostPointsConcededInVictory",
-      title: "Most Points Conceded in a Victory",
-      description:
-        "The highest opponent scores overcome in victory. Winning the hard way.",
-      record: records.mostPointsConcededInVictory,
-      leaderboard:
-        leaders.mostPointsConcededInVictory,
-      metric: (r) => r.opponentScore,
-      format: (r) =>
-        formatPoints(r.opponentScore),
-      suffix: "pts",
-    },
-  ];
-}
+    if (!isValidPerformance(matchup)) {
+      continue;
+    }
 
-function buildSeasonCategories(
-  records: SeasonRecordSet,
-  leaders: SeasonLeaderboardSet,
-  competition: Competition
-): RecordCategory<SeasonRecord>[] {
-  const categories: RecordCategory<SeasonRecord>[] = [
-    {
-      key: "mostWins",
-      title: "Most Wins",
-      description:
-        "The most successful individual seasons.",
-      record: records.mostWins,
-      leaderboard: leaders.mostWins,
-      metric: (r) => r.wins,
-      format: (r) => `${r.wins}`,
-      suffix: "wins",
-    },
-    {
-      key: "mostPointsFor",
-      title: "Most Points Scored",
-      description:
-        "The highest season-long scoring totals.",
-      record: records.mostPointsFor,
-      leaderboard: leaders.mostPointsFor,
-      metric: (r) => r.pointsFor,
-      format: (r) => formatPoints(r.pointsFor),
-      suffix: "pts",
-    },
-    {
-      key: "mostPointsAgainst",
-      title: "Most Points Conceded",
-      description:
-        "The unluckiest defensive records.",
-      record: records.mostPointsAgainst,
-      leaderboard: leaders.mostPointsAgainst,
-      metric: (r) => r.pointsAgainst,
-      format: (r) =>
-        formatPoints(r.pointsAgainst),
-      suffix: "pts",
-    },
-    {
-      key: "mostGamesOver150",
-      title: "Most 150+ Point Games",
-      description:
-        "The most games scoring at least 150 points in a single season.",
-      record: records.mostGamesOver150,
-      leaderboard: leaders.mostGamesOver150,
-      metric: (r) => r.gamesOver150,
-      format: (r) => `${r.gamesOver150}`,
-      suffix: "games",
-    },
-    {
-      key: "mostGames100OrFewer",
-      title: "Most Games Scoring 100 or Fewer",
-      description:
-        "The most games scoring 100 points or less in a single season.",
-      record: records.mostGames100OrFewer,
-      leaderboard: leaders.mostGames100OrFewer,
-      metric: (r) => r.games100OrFewer,
-      format: (r) => `${r.games100OrFewer}`,
-      suffix: "games",
-    },
-  ];
+    performances.push({
+      season: matchup.season,
+      week: matchup.week,
+      phase: matchup.phase,
+      rosterId: matchup.rosterA,
+      score: matchup.scoreA,
+      opponentRosterId: matchup.rosterB,
+      opponentScore: matchup.scoreB,
+    });
 
-  if (competition === "mainPlayoffs") {
-    return categories;
+    performances.push({
+      season: matchup.season,
+      week: matchup.week,
+      phase: matchup.phase,
+      rosterId: matchup.rosterB,
+      score: matchup.scoreB,
+      opponentRosterId: matchup.rosterA,
+      opponentScore: matchup.scoreA,
+    });
   }
 
-  return [
-    categories[0],
-    {
-      key: "fewestWins",
-      title: "Fewest Wins",
-      description:
-        "The bleakest regular-season campaigns.",
-      record: records.fewestWins,
-      leaderboard: leaders.fewestWins,
-      metric: (r) => r.wins,
-      format: (r) => `${r.wins}`,
-      suffix: "wins",
-    },
-    categories[1],
-    {
-      key: "fewestPointsFor",
-      title: "Fewest Points Scored",
-      description:
-        "The lowest season-long scoring totals.",
-      record: records.fewestPointsFor,
-      leaderboard: leaders.fewestPointsFor,
-      metric: (r) => r.pointsFor,
-      format: (r) => formatPoints(r.pointsFor),
-      suffix: "pts",
-    },
-    categories[2],
-    {
-      key: "fewestPointsAgainst",
-      title: "Fewest Points Conceded",
-      description:
-        "The lowest points-against totals.",
-      record: records.fewestPointsAgainst,
-      leaderboard: leaders.fewestPointsAgainst,
-      metric: (r) => r.pointsAgainst,
-      format: (r) =>
-        formatPoints(r.pointsAgainst),
-      suffix: "pts",
-    },
-    {
-      key: "bestPointDifferential",
-      title: "Best Point Differential",
-      description:
-        "The most dominant scoring advantages.",
-      record: records.bestPointDifferential,
-      leaderboard: leaders.bestPointDifferential,
-      metric: (r) => r.pointDifferential,
-      format: (r) =>
-        formatDifferential(r.pointDifferential),
-      suffix: "pts",
-    },
-    {
-      key: "worstPointDifferential",
-      title: "Worst Point Differential",
-      description:
-        "The largest season-long scoring deficits.",
-      record: records.worstPointDifferential,
-      leaderboard: leaders.worstPointDifferential,
-      metric: (r) => r.pointDifferential,
-      format: (r) =>
-        formatDifferential(r.pointDifferential),
-      suffix: "pts",
-    },
-    categories[3],
-    categories[4],
-  ];
+  return performances;
 }
 
-function buildAllTimeCategories(
-  records: AllTimeRecordSet,
-  leaders: AllTimeLeaderboardSet
-): RecordCategory<AllTimeFranchiseRecord>[] {
-  return [
-    {
-      key: "mostWins",
-      title: "Most Career Wins",
-      description:
-        "The winningest franchises in SFL history.",
-      record: records.mostWins,
-      leaderboard: leaders.mostWins,
-      metric: (r) => r.wins,
-      format: (r) => `${r.wins}`,
-      suffix: "wins",
-    },
-    {
-      key: "fewestWins",
-      title: "Fewest Career Wins",
-      description:
-        "The franchises with the fewest victories.",
-      record: records.fewestWins,
-      leaderboard: leaders.fewestWins,
-      metric: (r) => r.wins,
-      format: (r) => `${r.wins}`,
-      suffix: "wins",
-    },
-    {
-      key: "mostPointsFor",
-      title: "Most Career Points",
-      description:
-        "The greatest cumulative scoring totals.",
-      record: records.mostPointsFor,
-      leaderboard: leaders.mostPointsFor,
-      metric: (r) => r.pointsFor,
-      format: (r) => formatPoints(r.pointsFor),
-      suffix: "pts",
-    },
-    {
-      key: "mostPointsAgainst",
-      title: "Most Career Points Conceded",
-      description:
-        "The most punishment absorbed over time.",
-      record: records.mostPointsAgainst,
-      leaderboard: leaders.mostPointsAgainst,
-      metric: (r) => r.pointsAgainst,
-      format: (r) =>
-        formatPoints(r.pointsAgainst),
-      suffix: "pts",
-    },
-    {
-      key: "bestPointDifferential",
-      title: "Best Career Point Differential",
-      description:
-        "The greatest cumulative scoring advantages.",
-      record: records.bestPointDifferential,
-      leaderboard: leaders.bestPointDifferential,
-      metric: (r) => r.pointDifferential,
-      format: (r) =>
-        formatDifferential(r.pointDifferential),
-      suffix: "pts",
-    },
-    {
-      key: "worstPointDifferential",
-      title: "Worst Career Point Differential",
-      description:
-        "The greatest cumulative scoring deficits.",
-      record: records.worstPointDifferential,
-      leaderboard: leaders.worstPointDifferential,
-      metric: (r) => r.pointDifferential,
-      format: (r) =>
-        formatDifferential(r.pointDifferential),
-      suffix: "pts",
-    },
-  ];
+function toLeagueRecord(
+  performance: TeamPerformance
+): LeagueRecord {
+  return {
+    ...performance,
+    margin: rounded(
+      Math.abs(
+        performance.score -
+        performance.opponentScore
+      )
+    ),
+  };
 }
 
-export default function RecordsTabs({
-  records,
-}: {
-  records: AllTimeRecords;
-}) {
-  const [activeTab, setActiveTab] =
-    useState<RecordsTab>("games");
+function uniqueGames(
+  records: LeagueRecord[]
+): LeagueRecord[] {
+  const seen = new Set<string>();
 
-  const [selectedSeason, setSelectedSeason] =
-    useState("all");
-
-  const [competition, setCompetition] =
-    useState<Competition>("regularSeason");
-
-  const filteredRecords =
-    selectedSeason === "all"
-      ? records
-      : records.bySeason[selectedSeason] ?? records;
-
-  const isSeasonComplete =
-    selectedSeason === "all" ||
-    records.completedSeasons[competition].includes(
-      selectedSeason
+  return records.filter((record) => {
+    const first = Math.min(
+      record.rosterId,
+      record.opponentRosterId
     );
 
+    const second = Math.max(
+      record.rosterId,
+      record.opponentRosterId
+    );
+
+    const key = [
+      record.season,
+      record.week,
+      record.phase,
+      first,
+      second,
+    ].join("|");
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function compareChronologically(
+  a: {
+    season: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  },
+  b: {
+    season: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  }
+): number {
   return (
-    <div>
-      <div style={tabsStyle}>
-        <TabButton
-          label="Game"
-          active={activeTab === "games"}
-          onClick={() => setActiveTab("games")}
-        />
-
-        <TabButton
-          label="Season"
-          active={activeTab === "season"}
-          onClick={() => setActiveTab("season")}
-        />
-
-        <TabButton
-          label="All-Time"
-          active={activeTab === "allTime"}
-          onClick={() => setActiveTab("allTime")}
-        />
-      </div>
-
-      {activeTab !== "allTime" && (
-        <div style={{ marginBottom: "26px" }}>
-          <p style={subheadingStyle}>SEASON</p>
-
-          <select
-            value={selectedSeason}
-            onChange={(event) =>
-              setSelectedSeason(event.target.value)
-            }
-            style={selectStyle}
-          >
-            <option value="all">
-              All Seasons
-            </option>
-
-            {records.availableSeasons.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-
-          <p style={subheadingStyle}>
-            COMPETITION
-          </p>
-
-          <div style={competitionTabsStyle}>
-            <TabButton
-              label="Regular Season"
-              active={
-                competition === "regularSeason"
-              }
-              onClick={() =>
-                setCompetition("regularSeason")
-              }
-            />
-
-            <TabButton
-              label="Main Playoffs"
-              active={
-                competition === "mainPlayoffs"
-              }
-              onClick={() =>
-                setCompetition("mainPlayoffs")
-              }
-            />
-          </div>
-
-          {activeTab === "season" &&
-            !isSeasonComplete && (
-              <p style={noticeStyle}>
-                Season in Progress — these totals
-                are provisional and are excluded
-                from all-season records until
-                this competition is complete.
-              </p>
-            )}
-        </div>
-      )}
-
-      {activeTab === "games" && (
-        <RecordSection
-          key={`games-${selectedSeason}-${competition}`}
-          title="Individual Game"
-          subtitle="The greatest performances, closest finishes and most spectacular disasters."
-          categories={buildGameCategories(
-            filteredRecords.individualGame[
-              competition
-            ],
-            filteredRecords.leaderboards.individualGame[
-              competition
-            ]
-          )}
-          primaryLabel={(record) =>
-            franchiseName(record.rosterId)
-          }
-          detailLabel={matchupLabel}
-          metaLabel={gameDescription}
-        />
-      )}
-
-      {activeTab === "season" && (
-        <RecordSection
-          key={`season-${selectedSeason}-${competition}`}
-          title="Season Long"
-          subtitle="The best and worst campaigns across SFL history."
-          categories={buildSeasonCategories(
-            filteredRecords.season[
-              competition
-            ],
-            filteredRecords.leaderboards.season[
-              competition
-            ],
-            competition
-          )}
-          primaryLabel={(record) =>
-            franchiseName(record.rosterId)
-          }
-          detailLabel={seasonDescription}
-          metaLabel={(record) => record.season}
-        />
-      )}
-
-      {activeTab === "allTime" && (
-        <RecordSection
-          key="all-time"
-          title="All-Time Franchise"
-          subtitle="The cumulative achievements and embarrassments of the SFL's ten franchises."
-          categories={buildAllTimeCategories(
-            records.allTime,
-            records.allTimeLeaderboards
-          )}
-          primaryLabel={(record) =>
-            franchiseName(record.rosterId)
-          }
-          detailLabel={careerDescription}
-          metaLabel={() => ""}
-        />
-      )}
-    </div>
+    Number(a.season) -
+      Number(b.season) ||
+    (a.week ?? 0) - (b.week ?? 0) ||
+    a.rosterId - b.rosterId ||
+    (a.opponentRosterId ?? 0) -
+      (b.opponentRosterId ?? 0)
   );
 }
 
-function RecordSection<
-  T extends { rosterId: number }
->({
-  title,
-  subtitle,
-  categories,
-  primaryLabel,
-  detailLabel,
-  metaLabel,
-}: {
-  title: string;
-  subtitle: string;
-  categories: RecordCategory<T>[];
-  primaryLabel: (record: T) => string;
-  detailLabel: (record: T) => string;
-  metaLabel: (record: T) => string;
-}) {
-  return (
-    <section>
-      <SectionHeading title={title} />
+function rankRecords<
+  T extends {
+    season?: string;
+    week?: number;
+    rosterId: number;
+    opponentRosterId?: number;
+  }
+>(
+  records: T[],
+  value: (record: T) => number,
+  direction: "highest" | "lowest",
+  limit = LEADERBOARD_LIMIT
+): T[] {
+  const sorted = [...records].sort(
+    (a, b) => {
+      const difference =
+        rounded(value(a)) -
+        rounded(value(b));
 
-      <p style={sectionDescriptionStyle}>
-        {subtitle}
-      </p>
+      if (difference !== 0) {
+        return direction === "highest"
+          ? -difference
+          : difference;
+      }
 
-      {categories.map((category) => (
-        <ExpandableRecordCard
-          key={category.key}
-          category={category}
-          primaryLabel={primaryLabel}
-          detailLabel={detailLabel}
-          metaLabel={metaLabel}
-        />
-      ))}
-    </section>
+      return compareChronologically(
+        {
+          season: a.season ?? "0",
+          week: a.week,
+          rosterId: a.rosterId,
+          opponentRosterId:
+            a.opponentRosterId,
+        },
+        {
+          season: b.season ?? "0",
+          week: b.week,
+          rosterId: b.rosterId,
+          opponentRosterId:
+            b.opponentRosterId,
+        }
+      );
+    }
   );
-}
 
-function ExpandableRecordCard<
-  T extends { rosterId: number }
->({
-  category,
-  primaryLabel,
-  detailLabel,
-  metaLabel,
-}: {
-  category: RecordCategory<T>;
-  primaryLabel: (record: T) => string;
-  detailLabel: (record: T) => string;
-  metaLabel: (record: T) => string;
-}) {
-  const [expanded, setExpanded] =
-    useState(false);
-
-  const {
-    record,
-    leaderboard,
-    metric,
-    format,
-    suffix,
-  } = category;
-
-  if (!record) {
-    return null;
+  if (sorted.length <= limit) {
+    return sorted;
   }
 
-  const leadingValue = Math.round(
-    (metric(record) + Number.EPSILON) * 100
+  const cutoff = rounded(
+    value(sorted[limit - 1])
   );
 
-  const jointHolders = leaderboard.filter(
-    (entry) =>
-      Math.round(
-        (metric(entry) + Number.EPSILON) * 100
-      ) === leadingValue
-  );
-
-  const isJointRecord =
-    jointHolders.length > 1;
-
-  let previousMetric: number | null = null;
-  let previousRank = 0;
-
-  return (
-    <article style={cardStyle}>
-      <div style={cardHeaderStyle}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={labelStyle}>
-            {category.title.toUpperCase()}
-          </p>
-
-          <p style={descriptionStyle}>
-            {category.description}
-          </p>
-        </div>
-
-        {isJointRecord && (
-          <span style={jointBadgeStyle}>
-            JOINT
-          </span>
-        )}
-      </div>
-
-      <div style={valueRowStyle}>
-        <h3 style={valueStyle}>
-          {format(record)}
-        </h3>
-
-        {suffix && (
-          <span style={suffixStyle}>
-            {suffix}
-          </span>
-        )}
-      </div>
-
-      <p style={teamStyle}>
-        {primaryLabel(record)}
-      </p>
-
-      <p style={detailStyle}>
-        {detailLabel(record)}
-      </p>
-
-      {metaLabel(record) && (
-        <p style={metaStyle}>
-          {metaLabel(record)}
-        </p>
-      )}
-
-      {isJointRecord && (
-        <p style={jointNoticeStyle}>
-          {jointHolders.length} performances
-          share this record.
-        </p>
-      )}
-
-      {leaderboard.length > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={() =>
-              setExpanded(!expanded)
-            }
-            aria-expanded={expanded}
-            style={expandButtonStyle}
-          >
-            <span>
-              {expanded
-                ? "Hide leaderboard"
-                : `View leaderboard (${leaderboard.length})`}
-            </span>
-
-            <span aria-hidden="true">
-              {expanded ? "▲" : "▼"}
-            </span>
-          </button>
-
-          {expanded && (
-            <div style={leaderboardStyle}>
-              <p style={leaderboardHeadingStyle}>
-                HISTORICAL LEADERBOARD
-              </p>
-
-              {leaderboard.map(
-                (entry, index) => {
-                  const currentMetric =
-                    Math.round(
-                      (
-                        metric(entry) +
-                        Number.EPSILON
-                      ) * 100
-                    );
-
-                  const rank =
-                    previousMetric === currentMetric
-                      ? previousRank
-                      : index + 1;
-
-                  previousMetric =
-                    currentMetric;
-
-                  previousRank = rank;
-
-                  return (
-                    <div
-                      key={`${category.key}-${index}`}
-                      style={{
-                        ...leaderboardRowStyle,
-                        borderBottom:
-                          index ===
-                          leaderboard.length - 1
-                            ? "none"
-                            : "1px solid #27303b",
-                      }}
-                    >
-                      <div style={rankStyle}>
-                        {rank}
-                      </div>
-
-                      <div style={leaderboardInfoStyle}>
-                        <p style={leaderboardTeamStyle}>
-                          {primaryLabel(entry)}
-                        </p>
-
-                        <p style={leaderboardDetailStyle}>
-                          {detailLabel(entry)}
-                        </p>
-
-                        {metaLabel(entry) && (
-                          <p style={leaderboardMetaStyle}>
-                            {metaLabel(entry)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div style={leaderboardValueStyle}>
-                        {format(entry)}
-                      </div>
-                    </div>
-                  );
-                }
-              )}
-
-              <p style={leaderboardFootnoteStyle}>
-                Top ten performances, including
-                ties at the cutoff.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-    </article>
+  return sorted.filter(
+    (record, index) =>
+      index < limit ||
+      rounded(value(record)) === cutoff
   );
 }
 
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function firstOrNull<T>(
+  records: T[]
+): T | null {
+  return records[0] ?? null;
+}
+
+function calculateGameLeaderboards(
+  performances: TeamPerformance[]
+): RecordLeaderboardSet {
+  const records =
+    performances.map(toLeagueRecord);
+
+  const games = uniqueGames(records);
+
+  const winningGames = records.filter(
+    (record) =>
+      record.score > record.opponentScore
+  );
+
+  const losingGames = records.filter(
+    (record) =>
+      record.score < record.opponentScore
+  );
+
+  return {
+    highestTeamScore: rankRecords(
+      records,
+      (record) => record.score,
+      "highest"
+    ),
+
+    lowestTeamScore: rankRecords(
+      records,
+      (record) => record.score,
+      "lowest"
+    ),
+
+    biggestWinningMargin: rankRecords(
+      winningGames,
+      (record) => record.margin,
+      "highest"
+    ),
+
+    closestGame: rankRecords(
+      games,
+      (record) => record.margin,
+      "lowest"
+    ),
+
+    highestCombinedScore: rankRecords(
+      games,
+      (record) =>
+        record.score +
+        record.opponentScore,
+      "highest"
+    ),
+
+    lowestCombinedScore: rankRecords(
+      games,
+      (record) =>
+        record.score +
+        record.opponentScore,
+      "lowest"
+    ),
+
+    highestLosingScore: rankRecords(
+      losingGames,
+      (record) => record.score,
+      "highest"
+    ),
+
+    lowestWinningScore: rankRecords(
+      winningGames,
+      (record) => record.score,
+      "lowest"
+    ),
+
+    mostPointsConcededInVictory:
+      rankRecords(
+        winningGames,
+        (record) =>
+          record.opponentScore,
+        "highest"
+      ),
+  };
+}
+
+function firstGameRecords(
+  leaders: RecordLeaderboardSet
+): RecordSet {
+  return {
+    highestTeamScore: firstOrNull(
+      leaders.highestTeamScore
+    ),
+
+    lowestTeamScore: firstOrNull(
+      leaders.lowestTeamScore
+    ),
+
+    biggestWinningMargin: firstOrNull(
+      leaders.biggestWinningMargin
+    ),
+
+    closestGame: firstOrNull(
+      leaders.closestGame
+    ),
+
+    highestCombinedScore: firstOrNull(
+      leaders.highestCombinedScore
+    ),
+
+    lowestCombinedScore: firstOrNull(
+      leaders.lowestCombinedScore
+    ),
+
+    highestLosingScore: firstOrNull(
+      leaders.highestLosingScore
+    ),
+
+    lowestWinningScore: firstOrNull(
+      leaders.lowestWinningScore
+    ),
+
+    mostPointsConcededInVictory:
+      firstOrNull(
+        leaders.mostPointsConcededInVictory
+      ),
+  };
+}
+
+function buildSeasonRecords(
+  performances: TeamPerformance[]
+): SeasonRecord[] {
+  const seasons =
+    new Map<string, SeasonRecord>();
+
+  for (const performance of performances) {
+    const key = [
+      performance.season,
+      performance.rosterId,
+    ].join("|");
+
+    let record = seasons.get(key);
+
+    if (!record) {
+      record = {
+        season: performance.season,
+        rosterId: performance.rosterId,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointDifferential: 0,
+        gamesOver150: 0,
+        games100OrFewer: 0,
+      };
+
+      seasons.set(key, record);
+    }
+
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
+      record.wins++;
+    } else if (
+      performance.score <
+      performance.opponentScore
+    ) {
+      record.losses++;
+    } else {
+      record.ties++;
+    }
+
+    if (performance.score >= 150) {
+      record.gamesOver150++;
+    }
+
+    if (performance.score <= 100) {
+      record.games100OrFewer++;
+    }
+
+    record.pointsFor = rounded(
+      record.pointsFor +
+      performance.score
+    );
+
+    record.pointsAgainst = rounded(
+      record.pointsAgainst +
+      performance.opponentScore
+    );
+
+    record.pointDifferential = rounded(
+      record.pointsFor -
+      record.pointsAgainst
+    );
+  }
+
+  return Array.from(seasons.values());
+}
+
+function calculateSeasonLeaderboards(
+  records: SeasonRecord[]
+): SeasonLeaderboardSet {
+  return {
+    mostWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "highest"
+    ),
+
+    fewestWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "lowest"
+    ),
+
+    mostPointsFor: rankRecords(
+      records,
+      (record) => record.pointsFor,
+      "highest"
+    ),
+
+    fewestPointsFor: rankRecords(
+      records,
+      (record) => record.pointsFor,
+      "lowest"
+    ),
+
+    mostPointsAgainst: rankRecords(
+      records,
+      (record) => record.pointsAgainst,
+      "highest"
+    ),
+
+    fewestPointsAgainst: rankRecords(
+      records,
+      (record) => record.pointsAgainst,
+      "lowest"
+    ),
+
+    bestPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "highest"
+    ),
+
+    worstPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "lowest"
+    ),
+
+    mostGamesOver150: rankRecords(
+      records,
+      (record) => record.gamesOver150,
+      "highest"
+    ),
+
+    mostGames100OrFewer: rankRecords(
+      records,
+      (record) => record.games100OrFewer,
+      "highest"
+    ),
+  };
+}
+
+function firstSeasonRecords(
+  leaders: SeasonLeaderboardSet
+): SeasonRecordSet {
+  return {
+    mostWins: firstOrNull(
+      leaders.mostWins
+    ),
+
+    fewestWins: firstOrNull(
+      leaders.fewestWins
+    ),
+
+    mostPointsFor: firstOrNull(
+      leaders.mostPointsFor
+    ),
+
+    fewestPointsFor: firstOrNull(
+      leaders.fewestPointsFor
+    ),
+
+    mostPointsAgainst: firstOrNull(
+      leaders.mostPointsAgainst
+    ),
+
+    fewestPointsAgainst: firstOrNull(
+      leaders.fewestPointsAgainst
+    ),
+
+    bestPointDifferential: firstOrNull(
+      leaders.bestPointDifferential
+    ),
+
+    worstPointDifferential: firstOrNull(
+      leaders.worstPointDifferential
+    ),
+
+    mostGamesOver150: firstOrNull(
+      leaders.mostGamesOver150
+    ),
+
+    mostGames100OrFewer: firstOrNull(
+      leaders.mostGames100OrFewer
+    ),
+  };
+}
+
+function buildAllTimeFranchiseRecords(
+  performances: TeamPerformance[]
+): AllTimeFranchiseRecord[] {
+  const franchises = new Map<
+    number,
+    AllTimeFranchiseRecord
+  >();
+
+  for (const performance of performances) {
+    let record = franchises.get(
+      performance.rosterId
+    );
+
+    if (!record) {
+      record = {
+        rosterId: performance.rosterId,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointDifferential: 0,
+      };
+
+      franchises.set(
+        performance.rosterId,
+        record
+      );
+    }
+
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
+      record.wins++;
+    } else if (
+      performance.score <
+      performance.opponentScore
+    ) {
+      record.losses++;
+    } else {
+      record.ties++;
+    }
+
+    record.pointsFor = rounded(
+      record.pointsFor +
+      performance.score
+    );
+
+    record.pointsAgainst = rounded(
+      record.pointsAgainst +
+      performance.opponentScore
+    );
+
+    record.pointDifferential = rounded(
+      record.pointsFor -
+      record.pointsAgainst
+    );
+  }
+
+  return Array.from(franchises.values());
+}
+
+function calculateAllTimeLeaderboards(
+  records: AllTimeFranchiseRecord[]
+): AllTimeLeaderboardSet {
+  return {
+    mostWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "highest"
+    ),
+
+    fewestWins: rankRecords(
+      records,
+      (record) => record.wins,
+      "lowest"
+    ),
+
+    mostPointsFor: rankRecords(
+      records,
+      (record) => record.pointsFor,
+      "highest"
+    ),
+
+    mostPointsAgainst: rankRecords(
+      records,
+      (record) => record.pointsAgainst,
+      "highest"
+    ),
+
+    bestPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "highest"
+    ),
+
+    worstPointDifferential: rankRecords(
+      records,
+      (record) =>
+        record.pointDifferential,
+      "lowest"
+    ),
+  };
+}
+
+function firstAllTimeRecords(
+  leaders: AllTimeLeaderboardSet
+): AllTimeRecordSet {
+  return {
+    mostWins: firstOrNull(
+      leaders.mostWins
+    ),
+
+    fewestWins: firstOrNull(
+      leaders.fewestWins
+    ),
+
+    mostPointsFor: firstOrNull(
+      leaders.mostPointsFor
+    ),
+
+    mostPointsAgainst: firstOrNull(
+      leaders.mostPointsAgainst
+    ),
+
+    bestPointDifferential: firstOrNull(
+      leaders.bestPointDifferential
+    ),
+
+    worstPointDifferential: firstOrNull(
+      leaders.worstPointDifferential
+    ),
+  };
+}
+
+function isRegularSeasonComplete(
+  matchups: HistoricalMatchup[]
+): boolean {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      style={{
-        flex: 1,
-        minWidth: 0,
-        border: "none",
-        borderRadius: "10px",
-        padding: "11px 5px",
-        background: active
-          ? "#ffffff"
-          : "transparent",
-        color: active
-          ? "#0b0f14"
-          : "#aeb8c5",
-        fontSize: "13px",
-        fontWeight: "700",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
+    matchups.filter(
+      (matchup) =>
+        matchup.week === 14 &&
+        matchup.phase === "Regular Season" &&
+        isValidPerformance(matchup)
+    ).length === 5
   );
 }
 
-function SectionHeading({
-  title,
-}: {
-  title: string;
-}) {
-  return (
-    <div style={sectionHeadingStyle}>
-      <div style={headingAccentStyle} />
-
-      <h2 style={headingStyle}>
-        {title}
-      </h2>
-    </div>
+function arePlayoffsComplete(
+  matchups: HistoricalMatchup[]
+): boolean {
+  return matchups.some(
+    (matchup) =>
+      matchup.week === 17 &&
+      matchup.phase === "Main Playoffs" &&
+      isValidPerformance(matchup)
   );
 }
 
-const tabsStyle = {
-  display: "flex",
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: "14px",
-  padding: "4px",
-  marginBottom: "24px",
-  gap: "3px",
-};
+function buildFilteredRecords(
+  regularPerformances: TeamPerformance[],
+  playoffPerformances: TeamPerformance[],
+  regularSeasonRecords: SeasonRecord[],
+  playoffSeasonRecords: SeasonRecord[]
+): FilteredSeasonRecords {
+  const regularGameLeaders =
+    calculateGameLeaderboards(
+      regularPerformances
+    );
 
-const competitionTabsStyle = {
-  display: "flex",
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: "12px",
-  padding: "4px",
-  gap: "3px",
-};
+  const playoffGameLeaders =
+    calculateGameLeaderboards(
+      playoffPerformances
+    );
 
-const selectStyle = {
-  width: "100%",
-  padding: "13px 14px",
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: "12px",
-  color: "#ffffff",
-  fontSize: "14px",
-  marginBottom: "20px",
-};
+  const regularSeasonLeaders =
+    calculateSeasonLeaderboards(
+      regularSeasonRecords
+    );
 
-const cardStyle = {
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: "18px",
-  padding: "18px",
-  marginBottom: "12px",
-  overflow: "hidden" as const,
-};
+  const playoffSeasonLeaders =
+    calculateSeasonLeaderboards(
+      playoffSeasonRecords
+    );
 
-const cardHeaderStyle = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "10px",
-};
+  return {
+    individualGame: {
+      regularSeason: firstGameRecords(
+        regularGameLeaders
+      ),
 
-const valueRowStyle = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: "7px",
-  marginTop: "14px",
-  flexWrap: "wrap" as const,
-};
+      mainPlayoffs: firstGameRecords(
+        playoffGameLeaders
+      ),
+    },
 
-const valueStyle = {
-  margin: 0,
-  fontSize: "32px",
-  fontWeight: "800",
-  letterSpacing: "-1px",
-  fontVariantNumeric: "tabular-nums" as const,
-};
+    season: {
+      regularSeason: firstSeasonRecords(
+        regularSeasonLeaders
+      ),
 
-const labelStyle = {
-  margin: 0,
-  fontSize: "11px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  color: "#aeb8c5",
-};
+      mainPlayoffs: firstSeasonRecords(
+        playoffSeasonLeaders
+      ),
+    },
 
-const descriptionStyle = {
-  marginTop: "7px",
-  marginBottom: 0,
-  fontSize: "12px",
-  lineHeight: "1.5",
-  color: "#687384",
-};
+    leaderboards: {
+      individualGame: {
+        regularSeason:
+          regularGameLeaders,
 
-const suffixStyle = {
-  fontSize: "13px",
-  color: "#aeb8c5",
-};
+        mainPlayoffs:
+          playoffGameLeaders,
+      },
 
-const teamStyle = {
-  marginTop: "10px",
-  marginBottom: "4px",
-  color: "#ffffff",
-  fontWeight: "700",
-  fontSize: "15px",
-};
+      season: {
+        regularSeason:
+          regularSeasonLeaders,
 
-const detailStyle = {
-  marginTop: "5px",
-  marginBottom: 0,
-  fontSize: "13px",
-  lineHeight: "1.5",
-  color: "#d0d7e0",
-  overflowWrap: "anywhere" as const,
-};
+        mainPlayoffs:
+          playoffSeasonLeaders,
+      },
+    },
+  };
+}
 
-const metaStyle = {
-  marginTop: "8px",
-  marginBottom: 0,
-  fontSize: "12px",
-  color: "#8793a3",
-};
+/*
+ * HISTORICAL ACHIEVEMENTS
+ *
+ * Playoff appearances are derived from
+ * participation in a main winners-bracket
+ * matchup, not the number of games played.
+ *
+ * A team with a bye still qualifies because
+ * it appears in a subsequent bracket round.
+ */
 
-const subheadingStyle = {
-  fontSize: "11px",
-  fontWeight: "700",
-  letterSpacing: "1px",
-  color: "#aeb8c5",
-  marginBottom: "10px",
-};
+function buildFranchiseAchievements(
+  performances: TeamPerformance[],
+  championshipResults: {
+    season: string;
+    championRosterId: number;
+    runnerUpRosterId: number;
+  }[]
+): FranchiseAchievement[] {
+  const franchises = new Map<
+    number,
+    FranchiseAchievement
+  >();
 
-const noticeStyle = {
-  marginTop: "12px",
-  fontSize: "12px",
-  color: "#aeb8c5",
-  lineHeight: "1.6",
-};
+  function ensure(
+    rosterId: number
+  ): FranchiseAchievement {
+    const existing =
+      franchises.get(rosterId);
 
-const sectionHeadingStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  marginBottom: "8px",
-};
+    if (existing) {
+      return existing;
+    }
 
-const headingAccentStyle = {
-  width: "4px",
-  height: "26px",
-  background: "#ffffff",
-  borderRadius: "4px",
-  flexShrink: 0,
-};
+    const created: FranchiseAchievement = {
+      rosterId,
+      championships: 0,
+      championshipSeasons: [],
+      slootbowlAppearances: 0,
+      slootbowlSeasons: [],
+      runnerUpFinishes: 0,
+      runnerUpSeasons: [],
+      playoffAppearances: 0,
+      playoffSeasons: [],
+      playoffWins: 0,
+      playoffLosses: 0,
+      playoffTies: 0,
+    };
 
-const headingStyle = {
-  margin: 0,
-  fontSize: "24px",
-};
+    franchises.set(rosterId, created);
 
-const sectionDescriptionStyle = {
-  marginTop: "0",
-  marginBottom: "20px",
-  color: "#aeb8c5",
-  fontSize: "13px",
-  lineHeight: "1.6",
-};
+    return created;
+  }
 
-const jointBadgeStyle = {
-  fontSize: "10px",
-  fontWeight: "800",
-  letterSpacing: "0.8px",
-  color: "#ffffff",
-  border: "1px solid #475569",
-  borderRadius: "6px",
-  padding: "5px 7px",
-  whiteSpace: "nowrap" as const,
-};
+  for (const performance of performances) {
+    ensure(performance.rosterId);
+  }
 
-const jointNoticeStyle = {
-  marginTop: "10px",
-  marginBottom: 0,
-  color: "#aeb8c5",
-  fontSize: "12px",
-};
+  const playoffAppearances =
+    new Map<number, Set<string>>();
 
-const expandButtonStyle = {
-  display: "flex",
-  width: "100%",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginTop: "18px",
-  padding: "13px 2px 2px",
-  border: "none",
-  borderTop: "1px solid #27303b",
-  background: "transparent",
-  color: "#ffffff",
-  fontSize: "13px",
-  fontWeight: "700",
-  textAlign: "left" as const,
-  cursor: "pointer",
-};
+  for (const performance of performances) {
+    if (
+      performance.phase !==
+      "Main Playoffs"
+    ) {
+      continue;
+    }
 
-const leaderboardStyle = {
-  marginTop: "16px",
-  paddingTop: "14px",
-  borderTop: "1px solid #27303b",
-};
+    const franchise = ensure(
+      performance.rosterId
+    );
 
-const leaderboardHeadingStyle = {
-  marginTop: 0,
-  marginBottom: "10px",
-  fontSize: "10px",
-  fontWeight: "800",
-  letterSpacing: "1px",
-  color: "#8793a3",
-};
+    if (
+      performance.score >
+      performance.opponentScore
+    ) {
+      franchise.playoffWins++;
+    } else if (
+      performance.score <
+      performance.opponentScore
+    ) {
+      franchise.playoffLosses++;
+    } else {
+      franchise.playoffTies++;
+    }
 
-const leaderboardRowStyle = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "10px",
-  padding: "13px 0",
-};
+    let years = playoffAppearances.get(
+      performance.rosterId
+    );
 
-const rankStyle = {
-  width: "24px",
-  flexShrink: 0,
-  fontSize: "13px",
-  fontWeight: "800",
-  color: "#aeb8c5",
-};
+    if (!years) {
+      years = new Set<string>();
 
-const leaderboardInfoStyle = {
-  flex: 1,
-  minWidth: 0,
-};
+      playoffAppearances.set(
+        performance.rosterId,
+        years
+      );
+    }
 
-const leaderboardTeamStyle = {
-  margin: 0,
-  fontSize: "13px",
-  fontWeight: "700",
-  color: "#ffffff",
-  overflowWrap: "anywhere" as const,
-};
+    years.add(performance.season);
+  }
 
-const leaderboardDetailStyle = {
-  marginTop: "5px",
-  marginBottom: 0,
-  fontSize: "12px",
-  lineHeight: "1.5",
-  color: "#aeb8c5",
-  overflowWrap: "anywhere" as const,
-};
+  for (const [rosterId, years] of
+    playoffAppearances.entries()) {
+    const franchise = ensure(rosterId);
 
-const leaderboardMetaStyle = {
-  marginTop: "5px",
-  marginBottom: 0,
-  fontSize: "11px",
-  color: "#687384",
-};
+    franchise.playoffSeasons =
+      Array.from(years).sort(
+        (a, b) => Number(a) - Number(b)
+      );
 
-const leaderboardValueStyle = {
-  flexShrink: 0,
-  fontSize: "14px",
-  fontWeight: "800",
-  color: "#ffffff",
-  fontVariantNumeric: "tabular-nums" as const,
-};
+    franchise.playoffAppearances =
+      franchise.playoffSeasons.length;
+  }
 
-const leaderboardFootnoteStyle = {
-  marginTop: "12px",
-  marginBottom: 0,
-  fontSize: "11px",
-  lineHeight: "1.5",
-  color: "#687384",
-};
+  for (const result of championshipResults) {
+    const champion = ensure(
+      result.championRosterId
+    );
+
+    const runnerUp = ensure(
+      result.runnerUpRosterId
+    );
+
+    champion.championships++;
+    champion.slootbowlAppearances++;
+
+    champion.championshipSeasons.push(
+      result.season
+    );
+
+    champion.slootbowlSeasons.push(
+      result.season
+    );
+
+    runnerUp.runnerUpFinishes++;
+    runnerUp.slootbowlAppearances++;
+
+    runnerUp.runnerUpSeasons.push(
+      result.season
+    );
+
+    runnerUp.slootbowlSeasons.push(
+      result.season
+    );
+  }
+
+  return Array.from(franchises.values())
+    .sort(
+      (a, b) =>
+        a.rosterId - b.rosterId
+    );
+}
+
+function calculateAchievementLeaderboards(
+  franchises: FranchiseAchievement[]
+): AchievementLeaderboards {
+  return {
+    championships: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.championships > 0
+      ),
+      (record) => record.championships,
+      "highest"
+    ),
+
+    slootbowlAppearances: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.slootbowlAppearances > 0
+      ),
+      (record) =>
+        record.slootbowlAppearances,
+      "highest"
+    ),
+
+    runnerUpFinishes: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.runnerUpFinishes > 0
+      ),
+      (record) =>
+        record.runnerUpFinishes,
+      "highest"
+    ),
+
+    playoffAppearances: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffAppearances > 0
+      ),
+      (record) =>
+        record.playoffAppearances,
+      "highest"
+    ),
+
+    playoffWins: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffWins > 0
+      ),
+      (record) =>
+        record.playoffWins,
+      "highest"
+    ),
+
+    playoffLosses: rankRecords(
+      franchises.filter(
+        (record) =>
+          record.playoffLosses > 0
+      ),
+      (record) =>
+        record.playoffLosses,
+      "highest"
+    ),
+  };
+}
+
+/*
+ * STREAKS
+ *
+ * Each franchise has its own chronological
+ * sequence for each competition.
+ *
+ * Ties break both winning and losing streaks.
+ *
+ * Streaks may cross season boundaries, but
+ * regular season and main playoffs never mix.
+ *
+ * Every uninterrupted run is stored, rather
+ * than just the longest run per franchise.
+ * This lets the leaderboard show genuine
+ * historical top-ten streaks.
+ */
+
+function buildStreaks(
+  performances: TeamPerformance[],
+  competition: Competition,
+  result: "win" | "loss"
+): StreakRecord[] {
+  const requiredPhase: RecordPhase =
+    competition === "regularSeason"
+      ? "Regular Season"
+      : "Main Playoffs";
+
+  const byFranchise = new Map<
+    number,
+    TeamPerformance[]
+  >();
+
+  for (const performance of performances) {
+    if (
+      performance.phase !== requiredPhase
+    ) {
+      continue;
+    }
+
+    const games =
+      byFranchise.get(
+        performance.rosterId
+      ) ?? [];
+
+    games.push(performance);
+
+    byFranchise.set(
+      performance.rosterId,
+      games
+    );
+  }
+
+  const streaks: StreakRecord[] = [];
+
+  for (const [rosterId, games] of
+    byFranchise.entries()) {
+    games.sort(
+      (a, b) =>
+        Number(a.season) -
+          Number(b.season) ||
+        a.week - b.week
+    );
+
+    let start: TeamPerformance | null =
+      null;
+
+    let end: TeamPerformance | null =
+      null;
+
+    let length = 0;
+
+    function finishStreak() {
+      if (
+        start === null ||
+        end === null ||
+        length === 0
+      ) {
+        return;
+      }
+
+      streaks.push({
+        rosterId,
+        competition,
+        result,
+        length,
+        startSeason: start.season,
+        startWeek: start.week,
+        endSeason: end.season,
+        endWeek: end.week,
+      });
+
+      start = null;
+      end = null;
+      length = 0;
+    }
+
+    for (const game of games) {
+      const won =
+        game.score >
+        game.opponentScore;
+
+      const lost =
+        game.score <
+        game.opponentScore;
+
+      const matches =
+        result === "win"
+          ? won
+          : lost;
+
+      if (!matches) {
+        finishStreak();
+        continue;
+      }
+
+      if (length === 0) {
+        start = game;
+      }
+
+      end = game;
+      length++;
+    }
+
+    finishStreak();
+  }
+
+  return streaks;
+}
+
+function rankStreaks(
+  streaks: StreakRecord[]
+): StreakRecord[] {
+  const sorted = [...streaks].sort(
+    (a, b) =>
+      b.length - a.length ||
+      Number(a.startSeason) -
+        Number(b.startSeason) ||
+      a.startWeek - b.startWeek ||
+      a.rosterId - b.rosterId
+  );
+
+  if (
+    sorted.length <=
+    LEADERBOARD_LIMIT
+  ) {
+    return sorted;
+  }
+
+  const cutoff =
+    sorted[LEADERBOARD_LIMIT - 1].length;
+
+  return sorted.filter(
+    (streak, index) =>
+      index < LEADERBOARD_LIMIT ||
+      streak.length === cutoff
+  );
+}
+
+function calculateStreakLeaderboards(
+  performances: TeamPerformance[]
+): StreakLeaderboards {
+  return {
+    regularSeasonWinning: rankStreaks(
+      buildStreaks(
+        performances,
+        "regularSeason",
+        "win"
+      )
+    ),
+
+    regularSeasonLosing: rankStreaks(
+      buildStreaks(
+        performances,
+        "regularSeason",
+        "loss"
+      )
+    ),
+
+    mainPlayoffsWinning: rankStreaks(
+      buildStreaks(
+        performances,
+        "mainPlayoffs",
+        "win"
+      )
+    ),
+
+    mainPlayoffsLosing: rankStreaks(
+      buildStreaks(
+        performances,
+        "mainPlayoffs",
+        "loss"
+      )
+    ),
+  };
+}
+
+export async function getAllTimeRecords():
+  Promise<AllTimeRecords> {
+  const seasons =
+    await getHistoricalData();
+
+  const allPerformances =
+    seasons.flatMap(
+      (season) =>
+        buildPerformances(
+          season.matchups
+        )
+    );
+
+  const regularSeason =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase ===
+        "Regular Season"
+    );
+
+  const mainPlayoffs =
+    allPerformances.filter(
+      (performance) =>
+        performance.phase ===
+        "Main Playoffs"
+    );
+
+  const availableSeasons =
+    Array.from(
+      new Set(
+        seasons.map(
+          (season) =>
+            season.league.season
+        )
+      )
+    ).sort(
+      (a, b) =>
+        Number(b) - Number(a)
+    );
+
+  const completedRegularSeasons =
+    seasons
+      .filter((season) =>
+        isRegularSeasonComplete(
+          season.matchups
+        )
+      )
+      .map(
+        (season) =>
+          season.league.season
+      );
+
+  const completedPlayoffSeasons =
+    seasons
+      .filter((season) =>
+        arePlayoffsComplete(
+          season.matchups
+        )
+      )
+      .map(
+        (season) =>
+          season.league.season
+      );
+
+  const completedRegularPerformances =
+    regularSeason.filter(
+      (performance) =>
+        completedRegularSeasons.includes(
+          performance.season
+        )
+    );
+
+  const completedPlayoffPerformances =
+    mainPlayoffs.filter(
+      (performance) =>
+        completedPlayoffSeasons.includes(
+          performance.season
+        )
+    );
+
+  const bySeason: Record<
+    string,
+    FilteredSeasonRecords
+  > = {};
+
+  for (const year of availableSeasons) {
+    const yearRegular =
+      regularSeason.filter(
+        (performance) =>
+          performance.season === year
+      );
+
+    const yearPlayoffs =
+      mainPlayoffs.filter(
+        (performance) =>
+          performance.season === year
+      );
+
+    bySeason[year] =
+      buildFilteredRecords(
+        yearRegular,
+        yearPlayoffs,
+        buildSeasonRecords(
+          yearRegular
+        ),
+        buildSeasonRecords(
+          yearPlayoffs
+        )
+      );
+  }
+
+  const allTimeLeaders =
+    calculateAllTimeLeaderboards(
+      buildAllTimeFranchiseRecords(
+        allPerformances
+      )
+    );
+
+  const filteredRecords =
+    buildFilteredRecords(
+      regularSeason,
+      mainPlayoffs,
+      buildSeasonRecords(
+        completedRegularPerformances
+      ),
+      buildSeasonRecords(
+        completedPlayoffPerformances
+      )
+    );
+
+  /*
+   * Only seasons with completed main
+   * playoffs are eligible for verified
+   * Slootbowl championship results.
+   */
+
+  const completedThroughSeason =
+    completedPlayoffSeasons.length > 0
+      ? Math.max(
+          ...completedPlayoffSeasons.map(
+            Number
+          )
+        )
+      : 0;
+
+  const verifiedSlootbowls =
+    completedThroughSeason > 0
+      ? await getSlootbowlResults(
+          seasons,
+          completedThroughSeason
+        )
+      : [];
+
+  const championshipResults =
+    verifiedSlootbowls
+      .filter((result) =>
+        completedPlayoffSeasons.includes(
+          String(result.season)
+        )
+      )
+      .map((result) => ({
+        season: String(result.season),
+        championRosterId:
+          result.championRosterId,
+        runnerUpRosterId:
+          result.runnerUpRosterId,
+      }));
+
+  const franchises =
+    buildFranchiseAchievements(
+      allPerformances,
+      championshipResults
+    );
+
+  const historicalAchievements:
+    HistoricalAchievements = {
+      franchises,
+
+      leaderboards:
+        calculateAchievementLeaderboards(
+          franchises
+        ),
+
+      streaks:
+        calculateStreakLeaderboards(
+          allPerformances
+        ),
+    };
+
+  return {
+    ...filteredRecords,
+
+    allTime: firstAllTimeRecords(
+      allTimeLeaders
+    ),
+
+    allTimeLeaderboards:
+      allTimeLeaders,
+
+    bySeason,
+
+    availableSeasons,
+
+    completedSeasons: {
+      regularSeason:
+        completedRegularSeasons,
+
+      mainPlayoffs:
+        completedPlayoffSeasons,
+    },
+
+    historicalAchievements,
+  };
+}
