@@ -13,11 +13,16 @@ type WeeklyRoster = SleeperMatchup & {
 export type FranchisePlayerCareer = {
   playerId: string;
   rosterId: number;
+
   rosterWeeks: number;
+  rosterWeeksBySeason: Record<string, number>;
+
   seasonsRepresented: number;
   seasons: string[];
+
   starts: number;
   starterPoints: number;
+
   loyaltyPoints: number;
 };
 
@@ -25,7 +30,7 @@ type CareerAccumulator = {
   playerId: string;
   rosterId: number;
   weeks: Set<string>;
-  seasons: Set<string>;
+  weeksBySeason: Map<string, Set<number>>;
 };
 
 function calculateLoyaltyPoints(
@@ -57,8 +62,6 @@ function hasRecordedResult(
 function isLeagueWeekComplete(
   rosters: SleeperMatchup[]
 ): boolean {
-  // Require a recorded result for all 10 teams,
-  // not just one or two early score updates.
   return (
     rosters.length === 10 &&
     rosters.every(hasRecordedResult)
@@ -86,7 +89,7 @@ export async function getFranchisePlayerCareers():
     CareerAccumulator
   >();
 
-  // Process weekly membership.
+  // Build weekly roster membership histories.
   for (const league of leagues) {
     const year = Number(league.season);
 
@@ -104,11 +107,8 @@ export async function getFranchisePlayerCareers():
       const week = weekIndex + 1;
       const rosters = weeklyData[weekIndex];
 
-      // Historical completed seasons:
-      // count all available Weeks 1-17.
-      //
-      // Latest season:
-      // require all 10 teams to have a score.
+      // For the latest season, only count
+      // completed league-wide matchup weeks.
       if (
         year === latestSeason &&
         !isLeagueWeekComplete(rosters)
@@ -142,20 +142,36 @@ export async function getFranchisePlayerCareers():
               playerId,
               rosterId: roster.roster_id,
               weeks: new Set<string>(),
-              seasons: new Set<string>(),
+              weeksBySeason:
+                new Map<string, Set<number>>(),
             };
 
             careers.set(key, career);
           }
 
           career.weeks.add(weekKey);
-          career.seasons.add(league.season);
+
+          if (
+            !career.weeksBySeason.has(
+              league.season
+            )
+          ) {
+            career.weeksBySeason.set(
+              league.season,
+              new Set<number>()
+            );
+          }
+
+          career.weeksBySeason
+            .get(league.season)!
+            .add(week);
         }
       }
     }
   }
 
-  // Count official starts and points separately.
+  // Official starts and production only.
+  // Excludes Toilet Bowl and placement games.
   const officialPerformance = new Map<
     string,
     { starts: number; points: number }
@@ -217,6 +233,19 @@ export async function getFranchisePlayerCareers():
 
   return [...careers.values()]
     .map((career) => {
+      const rosterWeeksBySeason =
+        Object.fromEntries(
+          [...career.weeksBySeason.entries()]
+            .map(([season, weeks]) => [
+              season,
+              weeks.size,
+            ])
+        );
+
+      const seasons = Object.keys(
+        rosterWeeksBySeason
+      ).sort();
+
       const rosterWeeks = career.weeks.size;
 
       const performance =
@@ -227,12 +256,16 @@ export async function getFranchisePlayerCareers():
       return {
         playerId: career.playerId,
         rosterId: career.rosterId,
+
         rosterWeeks,
-        seasonsRepresented:
-          career.seasons.size,
-        seasons: [...career.seasons].sort(),
+        rosterWeeksBySeason,
+
+        seasonsRepresented: seasons.length,
+        seasons,
+
         starts: performance?.starts ?? 0,
         starterPoints: performance?.points ?? 0,
+
         loyaltyPoints:
           calculateLoyaltyPoints(rosterWeeks),
       };
