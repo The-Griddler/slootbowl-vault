@@ -37,6 +37,13 @@ const moreItems = [
       "Historic SFL results, playoff games and classic matchups",
   },
   {
+    href: "/greatest-games",
+    label: "Greatest Games",
+    icon: "🏟️",
+    description:
+      "The SFL's greatest clashes, closest finishes, biggest demolitions and legendary match reports",
+  },
+  {
     href: "/legacy",
     label: "League Legacy Tracker",
     icon: "🌟",
