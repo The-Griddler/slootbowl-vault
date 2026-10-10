@@ -35,6 +35,8 @@ export type SeasonRecord = {
   pointsFor: number;
   pointsAgainst: number;
   pointDifferential: number;
+  gamesOver150: number;
+  games100OrFewer: number;
 };
 
 export type RecordSet = {
@@ -46,6 +48,7 @@ export type RecordSet = {
   lowestCombinedScore: LeagueRecord | null;
   highestLosingScore: LeagueRecord | null;
   lowestWinningScore: LeagueRecord | null;
+  mostPointsConcededInVictory: LeagueRecord | null;
 };
 
 export type SeasonRecordSet = {
@@ -57,6 +60,8 @@ export type SeasonRecordSet = {
   fewestPointsAgainst: SeasonRecord | null;
   bestPointDifferential: SeasonRecord | null;
   worstPointDifferential: SeasonRecord | null;
+  mostGamesOver150: SeasonRecord | null;
+  mostGames100OrFewer: SeasonRecord | null;
 };
 
 export type AllTimeFranchiseRecord = {
@@ -77,13 +82,6 @@ export type AllTimeRecordSet = {
   bestPointDifferential: AllTimeFranchiseRecord | null;
   worstPointDifferential: AllTimeFranchiseRecord | null;
 };
-
-// Ranked lists use the same keys as the
-// existing single-record objects.
-//
-// A tied tenth-place performance is included,
-// so a leaderboard can contain more than ten
-// entries when records are tied.
 
 export type RecordLeaderboardSet = {
   [K in keyof RecordSet]: LeagueRecord[];
@@ -117,8 +115,6 @@ export type FilteredSeasonRecords = {
     regularSeason: SeasonRecordSet;
     mainPlayoffs: SeasonRecordSet;
   };
-
-  // New: ranked results for the interface.
   leaderboards: {
     individualGame: CompetitionLeaderboards;
     season: SeasonCompetitionLeaderboards;
@@ -128,17 +124,13 @@ export type FilteredSeasonRecords = {
 export type AllTimeRecords =
   FilteredSeasonRecords & {
     allTime: AllTimeRecordSet;
-
     allTimeLeaderboards:
       AllTimeLeaderboardSet;
-
     bySeason: Record<
       string,
       FilteredSeasonRecords
     >;
-
     availableSeasons: string[];
-
     completedSeasons: {
       regularSeason: string[];
       mainPlayoffs: string[];
@@ -146,11 +138,6 @@ export type AllTimeRecords =
   };
 
 const LEADERBOARD_LIMIT = 10;
-
-// Scores are stored to two decimal places
-// for comparison purposes. This prevents
-// floating-point accumulation errors from
-// incorrectly separating tied records.
 
 function rounded(value: number): number {
   return Math.round(
@@ -228,13 +215,6 @@ function toLeagueRecord(
   };
 }
 
-// For matchup-level records, retain only
-// one perspective of each actual game.
-//
-// The key includes season, week, phase
-// and both roster IDs. The phase prevents
-// unrelated competitions being merged.
-
 function uniqueGames(
   records: LeagueRecord[]
 ): LeagueRecord[] {
@@ -291,12 +271,6 @@ function compareChronologically(
       (b.opponentRosterId ?? 0)
   );
 }
-
-// Return the top ten ranks, including
-// everyone tied with the tenth entry.
-//
-// The secondary sort is chronological,
-// so tied records display consistently.
 
 function rankRecords<
   T extends {
@@ -433,6 +407,12 @@ function calculateGameLeaderboards(
       (record) => record.score,
       "lowest"
     ),
+
+    mostPointsConcededInVictory: rankRecords(
+      winningGames,
+      (record) => record.opponentScore,
+      "highest"
+    ),
   };
 }
 
@@ -471,6 +451,10 @@ function firstGameRecords(
     lowestWinningScore: firstOrNull(
       leaders.lowestWinningScore
     ),
+
+    mostPointsConcededInVictory: firstOrNull(
+      leaders.mostPointsConcededInVictory
+    ),
   };
 }
 
@@ -498,6 +482,8 @@ function buildSeasonRecords(
         pointsFor: 0,
         pointsAgainst: 0,
         pointDifferential: 0,
+        gamesOver150: 0,
+        games100OrFewer: 0,
       };
 
       seasons.set(key, record);
@@ -515,6 +501,14 @@ function buildSeasonRecords(
       record.losses++;
     } else {
       record.ties++;
+    }
+
+    if (performance.score >= 150) {
+      record.gamesOver150++;
+    }
+
+    if (performance.score <= 100) {
+      record.games100OrFewer++;
     }
 
     record.pointsFor = rounded(
@@ -589,6 +583,18 @@ function calculateSeasonLeaderboards(
         record.pointDifferential,
       "lowest"
     ),
+
+    mostGamesOver150: rankRecords(
+      records,
+      (record) => record.gamesOver150,
+      "highest"
+    ),
+
+    mostGames100OrFewer: rankRecords(
+      records,
+      (record) => record.games100OrFewer,
+      "highest"
+    ),
   };
 }
 
@@ -626,6 +632,14 @@ function firstSeasonRecords(
 
     worstPointDifferential: firstOrNull(
       leaders.worstPointDifferential
+    ),
+
+    mostGamesOver150: firstOrNull(
+      leaders.mostGamesOver150
+    ),
+
+    mostGames100OrFewer: firstOrNull(
+      leaders.mostGames100OrFewer
     ),
   };
 }
@@ -766,20 +780,6 @@ function firstAllTimeRecords(
     ),
   };
 }
-
-// Completion rules remain compatible
-// with the existing Records page.
-//
-// Regular season:
-// Five scored matchups in Week 14.
-//
-// Main playoffs:
-// A scored championship matchup in Week 17.
-//
-// The source does not expose a definitive
-// NFL game-final flag, so these checks
-// cannot independently verify that a live
-// scoring week has officially finished.
 
 function isFinalScore(
   matchup: HistoricalMatchup
