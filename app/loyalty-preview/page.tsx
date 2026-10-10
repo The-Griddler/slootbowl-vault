@@ -12,6 +12,10 @@ import {
 } from "../../lib/franchiseLegacyScore";
 
 import {
+  getFranchiseChampionships,
+} from "../../lib/franchiseChampionships";
+
+import {
   getPlayerNames,
   getAllSlootPlayerDirectory,
 } from "../../lib/players";
@@ -40,10 +44,12 @@ export default async function LoyaltyPreviewPage() {
   ]);
 
   const currentYear = new Date().getUTCFullYear();
-  const completedThroughSeason = currentYear - 1;
 
-  // Use the existing SFL seasonal grading system.
-  // Current-season grades are not official.
+  const completedThroughSeason =
+    currentYear - 1;
+
+  // Only completed seasons receive
+  // seasonal awards and championships.
   const seasonalGrades =
     calculateHistoricalSeasonGrades(
       historicalData,
@@ -51,31 +57,43 @@ export default async function LoyaltyPreviewPage() {
       completedThroughSeason
     );
 
-  // Reuse the existing All-Sloot selections.
-  // Only completed seasons earn career honours.
-  const completedAllSlootSeasons = historicalData
-    .filter(
-      (season) =>
-        Number(season.league.season) <=
-        completedThroughSeason
-    )
-    .map((season) =>
-      calculateAllSloot(season, playerDirectory)
-    );
+  const completedAllSlootSeasons =
+    historicalData
+      .filter(
+        (season) =>
+          Number(season.league.season) <=
+          completedThroughSeason
+      )
+      .map((season) =>
+        calculateAllSloot(
+          season,
+          playerDirectory
+        )
+      );
 
   const allSlootCareers =
     calculateAllSlootCareers(
       completedAllSlootSeasons
     );
 
-  // Combine loyalty, starts, production
-  // and franchise-attributed achievements.
+  // Identify official Slootbowl winners,
+  // then credit every player on the
+  // championship-week winning roster.
+  const franchiseChampionships =
+    await getFranchiseChampionships(
+      historicalData,
+      completedThroughSeason
+    );
+
+  // Calculate complete Franchise Legends
+  // scores including championship bonuses.
   const rankings =
     calculateFranchiseLegacyScores(
       careers,
       historicalData,
       seasonalGrades,
-      allSlootCareers
+      allSlootCareers,
+      franchiseChampionships
     );
 
   const topPlayers = FRANCHISES.flatMap(
@@ -124,11 +142,11 @@ export default async function LoyaltyPreviewPage() {
           marginTop: 10,
         }}
       >
-        Experimental franchise rankings combining
-        roster loyalty, official starts, fantasy
-        production, seasonal grades and All-Sloot
-        honours. Slootbowl championship bonuses
-        are not included yet.
+        Experimental franchise rankings
+        combining roster loyalty, official
+        starts, fantasy production, seasonal
+        grades, All-Sloot honours and Slootbowl
+        championships.
       </p>
 
       <p
@@ -139,19 +157,36 @@ export default async function LoyaltyPreviewPage() {
           marginTop: 10,
         }}
       >
-        Seasonal achievements are awarded to the
-        franchise where a player recorded the most
-        official starts that season. Tiebreakers:
-        fantasy points, roster weeks, then lowest
-        roster ID. Only completed seasons receive
-        achievement bonuses.
+        Seasonal grades and All-Sloot honours
+        are attributed to the franchise where
+        a player recorded the most official
+        starts that season. Tiebreakers are
+        fantasy points, roster weeks, then
+        lowest roster ID.
+      </p>
+
+      <p
+        style={{
+          color: "#9da7b3",
+          fontSize: 12,
+          lineHeight: 1.6,
+          marginTop: 10,
+        }}
+      >
+        Each Slootbowl championship awards
+        150 points to every player on the
+        winning franchise&apos;s roster during
+        the championship week, including
+        bench players. Only completed seasons
+        receive achievement bonuses.
       </p>
 
       {FRANCHISES.map((franchise) => {
         const leaders = rankings
           .filter(
             (player) =>
-              player.rosterId === franchise.rosterId
+              player.rosterId ===
+              franchise.rosterId
           )
           .slice(0, 15);
 
@@ -198,6 +233,8 @@ export default async function LoyaltyPreviewPage() {
                       "Production",
                       "Grades",
                       "All-Sloot",
+                      "Titles",
+                      "Title Pts",
                       "Achievements",
                       "Total",
                     ].map((heading) => (
@@ -279,6 +316,35 @@ export default async function LoyaltyPreviewPage() {
                         <td style={cellStyle}>
                           {format(
                             player.allSlootHonoursPoints
+                          )}
+                        </td>
+
+                        <td
+                          style={{
+                            ...cellStyle,
+                            fontWeight:
+                              player.championships > 0
+                                ? 800
+                                : 400,
+                            color:
+                              player.championships > 0
+                                ? "#eab308"
+                                : "inherit",
+                          }}
+                          title={
+                            player.championshipSeasons
+                              .join(", ") ||
+                            "No championships"
+                          }
+                        >
+                          {player.championships > 0
+                            ? `🏆 ${player.championships}`
+                            : "0"}
+                        </td>
+
+                        <td style={cellStyle}>
+                          {format(
+                            player.championshipPoints
                           )}
                         </td>
 
