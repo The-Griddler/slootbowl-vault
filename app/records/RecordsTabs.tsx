@@ -18,7 +18,10 @@ import type {
   StreakRecord,
 } from "../../lib/records";
 
-import { getFranchiseName } from "../../lib/franchises";
+import {
+  getFranchiseName,
+  getHistoricalFranchiseName,
+} from "../../lib/franchises";
 
 type RecordsTab = "games" | "season" | "allTime";
 type Competition = "regularSeason" | "mainPlayoffs";
@@ -45,11 +48,19 @@ const differential = (value: number) =>
 const franchise = (id: number) =>
   getFranchiseName(id);
 
+const historicalFranchise = (
+  id: number,
+  season: string | number
+) => getHistoricalFranchiseName(id, season);
+
 function matchupDetail(r: LeagueRecord) {
   return (
-    `${franchise(r.rosterId)} ${points(r.score)} vs ` +
-    `${franchise(r.opponentRosterId)} ` +
-    `${points(r.opponentScore)}`
+    `${historicalFranchise(r.rosterId, r.season)} ` +
+    `${points(r.score)} vs ` +
+    `${historicalFranchise(
+      r.opponentRosterId,
+      r.season
+    )} ${points(r.opponentScore)}`
   );
 }
 
@@ -229,7 +240,7 @@ function seasonCategories(
     suffix: "games",
   };
 
-  // Playoffs: only the two meaningful season totals.
+  // Playoffs retain only the two scoring totals.
   if (competition === "mainPlayoffs") {
     return [mostPoints, mostAgainst];
   }
@@ -597,7 +608,12 @@ export default function RecordsTabs({
               competition
             ]
           )}
-          primaryLabel={r => franchise(r.rosterId)}
+          primaryLabel={r =>
+            historicalFranchise(
+              r.rosterId,
+              r.season
+            )
+          }
           defaultDetail={matchupDetail}
           metaLabel={gameMeta}
         />
@@ -615,7 +631,12 @@ export default function RecordsTabs({
             ],
             competition
           )}
-          primaryLabel={r => franchise(r.rosterId)}
+          primaryLabel={r =>
+            historicalFranchise(
+              r.rosterId,
+              r.season
+            )
+          }
           defaultDetail={seasonDetail}
           metaLabel={r => r.season}
         />
