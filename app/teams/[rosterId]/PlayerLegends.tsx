@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 import type { HistoricalMatchup } from "../../../lib/sleeper";
+import type { FranchiseLegacyScore } from "../../../lib/franchiseLegacyScore";
 
 type Phase = "Regular Season" | "Main Playoffs";
 
@@ -30,10 +31,17 @@ type PlayerLegendsProps = {
   rosterId: number;
   matchups: HistoricalMatchup[];
   playerNames: Record<string, string>;
+  franchiseLegends?: FranchiseLegacyScore[];
 };
 
 function formatPoints(value: number) {
   return value.toFixed(2);
+}
+
+function formatLegacyPoints(value: number) {
+  return value.toLocaleString("en-AU", {
+    maximumFractionDigits: 0,
+  });
 }
 
 type LeaderboardEntry = {
@@ -157,10 +165,194 @@ function Leaderboard({
   );
 }
 
+function FranchiseLegends({
+  entries,
+  playerNames,
+}: {
+  entries: FranchiseLegacyScore[];
+  playerNames: Record<string, string>;
+}) {
+  const topFive = [...entries]
+    .sort(
+      (a, b) =>
+        b.totalFranchiseLegacyPoints -
+          a.totalFranchiseLegacyPoints ||
+        b.rosterWeeks - a.rosterWeeks ||
+        b.starts - a.starts
+    )
+    .slice(0, 5);
+
+  return (
+    <section style={{ marginTop: "24px" }}>
+      <h3
+        style={{
+          fontSize: "18px",
+          marginBottom: "8px",
+        }}
+      >
+        🏛️ Franchise Legends
+      </h3>
+
+      <p
+        style={{
+          color: "#9da7b3",
+          fontSize: "12px",
+          lineHeight: 1.6,
+          marginBottom: "14px",
+        }}
+      >
+        The five greatest players in franchise
+        history, ranked by loyalty, official
+        starts, fantasy production, individual
+        honours and Slootbowl championships.
+      </p>
+
+      <div
+        style={{
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "14px",
+          overflow: "hidden",
+        }}
+      >
+        {topFive.length === 0 ? (
+          <p
+            style={{
+              padding: "18px",
+              color: "#9da7b3",
+            }}
+          >
+            Franchise rankings are being prepared.
+          </p>
+        ) : (
+          topFive.map((player, index) => (
+            <div
+              key={player.playerId}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "16px 12px",
+                background:
+                  index === 0
+                    ? "rgba(234,179,8,0.07)"
+                    : "transparent",
+                borderBottom:
+                  index === topFive.length - 1
+                    ? "none"
+                    : "1px solid #27303b",
+              }}
+            >
+              <div
+                style={{
+                  width: "28px",
+                  flexShrink: 0,
+                  color:
+                    index === 0
+                      ? "#eab308"
+                      : "#687384",
+                  fontSize: "16px",
+                  fontWeight: 800,
+                  textAlign: "center",
+                }}
+              >
+                {index + 1}
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {playerNames[player.playerId] ??
+                    `Player ${player.playerId}`}
+                </div>
+
+                <div
+                  style={{
+                    color: "#9da7b3",
+                    fontSize: "11px",
+                    marginTop: "5px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {player.rosterWeeks} roster weeks
+                  {" · "}
+                  {player.starts} starts
+                </div>
+
+                {player.championships > 0 && (
+                  <div
+                    style={{
+                      color: "#eab308",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      marginTop: "4px",
+                    }}
+                  >
+                    🏆 {player.championships}{" "}
+                    {player.championships === 1
+                      ? "Slootbowl title"
+                      : "Slootbowl titles"}
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  textAlign: "right",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    color:
+                      index === 0
+                        ? "#eab308"
+                        : "#ffffff",
+                    fontSize: "17px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {formatLegacyPoints(
+                    player.totalFranchiseLegacyPoints
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    color: "#9da7b3",
+                    fontSize: "10px",
+                    marginTop: "4px",
+                  }}
+                >
+                  LEGACY PTS
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function PlayerLegends({
   rosterId,
   matchups,
   playerNames,
+  franchiseLegends = [],
 }: PlayerLegendsProps) {
   const [phase, setPhase] =
     useState<Phase>("Regular Season");
@@ -377,15 +569,21 @@ export default function PlayerLegends({
         Franchise player records based exclusively
         on games started for this team. Bench
         performances, Toilet Bowl games and
-        consolation matches are excluded.
+        consolation matches are excluded from
+        the performance leaderboards below.
       </p>
+
+      <FranchiseLegends
+        entries={franchiseLegends}
+        playerNames={playerNames}
+      />
 
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
           gap: "8px",
-          marginTop: "20px",
+          marginTop: "28px",
         }}
       >
         {(
