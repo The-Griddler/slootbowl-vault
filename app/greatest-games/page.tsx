@@ -8,6 +8,7 @@ import {
   calculateGreatestGames,
   type GreatestGame,
 } from "../../lib/greatestGames";
+import { getGreatestGameCommentary } from "../../lib/greatestGamesCommentary";
 
 const franchiseNames = new Map(
   FRANCHISES.map((team) => [team.rosterId, team.name])
@@ -89,339 +90,6 @@ function gameStage(game: GreatestGame, context: GameContext) {
   return "Regular Season";
 }
 
-function commentary(
-  game: GreatestGame,
-  context: GameContext
-): string {
-  const winnerId = game.winnerId;
-
-  if (winnerId === null) {
-    return (
-      `Neither side could finish the job, with ` +
-      `${points(game.combinedScore)} combined points ` +
-      `and absolutely nothing separating them.`
-    );
-  }
-
-  const loserId =
-    winnerId === game.rosterA
-      ? game.rosterB
-      : game.rosterA;
-
-  const winner = shortName(winnerId);
-  const loser = shortName(loserId);
-
-  const winnerFull = teamName(winnerId);
-  const loserFull = teamName(loserId);
-
-  const winnerScore =
-    winnerId === game.rosterA
-      ? game.scoreA
-      : game.scoreB;
-
-  const loserScore =
-    winnerId === game.rosterA
-      ? game.scoreB
-      : game.scoreA;
-
-  const winnerRecord = recordShort(
-    winnerId === game.rosterA
-      ? game.pregameRecordA
-      : game.pregameRecordB
-  );
-
-  const loserRecord = recordShort(
-    winnerId === game.rosterA
-      ? game.pregameRecordB
-      : game.pregameRecordA
-  );
-
-  const margin = points(game.margin);
-  const total = points(game.combinedScore);
-
-  // SLOOTBOWL
-  if (context.isSlootbowl) {
-    if (
-      winnerId === 10 &&
-      loserId === 9 &&
-      context.isHistoricClosestSlootbowl
-    ) {
-      return (
-        `Chad Moist Discharge entered the Slootbowl ` +
-        `at ${winnerRecord}, facing an East Rutherford ` +
-        `side that had gone ${loserRecord}. Against ` +
-        `the odds, Chad squeezed out a ` +
-        `${points(winnerScore)}–${points(loserScore)} ` +
-        `victory, claiming the championship by just ` +
-        `${margin} points. Never has such a tiny ` +
-        `margin produced such an enormous discharge.`
-      );
-    }
-
-    if (
-      winnerId === 10 &&
-      loserId === 4 &&
-      context.isHighestScoring
-    ) {
-      return (
-        `The Happy Endings came looking for a climax, ` +
-        `but Chad Moist Discharge had other ideas. ` +
-        `In the highest-scoring game in SFL history, ` +
-        `Chad prevailed ${points(winnerScore)}–` +
-        `${points(loserScore)}, with both sides ` +
-        `combining for a frankly indecent ${total} points.`
-      );
-    }
-
-    if (context.isHistoricClosestSlootbowl) {
-      return (
-        `${winnerFull} claimed the Slootbowl over ` +
-        `${loserFull} by an almost unbelievable ` +
-        `${margin} points. The closest championship ` +
-        `finish in SFL history left absolutely no ` +
-        `room for premature celebration.`
-      );
-    }
-
-    if (game.isUpset) {
-      return (
-        `${winnerFull} arrived at ${winnerRecord}, ` +
-        `while ${loser} entered at ${loserRecord}. ` +
-        `Form went out the window as ${winner} ` +
-        `claimed the Slootbowl by ${margin} points. ` +
-        `A glorious upset on the biggest stage.`
-      );
-    }
-
-    if (game.margin <= 5) {
-      return (
-        `${winnerFull} held their nerve to defeat ` +
-        `${loserFull} by ${margin} points in the ` +
-        `Slootbowl. With ${total} points between ` +
-        `them, this championship delivered a ` +
-        `properly nerve-shredding finish.`
-      );
-    }
-
-    return (
-      `${winnerFull} defeated ${loserFull} ` +
-      `${points(winnerScore)}–${points(loserScore)} ` +
-      `to lift the Slootbowl. The championship ` +
-      `produced ${total} combined points, with ` +
-      `${winner} emerging as the last franchise standing.`
-    );
-  }
-
-  // CONFERENCE CHAMPIONSHIP GAMES
-  if (
-    context.isConferenceChampionship &&
-    context.conferenceName
-  ) {
-    const title = `${context.conferenceName} Championship Game`;
-
-    if (game.margin <= 1) {
-      if (winnerId === 4 && loserId === 9) {
-        return (
-          `The ${title} delivered ${total} points ` +
-          `of absolute filth. Isle of Wight Happy ` +
-          `Endings edged East Rutherford Shitlickers ` +
-          `by just ${margin} points, leaving the ` +
-          `Shitlickers with nothing to show for ` +
-          `their efforts but a very sore exit. ` +
-          `Isle of Wight booked their place in ` +
-          `the Slootbowl.`
-        );
-      }
-
-      return (
-        `The ${title} went right down to the wire. ` +
-        `${winnerFull} edged ${loserFull} by ` +
-        `just ${margin} points after a ${total}-point ` +
-        `contest, securing the conference crown ` +
-        `and a place in the Slootbowl.`
-      );
-    }
-
-    if (game.margin <= 5) {
-      return (
-        `${winnerFull} survived a fierce challenge ` +
-        `from ${loserFull} in the ${title}. ` +
-        `A ${margin}-point victory secured the ` +
-        `conference crown and sent ${winner} ` +
-        `through to the Slootbowl.`
-      );
-    }
-
-    return (
-      `${winnerFull} defeated ${loserFull} ` +
-      `${points(winnerScore)}–${points(loserScore)} ` +
-      `in the ${title}. ${winner} claimed the ` +
-      `conference crown and punched their ticket ` +
-      `to the Slootbowl.`
-    );
-  }
-
-  // HISTORIC DEMOLITIONS
-  if (context.isBiggestDemolition) {
-    if (winnerId === 10 && loserId === 7) {
-      return (
-        `Kalamata Dirty Vegans were absolutely ` +
-        `steamrolled by Chad Moist Discharge, ` +
-        `who unloaded ${points(winnerScore)} points ` +
-        `against their miserable ${points(loserScore)}. ` +
-        `The ${margin}-point margin stands as the ` +
-        `biggest demolition in SFL history. ` +
-        `A performance that probably warrants ` +
-        `an apology.`
-      );
-    }
-
-    return (
-      `${winnerFull} absolutely dismantled ` +
-      `${loserFull}, winning by ${margin} points ` +
-      `in the biggest demolition in SFL history. ` +
-      `The scoreboard was ugly, and the loser ` +
-      `will be hoping nobody saved a screenshot.`
-    );
-  }
-
-  // OTHER PLAYOFF GAMES
-  if (game.phase === "Main Playoffs") {
-    if (game.margin >= 75) {
-      return (
-        `${winnerFull} gave ${loserFull} an ` +
-        `absolute hiding in the playoffs, ` +
-        `winning by ${margin} points. ` +
-        `A postseason performance that was ` +
-        `equal parts ruthless and deeply embarrassing.`
-      );
-    }
-
-    if (game.margin <= 3) {
-      return (
-        `Only ${margin} points separated ` +
-        `${winner} and ${loser} in a ${total}-point ` +
-        `playoff thriller. ${winnerFull} survived ` +
-        `the scare and kept their Slootbowl ` +
-        `ambitions alive.`
-      );
-    }
-
-    if (game.isUpset) {
-      return (
-        `${winnerFull} entered the playoffs at ` +
-        `${winnerRecord}, but regular-season form ` +
-        `counted for very little against ${loser}. ` +
-        `${winner} pulled off a ${margin}-point ` +
-        `upset to keep their championship hopes alive.`
-      );
-    }
-
-    return (
-      `${winnerFull} overcame ${loserFull} by ` +
-      `${margin} points in a ${total}-point ` +
-      `playoff clash, keeping their Slootbowl ` +
-      `dreams very much alive.`
-    );
-  }
-
-  // REGULAR-SEASON GAMES
-  if (game.margin >= 75) {
-    return (
-      `${winnerFull} put ${loserFull} through ` +
-      `the absolute wringer, winning ` +
-      `${points(winnerScore)}–${points(loserScore)}. ` +
-      `A ${margin}-point humiliation that ` +
-      `won't be forgotten in the group chat.`
-    );
-  }
-
-  if (game.margin >= 40) {
-    return (
-      `${winnerFull} piled on ${points(winnerScore)} ` +
-      `points and left ${loserFull} trailing ` +
-      `by ${margin}. A comprehensive spanking ` +
-      `by any reasonable definition.`
-    );
-  }
-
-  if (context.isHighestScoring) {
-    return (
-      `${winnerFull} came out on top against ` +
-      `${loserFull} in the highest-scoring game ` +
-      `in SFL history. The two franchises ` +
-      `combined for an outrageous ${total} points.`
-    );
-  }
-
-  if (game.isUpset && game.margin <= 5) {
-    return (
-      `${winner} entered at ${winnerRecord}, ` +
-      `facing a ${loser} side sitting at ` +
-      `${loserRecord}. The underdogs somehow ` +
-      `squeezed out a ${margin}-point victory, ` +
-      `leaving the favourites thoroughly unsatisfied.`
-    );
-  }
-
-  if (game.isUpset) {
-    return (
-      `Despite entering at ${winnerRecord} ` +
-      `against ${loser}'s ${loserRecord}, ` +
-      `${winnerFull} turned the form book ` +
-      `upside down. A ${margin}-point upset ` +
-      `gave ${loser} a result they'd rather forget.`
-    );
-  }
-
-  if (game.margin <= 0.5) {
-    return (
-      `${winnerFull} escaped with a victory ` +
-      `over ${loserFull} by a microscopic ` +
-      `${margin} points. After ${total} combined ` +
-      `points, the difference was barely enough ` +
-      `to measure. Absolute scenes.`
-    );
-  }
-
-  if (game.margin <= 3) {
-    return (
-      `${winnerFull} edged ${loserFull} ` +
-      `by just ${margin} points in a ` +
-      `${total}-point nail-biter. ` +
-      `One franchise celebrated; the other ` +
-      `was left staring at the decimal places.`
-    );
-  }
-
-  if (game.combinedScore >= 330) {
-    return (
-      `${winnerFull} outgunned ${loserFull} ` +
-      `in a spectacular ${total}-point shootout. ` +
-      `${winner} finished ${margin} points clear ` +
-      `after both sides emptied the clip.`
-    );
-  }
-
-  if (game.margin <= 8) {
-    return (
-      `${winnerFull} held off ${loserFull} ` +
-      `by ${margin} points after a tightly ` +
-      `contested ${total}-point matchup. ` +
-      `A win worth celebrating and a loss ` +
-      `worth complaining about all week.`
-    );
-  }
-
-  return (
-    `${winnerFull} defeated ${loserFull} ` +
-    `${points(winnerScore)}–${points(loserScore)} ` +
-    `in Week ${game.week} of the ${game.season} ` +
-    `season. ${winner} took the bragging rights ` +
-    `with a ${margin}-point victory.`
-  );
-}
-
 function GameCard({
   game,
   rank,
@@ -431,6 +99,8 @@ function GameCard({
   rank: number;
   context: GameContext;
 }) {
+  const report = getGreatestGameCommentary(game, context);
+
   return (
     <article
       style={{
@@ -596,7 +266,7 @@ function GameCard({
           marginTop: 16,
         }}
       >
-        {commentary(game, context)}
+        {report}
       </p>
 
       <details style={{ marginTop: 16 }}>
@@ -632,10 +302,14 @@ function GameCard({
           <span>Underdog drama (max 10)</span>
           <strong>{game.underdogPoints}</strong>
 
-          <span>Pregame record — {shortName(game.rosterA)}</span>
+          <span>
+            Pregame record — {shortName(game.rosterA)}
+          </span>
           <strong>{recordShort(game.pregameRecordA)}</strong>
 
-          <span>Pregame record — {shortName(game.rosterB)}</span>
+          <span>
+            Pregame record — {shortName(game.rosterB)}
+          </span>
           <strong>{recordShort(game.pregameRecordB)}</strong>
         </div>
       </details>
@@ -725,10 +399,6 @@ export default async function GreatestGamesPage() {
       game.winnerId !== null &&
       finalists?.has(game.winnerId) === true;
 
-    // A Week 16 matchup is labelled a conference
-    // championship only when both teams share
-    // a conference and its winner is a verified
-    // Slootbowl finalist that season.
     const isConferenceChampionship =
       game.phase === "Main Playoffs" &&
       game.week === 16 &&
