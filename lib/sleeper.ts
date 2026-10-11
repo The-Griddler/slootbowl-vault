@@ -1,3 +1,4 @@
+
 const LEAGUE_ID = "1326512818865868800";
 
 export type SleeperLeague = {
@@ -76,11 +77,30 @@ export type HistoricalMatchup = {
   startersB: string[];
   startersPointsA: number[];
   startersPointsB: number[];
+
+  /**
+   * True when Sleeper's NFL state indicates
+   * that this fantasy week has finished.
+   *
+   * Current-week scores remain available
+   * for live display, but are not final.
+   */
+  isComplete: boolean;
 };
 
 export type HistoricalSeason = {
   league: SleeperLeague;
   matchups: HistoricalMatchup[];
+};
+
+export type SleeperNFLState = {
+  season: string;
+  week: number;
+  leg?: number;
+  season_type: string;
+  display_week?: number;
+  league_season?: string;
+  previous_season?: string;
 };
 
 async function fetchLeague(
@@ -128,18 +148,124 @@ async function fetchBracket(
   return response.json();
 }
 
-export async function getLeague(): Promise<SleeperLeague> {
+/**
+ * Get Sleeper's current NFL season and week.
+ *
+ * Do not use display_week for completion:
+ * it can differ from the actual NFL week.
+ */
+export async function getNFLState():
+  Promise<SleeperNFLState> {
+  const response = await fetch(
+    "https://api.sleeper.app/v1/state/nfl",
+    {
+      next: {
+        revalidate: 300,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to load Sleeper NFL state"
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Determine whether an NFL fantasy week
+ * has officially passed.
+ *
+ * Past seasons are complete.
+ * Future seasons are incomplete.
+ *
+ * During the current NFL regular season,
+ * only weeks earlier than the active
+ * NFL week are considered complete.
+ *
+ * Once the NFL postseason begins,
+ * fantasy Weeks 1-17 are complete.
+ *
+ * During preseason, no games in that
+ * season are considered complete.
+ */
+export function isNFLWeekComplete(
+  season: string,
+  week: number,
+  nflState: SleeperNFLState
+): boolean {
+  const matchupYear = Number(season);
+  const nflYear = Number(nflState.season);
+
+  if (
+    !Number.isFinite(matchupYear) ||
+    !Number.isFinite(nflYear) ||
+    !Number.isInteger(week) ||
+    week < 1 ||
+    week > 17
+  ) {
+    return false;
+  }
+
+  if (matchupYear < nflYear) {
+    return true;
+  }
+
+  if (matchupYear > nflYear) {
+    return false;
+  }
+
+  const seasonType =
+    nflState.season_type.toLowerCase();
+
+  if (
+    seasonType === "post" ||
+    seasonType === "postseason"
+  ) {
+    return true;
+  }
+
+  if (
+    seasonType === "pre" ||
+    seasonType === "preseason"
+  ) {
+    return false;
+  }
+
+  if (
+    seasonType !== "regular" &&
+    seasonType !== "reg"
+  ) {
+    return false;
+  }
+
+  const currentWeek = Number(
+    nflState.week
+  );
+
+  if (
+    !Number.isInteger(currentWeek) ||
+    currentWeek < 1
+  ) {
+    return false;
+  }
+
+  return week < currentWeek;
+}
+
+export async function getLeague():
+  Promise<SleeperLeague> {
   return fetchLeague(LEAGUE_ID);
 }
 
-export async function getLeagueHistory(): Promise<
-  SleeperLeague[]
-> {
+export async function getLeagueHistory():
+  Promise<SleeperLeague[]> {
   const history: SleeperLeague[] = [];
 
-  let leagueId:
-    | string
-    | null = LEAGUE_ID;
+  let leagueId: string | null =
+    LEAGUE_ID;
 
   while (leagueId) {
     const league =
@@ -232,10 +358,7 @@ function rosterPairKey(
 
 function buildBracketMap(
   bracket: SleeperBracketMatch[]
-): Map<
-  string,
-  SleeperBracketMatch
-> {
+): Map<string, SleeperBracketMatch> {
   const map = new Map<
     string,
     SleeperBracketMatch
@@ -282,8 +405,7 @@ function classifyPlayoffMatchup(
 
   if (winnersMatch) {
     if (
-      winnersMatch.p ===
-        undefined ||
+      winnersMatch.p === undefined ||
       winnersMatch.p === 1
     ) {
       return "Main Playoffs";
@@ -300,8 +422,12 @@ function classifyPlayoffMatchup(
 }
 
 export async function getHistoricalSeason(
-  league: SleeperLeague
+  league: SleeperLeague,
+  nflState?: SleeperNFLState
 ): Promise<HistoricalSeason> {
+  const state =
+    nflState ?? await getNFLState();
+
   const [
     winnersBracket,
     losersBracket,
@@ -348,8 +474,7 @@ export async function getHistoricalSeason(
 
     for (const matchup of weeklyMatchups) {
       if (
-        matchup.matchup_id ===
-        null
+        matchup.matchup_id === null
       ) {
         continue;
       }
@@ -415,21 +540,26 @@ export async function getHistoricalSeason(
       const startersPointsB =
         teamB.starters_points ?? [];
 
-      matchups.push({
-        season:
+      const isComplete =
+        isNFLWeekComplete(
           league.season,
+          week,
+          state
+        );
+
+      matchups.push({
+        season: league.season,
         week,
         phase,
-        rosterA:
-          teamA.roster_id,
-        rosterB:
-          teamB.roster_id,
+        rosterA: teamA.roster_id,
+        rosterB: teamB.roster_id,
         scoreA,
         scoreB,
         startersA,
         startersB,
         startersPointsA,
         startersPointsB,
+        isComplete,
       });
     }
   }
@@ -440,18 +570,23 @@ export async function getHistoricalSeason(
   };
 }
 
-export async function getHistoricalData(): Promise<
-  HistoricalSeason[]
-> {
-  const leagues =
-    await getLeagueHistory();
+export async function getHistoricalData():
+  Promise<HistoricalSeason[]> {
+  const [
+    leagues,
+    nflState,
+  ] = await Promise.all([
+    getLeagueHistory(),
+    getNFLState(),
+  ]);
 
   const seasons =
     await Promise.all(
       leagues.map(
         (league) =>
           getHistoricalSeason(
-            league
+            league,
+            nflState
           )
       )
     );
