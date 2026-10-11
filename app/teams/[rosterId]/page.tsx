@@ -68,10 +68,17 @@ const FINALISTS: Record<string, number[]> = {
   "2025": [10, 9],
 };
 
+/*
+ * An official result requires a completed
+ * NFL week and valid recorded scores.
+ */
 function isPlayed(matchup: HistoricalMatchup) {
   return (
+    matchup.isComplete === true &&
     Number.isFinite(matchup.scoreA) &&
     Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
     (matchup.scoreA !== 0 ||
       matchup.scoreB !== 0)
   );
@@ -217,9 +224,17 @@ export default async function FranchisePage({
     getAllSlootPlayerDirectory(),
   ]);
 
-  const allMatchups = historicalData.flatMap(
-    (season) => season.matchups
-  );
+  /*
+   * Keep the original historical dataset
+   * for calculations that need season
+   * information.
+   *
+   * Historical result-based tabs receive
+   * only officially completed matchups.
+   */
+  const allMatchups = historicalData
+    .flatMap((season) => season.matchups)
+    .filter(isPlayed);
 
   const franchiseMatchups =
     allMatchups.filter(
@@ -363,7 +378,8 @@ export default async function FranchisePage({
         season.matchups.filter(
           (matchup) =>
             matchup.phase ===
-            "Regular Season"
+            "Regular Season" &&
+            isPlayed(matchup)
         );
 
       const record = calculateRecord(
@@ -371,15 +387,36 @@ export default async function FranchisePage({
         rosterId
       );
 
-      const week14Games =
-        regularMatchups.filter(
-          (matchup) =>
-            matchup.week === 14 &&
-            isPlayed(matchup)
-        );
-
+      /*
+       * A season is complete only when
+       * every regular-season week has
+       * five official matchups covering
+       * all ten franchises.
+       */
       const completed =
-        week14Games.length === 5;
+        Array.from(
+          { length: 14 },
+          (_, index) => index + 1
+        ).every((week) => {
+          const weekly =
+            regularMatchups.filter(
+              (matchup) =>
+                matchup.week === week
+            );
+
+          if (weekly.length !== 5) {
+            return false;
+          }
+
+          const teams = new Set<number>();
+
+          for (const matchup of weekly) {
+            teams.add(matchup.rosterA);
+            teams.add(matchup.rosterB);
+          }
+
+          return teams.size === 10;
+        });
 
       const finalist =
         FINALISTS[year]?.includes(
@@ -397,6 +434,7 @@ export default async function FranchisePage({
         conferenceChampionshipAppearance:
           season.matchups.some(
             (matchup) =>
+              isPlayed(matchup) &&
               matchup.week === 16 &&
               matchup.phase ===
                 "Main Playoffs" &&
