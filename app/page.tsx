@@ -615,7 +615,6 @@ export default async function HomePage() {
           <section
             style={{
               ...PANEL,
-              borderTop: "5px solid #f4f5f7",
               marginBottom: 27,
             }}
           >
