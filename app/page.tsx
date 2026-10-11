@@ -358,35 +358,22 @@ function shitcunt(
   };
 }
 
-function historicalFlashback(
-  editions: Edition[],
-  current: Edition
+function vaultTeaser(
+  season: string,
+  week: number
 ) {
-  const previous = editions.filter(
-    (edition) =>
-      Number(edition.season) <
-        Number(current.season) &&
-      edition.week === current.week
+  return pick(
+    [
+      "An old result has resurfaced, and at least one SFL manager is desperately hoping nobody remembers the details. Our investigative desk has other ideas.",
+      "A forgotten humiliation. A fresh connection. And a historical scoreboard that refuses to keep its fucking mouth shut. The Sloot News archives have been reopened.",
+      "Some managers believe time heals all wounds. Unfortunately, Sloot News has retained the original scores and has absolutely no intention of letting anybody move on.",
+      "An incident from the SFL's past has become suspiciously relevant again. The newsroom has uncovered the evidence, and somebody's reputation is about to take another kicking.",
+      "The commissioner's office has reportedly requested that several historical documents be destroyed. Our investigators have instead decided to publish an article about them.",
+    ],
+    season,
+    week,
+    47
   );
-
-  const candidates = previous.flatMap(
-    (edition) =>
-      edition.results.map((result) => ({
-        season: edition.season,
-        week: edition.week,
-        result,
-      }))
-  );
-
-  candidates.sort(
-    (a, b) =>
-      importance(b.result) -
-        importance(a.result) ||
-      Number(b.season) -
-        Number(a.season)
-  );
-
-  return candidates[0] ?? null;
 }
 
 function ArticleLink({
@@ -494,10 +481,6 @@ export default async function HomePage() {
 
   const worst = latest
     ? shitcunt(latest.results, latest.season)
-    : null;
-
-  const flashback = latest
-    ? historicalFlashback(editions, latest)
     : null;
 
   const sponsor = latest
@@ -903,60 +886,25 @@ export default async function HomePage() {
               The Past Refuses to Stay Buried
             </h2>
 
-            {flashback ? (
-              <>
-                <p
-                  style={{
-                    color: "#d2d8e0",
-                    fontSize: 14,
-                    lineHeight: 1.8,
-                    margin: "0 0 12px",
-                  }}
-                >
-                  In Week {flashback.week} of
-                  {" "}
-                  {flashback.season},
-                  {" "}
-                  {teamName(
-                    flashback.result.winner,
-                    flashback.season
-                  )}
-                  {" "}
-                  and
-                  {" "}
-                  {teamName(
-                    flashback.result.loser,
-                    flashback.season
-                  )}
-                  {" "}
-                  were involved in a result
-                  worth dragging back into
-                  the public eye. Some
-                  wounds deserve reopening.
-                </p>
+            <p
+              style={{
+                color: "#d2d8e0",
+                fontSize: 14,
+                lineHeight: 1.8,
+                margin: "0 0 12px",
+              }}
+            >
+              {vaultTeaser(
+                latest.season,
+                latest.week
+              )}
+            </p>
 
-                <ArticleLink
-                  href={`/news/${flashback.season}/${flashback.week}`}
-                >
-                  REVISIT THE DISASTER
-                </ArticleLink>
-              </>
-            ) : (
-              <p
-                style={{
-                  color: MUTED,
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  margin: 0,
-                }}
-              >
-                The archives are still
-                being examined. The
-                commissioner has reportedly
-                requested that several
-                documents be destroyed.
-              </p>
-            )}
+            <ArticleLink
+              href={`${base}/from-the-vault`}
+            >
+              OPEN THE HISTORICAL INVESTIGATION
+            </ArticleLink>
           </section>
 
           <section
