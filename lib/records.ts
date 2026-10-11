@@ -98,13 +98,6 @@ export type AllTimeLeaderboardSet = {
     AllTimeFranchiseRecord[];
 };
 
-/*
- * Stage 4: Slootbowl, playoff and streak records.
- *
- * These are additional exports. Existing RecordsTabs
- * properties remain unchanged.
- */
-
 export type FranchiseAchievement = {
   rosterId: number;
   championships: number;
@@ -198,6 +191,9 @@ export type AllTimeRecords =
 
 const LEADERBOARD_LIMIT = 10;
 
+const REGULAR_SEASON_WEEKS = 14;
+const REGULAR_SEASON_MATCHUPS_PER_WEEK = 5;
+
 function rounded(value: number): number {
   return (
     Math.round(
@@ -206,10 +202,19 @@ function rounded(value: number): number {
   );
 }
 
+/**
+ * A matchup is eligible for historical
+ * records only after its NFL week has
+ * officially completed.
+ *
+ * Nonzero scores alone are not proof
+ * that a matchup is finished.
+ */
 function isValidPerformance(
   matchup: HistoricalMatchup
 ): boolean {
   return (
+    matchup.isComplete === true &&
     Number.isFinite(matchup.scoreA) &&
     Number.isFinite(matchup.scoreB) &&
     matchup.scoreA >= 0 &&
@@ -221,6 +226,13 @@ function isValidPerformance(
   );
 }
 
+/**
+ * One completed fantasy matchup creates
+ * two team performances.
+ *
+ * Live, future and ignored matchups
+ * cannot enter the records pipeline.
+ */
 function buildPerformances(
   matchups: HistoricalMatchup[]
 ): TeamPerformance[] {
@@ -845,26 +857,67 @@ function firstAllTimeRecords(
   };
 }
 
+/**
+ * A completed regular season must have
+ * all five valid matchups in every week
+ * from Week 1 through Week 14.
+ *
+ * This prevents a partially populated
+ * Week 14 from marking the season complete.
+ */
 function isRegularSeasonComplete(
   matchups: HistoricalMatchup[]
 ): boolean {
-  return (
-    matchups.filter(
+  for (
+    let week = 1;
+    week <= REGULAR_SEASON_WEEKS;
+    week++
+  ) {
+    const weekly = matchups.filter(
       (matchup) =>
-        matchup.week === 14 &&
-        matchup.phase === "Regular Season" &&
+        matchup.week === week &&
+        matchup.phase ===
+          "Regular Season" &&
         isValidPerformance(matchup)
-    ).length === 5
-  );
+    );
+
+    if (
+      weekly.length !==
+      REGULAR_SEASON_MATCHUPS_PER_WEEK
+    ) {
+      return false;
+    }
+
+    const rosterIds = new Set<number>();
+
+    for (const matchup of weekly) {
+      rosterIds.add(matchup.rosterA);
+      rosterIds.add(matchup.rosterB);
+    }
+
+    if (rosterIds.size !== 10) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
+/**
+ * The Slootbowl final must be present,
+ * valid and officially completed.
+ *
+ * Week 17 placement games are not
+ * eligible to establish completion.
+ */
 function arePlayoffsComplete(
   matchups: HistoricalMatchup[]
 ): boolean {
   return matchups.some(
     (matchup) =>
       matchup.week === 17 &&
-      matchup.phase === "Main Playoffs" &&
+      matchup.phase ===
+        "Main Playoffs" &&
       isValidPerformance(matchup)
   );
 }
@@ -935,17 +988,6 @@ function buildFilteredRecords(
     },
   };
 }
-
-/*
- * HISTORICAL ACHIEVEMENTS
- *
- * Playoff appearances are derived from
- * participation in a main winners-bracket
- * matchup, not the number of games played.
- *
- * A team with a bye still qualifies because
- * it appears in a subsequent bracket round.
- */
 
 function buildFranchiseAchievements(
   performances: TeamPerformance[],
@@ -1156,22 +1198,56 @@ function calculateAchievementLeaderboards(
   };
 }
 
-/*
- * STREAKS
+/**
+ * Regular-season streaks must use
+ * consecutive fantasy weeks.
  *
- * Each franchise has its own chronological
- * sequence for each competition.
+ * Week 14 -> next season Week 1 is
+ * a legitimate consecutive transition.
  *
- * Ties break both winning and losing streaks.
+ * Missing weeks break streaks instead
+ * of accidentally joining separate runs.
  *
- * Streaks may cross season boundaries, but
- * regular season and main playoffs never mix.
- *
- * Every uninterrupted run is stored, rather
- * than just the longest run per franchise.
- * This lets the leaderboard show genuine
- * historical top-ten streaks.
+ * Playoff streaks follow successive
+ * playoff appearances. Byes and
+ * off-seasons do not break them.
  */
+function areConsecutiveStreakGames(
+  previous: TeamPerformance,
+  current: TeamPerformance,
+  competition: Competition
+): boolean {
+  const previousYear =
+    Number(previous.season);
+
+  const currentYear =
+    Number(current.season);
+
+  if (
+    !Number.isFinite(previousYear) ||
+    !Number.isFinite(currentYear)
+  ) {
+    return false;
+  }
+
+  if (competition === "mainPlayoffs") {
+    return true;
+  }
+
+  if (previousYear === currentYear) {
+    return (
+      current.week ===
+      previous.week + 1
+    );
+  }
+
+  return (
+    currentYear === previousYear + 1 &&
+    previous.week ===
+      REGULAR_SEASON_WEEKS &&
+    current.week === 1
+  );
+}
 
 function buildStreaks(
   performances: TeamPerformance[],
@@ -1227,6 +1303,10 @@ function buildStreaks(
 
     let length = 0;
 
+    let previousGame:
+      | TeamPerformance
+      | null = null;
+
     function finishStreak() {
       if (
         start === null ||
@@ -1253,6 +1333,17 @@ function buildStreaks(
     }
 
     for (const game of games) {
+      if (
+        previousGame !== null &&
+        !areConsecutiveStreakGames(
+          previousGame,
+          game,
+          competition
+        )
+      ) {
+        finishStreak();
+      }
+
       const won =
         game.score >
         game.opponentScore;
@@ -1268,6 +1359,7 @@ function buildStreaks(
 
       if (!matches) {
         finishStreak();
+        previousGame = game;
         continue;
       }
 
@@ -1277,6 +1369,8 @@ function buildStreaks(
 
       end = game;
       length++;
+
+      previousGame = game;
     }
 
     finishStreak();
@@ -1357,6 +1451,10 @@ export async function getAllTimeRecords():
   const seasons =
     await getHistoricalData();
 
+  /**
+   * Only officially completed games
+   * enter the performance pipeline.
+   */
   const allPerformances =
     seasons.flatMap(
       (season) =>
@@ -1482,12 +1580,11 @@ export async function getAllTimeRecords():
       )
     );
 
-  /*
-   * Only seasons with completed main
-   * playoffs are eligible for verified
+  /**
+   * Only completed playoff seasons
+   * are eligible for verified
    * Slootbowl championship results.
    */
-
   const completedThroughSeason =
     completedPlayoffSeasons.length > 0
       ? Math.max(
