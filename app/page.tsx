@@ -1,5 +1,6 @@
 
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   getHistoricalData,
   type HistoricalMatchup,
@@ -48,49 +49,26 @@ const MANAGERS: Record<number, string> = {
   10: "Josh Thomas",
 };
 
-const RIVALRIES = [
-  {
-    a: 1,
-    b: 3,
-    title: "The Shotty Bowl",
-  },
-  {
-    a: 4,
-    b: 7,
-    title: "The Paddletap Bowl",
-  },
-  {
-    a: 4,
-    b: 9,
-    title: "The OBFC Grudge Match",
-  },
-  {
-    a: 1,
-    b: 10,
-    title: "The Commissioner's Nightmare",
-  },
-];
-
 const SPONSORS = [
-  "The SFL Department of Questionable Decisions",
-  "Jack Brannigan's Retirement Fund",
-  "Tarl Brayer's Postseason Counselling Service",
-  "The Garrett Etheridge Trophy Cabinet Company",
-  "Ed Nelms' Independent Ethics Committee",
-  "The Josh Thomas Regular Season Appreciation Society",
-  "The Ollie Payne School of Financial Planning",
-  "Grimsby Chode Chokers' Championship Museum",
+  "Aaron Hernandez Memorial Foundation",
+  "Tom Brady's Missing Rings",
+  "Need For Speed: The Henry Ruggs Edition",
+  "Michael Vick's Society of Good Boys",
+  "Houston School of Massage",
+  "Stefon Diggs & Boston Culinary School",
+  "The Ryan Whiting Football Academy",
+  "Garrett Etheridge's Playoff Preparation Centre",
+  "The Commissioner's Independent Ethics Committee",
+  "The Ballbags Ministry of Information",
 ];
 
-const panel: React.CSSProperties = {
+const MUTED = "#929eae";
+
+const PANEL: CSSProperties = {
   background: "#151b23",
   border: "1px solid #27303b",
-  borderRadius: "18px",
-  padding: "20px",
-};
-
-const muted: React.CSSProperties = {
-  color: "#929eae",
+  borderRadius: 16,
+  padding: 20,
 };
 
 function teamName(id: number, season: string) {
@@ -101,41 +79,16 @@ function teamName(id: number, season: string) {
   return TEAMS[id] ?? `Franchise ${id}`;
 }
 
-function manager(id: number) {
-  return MANAGERS[id] ?? "Unknown Manager";
-}
-
-function pts(value: number) {
+function score(value: number) {
   return value.toFixed(2);
-}
-
-function pick<T>(items: T[], seed: number): T {
-  return items[
-    Math.abs(Math.trunc(seed)) % items.length
-  ];
-}
-
-function seedFor(result: Result) {
-  return (
-    Number(result.game.season) * 31 +
-    result.game.week * 17 +
-    result.winner * 13 +
-    result.loser * 7
-  );
-}
-
-function rivalryFor(a: number, b: number) {
-  return RIVALRIES.find(
-    (rivalry) =>
-      (rivalry.a === a && rivalry.b === b) ||
-      (rivalry.a === b && rivalry.b === a)
-  );
 }
 
 function isComplete(game: HistoricalMatchup) {
   return (
-    game.isComplete === true &&
     game.phase === "Regular Season" &&
+    game.isComplete === true &&
+    game.week >= 1 &&
+    game.week <= 14 &&
     Number.isFinite(game.scoreA) &&
     Number.isFinite(game.scoreB) &&
     game.scoreA >= 0 &&
@@ -148,176 +101,67 @@ function toResult(
   game: HistoricalMatchup
 ): Result | null {
   if (!isComplete(game)) return null;
-  if (game.scoreA === game.scoreB) return null;
+
+  if (game.scoreA === game.scoreB) {
+    return null;
+  }
 
   const aWon = game.scoreA > game.scoreB;
 
+  const winner = aWon
+    ? game.rosterA
+    : game.rosterB;
+
+  const loser = aWon
+    ? game.rosterB
+    : game.rosterA;
+
+  const winnerScore = aWon
+    ? game.scoreA
+    : game.scoreB;
+
+  const loserScore = aWon
+    ? game.scoreB
+    : game.scoreA;
+
   return {
     game,
-    winner: aWon ? game.rosterA : game.rosterB,
-    loser: aWon ? game.rosterB : game.rosterA,
-    winnerScore: aWon ? game.scoreA : game.scoreB,
-    loserScore: aWon ? game.scoreB : game.scoreA,
-    margin: Math.abs(game.scoreA - game.scoreB),
-    total: game.scoreA + game.scoreB,
+    winner,
+    loser,
+    winnerScore,
+    loserScore,
+    margin: winnerScore - loserScore,
+    total: winnerScore + loserScore,
   };
 }
 
-// This is deliberately identical to the
-// Game of the Week scoring on the edition page.
-function storyImportance(result: Result) {
-  let importance = result.margin * 0.4;
+function rivalry(a: number, b: number) {
+  const ids = [a, b].sort((x, y) => x - y);
+  const key = ids.join("-");
 
-  if (result.margin <= 3) importance += 40;
-  if (result.margin >= 40) importance += 20;
-  if (result.winnerScore >= 175) importance += 25;
-  if (result.total >= 330) importance += 30;
+  const names: Record<string, string> = {
+    "1-3": "The Shotty Bowl",
+    "4-7": "The Paddletap Bowl",
+    "4-9": "The OBFC Grudge Match",
+    "1-10": "The Commissioner's Nightmare",
+  };
 
-  if (rivalryFor(result.winner, result.loser)) {
-    importance += 45;
-  }
-
-  return importance;
+  return names[key] ?? null;
 }
 
-// These headline rules match the edition page.
-function headline(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
+function importance(result: Result) {
+  let value = result.margin * 0.4;
 
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
+  if (result.margin <= 3) value += 40;
+  if (result.margin >= 40) value += 20;
+  if (result.winnerScore >= 175) value += 25;
+  if (result.total >= 330) value += 30;
 
-  const seed = seedFor(result);
-
-  const rivalry = rivalryFor(
-    result.winner,
-    result.loser
-  );
-
-  if (rivalry) {
-    return pick(
-      [
-        `${rivalry.title} Ends in Tears as ${winner} Claim the Spoils`,
-        `${winner} Win ${rivalry.title}; ${loser} Left Holding Their Own Bollocks`,
-        `Another Chapter of Absolute Filth as ${winner} Conquer ${loser}`,
-      ],
-      seed
-    );
+  if (rivalry(result.winner, result.loser)) {
+    value += 45;
   }
 
-  if (result.margin <= 2) {
-    return pick(
-      [
-        `${winner} Escape by ${pts(result.margin)} Points in Outrageous SFL Shitshow`,
-        `${loser} Lose by a Pubic Hair; Local Supporters Demand Answers`,
-        `Heartbreak, Bollocks and Bad Decisions: ${winner} Survive`,
-      ],
-      seed
-    );
-  }
-
-  if (result.margin >= 45) {
-    return pick(
-      [
-        `${winner} Batter ${loser} Into Next Fucking Week`,
-        `${loser} Absolutely Annihilated; Funeral Arrangements Underway`,
-        `Authorities Called as ${winner} Commit Unholy Act of Football Violence`,
-      ],
-      seed
-    );
-  }
-
-  if (result.winnerScore >= 175) {
-    return pick(
-      [
-        `${winner} Unleash Offensive Filth on Helpless ${loser}`,
-        `${winner} Produce ${pts(result.winnerScore)}-Point Masterclass in Being a Bastard`,
-        `${loser} Powerless to Stop ${winner} Scoring Like a Man Possessed`,
-      ],
-      seed
-    );
-  }
-
-  return pick(
-    [
-      `${winner} Defeat ${loser} in Another Week of Questionable Football`,
-      `${loser} Come Up Short as ${winner} Take the Piss`,
-      `${winner} Claim the Points; ${loser} Claim Absolutely Fuck All`,
-    ],
-    seed
-  );
-}
-
-function teaser(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
-
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
-
-  const seed = seedFor(result);
-  const rivalry = rivalryFor(
-    result.winner,
-    result.loser
-  );
-
-  if (rivalry) {
-    return pick(
-      [
-        `Old grudges, new humiliations. ${winner} emerged victorious against ${loser}, and the SFL's least healthy relationship has somehow become even more unpleasant.`,
-        `The ${rivalry.title} delivered another chapter of competitive hostility, with ${winner} claiming the points and ${loser} claiming the right to be absolutely fucking furious.`,
-      ],
-      seed
-    );
-  }
-
-  if (result.margin <= 3) {
-    return pick(
-      [
-        `Just ${pts(result.margin)} points separated the two sides. ${manager(result.loser)} is expected to spend the next several days conducting a forensic investigation into every single lineup decision.`,
-        `${loser} came within ${pts(result.margin)} points of victory. Unfortunately, fantasy football does not award consolation trophies for almost managing not to fuck it up.`,
-      ],
-      seed
-    );
-  }
-
-  if (result.margin >= 40) {
-    return pick(
-      [
-        `${winner} inflicted a ${pts(result.margin)}-point demolition on ${loser}. Sloot News has contacted the losing franchise for comment but understands the manager may currently be hiding beneath a duvet.`,
-        `An absolute massacre. ${loser} were dismantled by ${pts(result.margin)} points, raising serious questions about whether ${manager(result.loser)} should be permitted near a starting lineup next Sunday.`,
-      ],
-      seed
-    );
-  }
-
-  if (result.total >= 320) {
-    return pick(
-      [
-        `A combined ${pts(result.total)} points made this one of the week's great scoring spectacles. ${manager(result.loser)} contributed admirably before discovering that losing while scoring loads is still fucking losing.`,
-        `${winner} and ${loser} combined for ${pts(result.total)} points. Only one manager got to enjoy it, which is precisely why this league is such a magnificent little cesspit.`,
-      ],
-      seed
-    );
-  }
-
-  return pick(
-    [
-      `${winner} took the points, ${loser} took the emotional damage, and another entirely avoidable fantasy football argument entered the SFL history books.`,
-      `${manager(result.winner)} will be celebrating. ${manager(result.loser)} will be searching for excuses. Sloot News will be giving both the respect they deserve, which is very little.`,
-      `${winner} came out on top in a fixture that leaves ${loser} with another week of soul-searching and absolutely no sympathy from the rest of the league.`,
-    ],
-    seed
-  );
+  return value;
 }
 
 function editionFrom(
@@ -330,47 +174,52 @@ function editionFrom(
       isComplete(game)
   );
 
+  if (games.length !== 5) return null;
+
   const teams = new Set<number>();
 
   for (const game of games) {
+    if (
+      game.rosterA < 1 ||
+      game.rosterA > 10 ||
+      game.rosterB < 1 ||
+      game.rosterB > 10 ||
+      game.rosterA === game.rosterB
+    ) {
+      return null;
+    }
+
     teams.add(game.rosterA);
     teams.add(game.rosterB);
   }
 
-  // All five fixtures must be complete.
-  if (games.length !== 5 || teams.size !== 10) {
-    return null;
-  }
+  if (teams.size !== 10) return null;
 
-  const results = games
-    .map(toResult)
-    .filter(
-      (result): result is Result =>
-        result !== null
-    );
+  const results = games.map(toResult);
 
-  if (results.length !== 5) {
+  if (results.some((result) => !result)) {
     return null;
   }
 
   return {
     season: season.league.season,
     week,
-    results,
+    results: (results as Result[]).sort(
+      (a, b) =>
+        importance(b) - importance(a) ||
+        b.margin - a.margin
+    ),
   };
 }
 
-function latestEdition(
+function allEditions(
   seasons: HistoricalSeason[]
-): Edition | null {
+) {
   const editions: Edition[] = [];
 
   for (const season of seasons) {
     for (let week = 1; week <= 14; week++) {
-      const edition = editionFrom(
-        season,
-        week
-      );
+      const edition = editionFrom(season, week);
 
       if (edition) {
         editions.push(edition);
@@ -378,231 +227,321 @@ function latestEdition(
     }
   }
 
-  editions.sort(
+  return editions.sort(
     (a, b) =>
       Number(b.season) - Number(a.season) ||
       b.week - a.week
   );
-
-  return editions[0] ?? null;
 }
 
-function SectionHeading({
+function pick(
+  choices: string[],
+  season: string,
+  week: number,
+  salt = 0
+) {
+  const seed =
+    Number(season) * 17 +
+    week * 31 +
+    salt * 13;
+
+  return choices[
+    Math.abs(seed) % choices.length
+  ];
+}
+
+function headline(
+  result: Result,
+  season: string
+) {
+  const winner = teamName(
+    result.winner,
+    season
+  );
+
+  const loser = teamName(
+    result.loser,
+    season
+  );
+
+  const derby = rivalry(
+    result.winner,
+    result.loser
+  );
+
+  if (derby) {
+    return `${derby} Descends Into Absolute Fucking Chaos`;
+  }
+
+  if (result.margin <= 2) {
+    return `${winner} Escape With Their Lives as ${loser} Suffer Heartbreak`;
+  }
+
+  if (result.margin >= 45) {
+    return `${winner} Accused of War Crimes Following ${loser} Massacre`;
+  }
+
+  if (result.winnerScore >= 175) {
+    return `${winner} Go Nuclear in Offensive Exhibition`;
+  }
+
+  if (result.winner === 1) {
+    return "BALLBAGS VICTORY DECLARED NATIONAL HOLIDAY";
+  }
+
+  if (result.loser === 5) {
+    return "WHITING'S LATEST DISASTER PROMPTS PUBLIC INQUIRY";
+  }
+
+  if (result.loser === 6) {
+    return "GARRETT FACES QUESTIONS AFTER LINCOLN SETBACK";
+  }
+
+  return `${winner} Put ${loser} to the Sword`;
+}
+
+function leadTeaser(
+  result: Result,
+  season: string,
+  week: number
+) {
+  const winner = teamName(
+    result.winner,
+    season
+  );
+
+  const loser = teamName(
+    result.loser,
+    season
+  );
+
+  if (result.margin <= 3) {
+    return `${winner} survived a ${score(result.margin)}-point thriller against ${loser}. Sloot News investigates the collapse, the controversy and the manager currently pretending everything is fine.`;
+  }
+
+  if (result.margin >= 40) {
+    return `${loser} suffered a ${score(result.margin)}-point demolition at the hands of ${winner}. The newsroom has seen enough to recommend an independent investigation.`;
+  }
+
+  if (result.winnerScore >= 175) {
+    return `${winner} exploded for ${score(result.winnerScore)} points. The opposition has requested anonymity, while the editorial department prepares a full report on the carnage.`;
+  }
+
+  return pick(
+    [
+      `${winner} emerged victorious over ${loser}, but the final score only tells part of the story. Our correspondents have been examining the damage.`,
+      `${winner} took the points against ${loser}. Behind the result lies a week of questionable decisions and deeply unfortunate consequences.`,
+      `Another week, another SFL manager forced to explain himself. ${winner} beat ${loser}, and the newsroom has several questions.`,
+    ],
+    season,
+    week,
+    result.winner
+  );
+}
+
+function shitcunt(
+  results: Result[],
+  season: string
+) {
+  const worst = [...results].sort(
+    (a, b) =>
+      b.margin - a.margin ||
+      a.loserScore - b.loserScore
+  )[0];
+
+  if (!worst) return null;
+
+  return {
+    manager: MANAGERS[worst.loser],
+    team: teamName(worst.loser, season),
+    margin: worst.margin,
+  };
+}
+
+function historicalFlashback(
+  editions: Edition[],
+  current: Edition
+) {
+  const previous = editions.filter(
+    (edition) =>
+      Number(edition.season) <
+        Number(current.season) &&
+      edition.week === current.week
+  );
+
+  const candidates = previous.flatMap(
+    (edition) =>
+      edition.results.map((result) => ({
+        season: edition.season,
+        week: edition.week,
+        result,
+      }))
+  );
+
+  candidates.sort(
+    (a, b) =>
+      importance(b.result) -
+        importance(a.result) ||
+      Number(b.season) -
+        Number(a.season)
+  );
+
+  return candidates[0] ?? null;
+}
+
+function ArticleLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        color: "#f4f5f7",
+        fontSize: 12,
+        fontWeight: 900,
+        letterSpacing: 0.5,
+        textDecoration: "none",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "10px 0",
+      }}
+    >
+      {children} →
+    </Link>
+  );
+}
+
+function FeatureCard({
   eyebrow,
   title,
+  description,
+  href,
+  linkText,
 }: {
   eyebrow: string;
   title: string;
+  description: string;
+  href: string;
+  linkText: string;
 }) {
   return (
-    <div style={{ marginBottom: "18px" }}>
+    <article
+      style={{
+        ...PANEL,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 215,
+      }}
+    >
       <p
         style={{
-          ...muted,
-          fontSize: "11px",
-          fontWeight: 800,
-          letterSpacing: "2px",
-          margin: "0 0 6px",
-          textTransform: "uppercase",
+          color: MUTED,
+          fontSize: 10,
+          fontWeight: 900,
+          letterSpacing: 1.5,
+          margin: "0 0 12px",
         }}
       >
         {eyebrow}
       </p>
 
-      <h2
+      <h3
         style={{
-          fontSize: "25px",
-          lineHeight: 1.2,
-          margin: 0,
+          fontSize: 22,
+          lineHeight: 1.18,
+          margin: "0 0 13px",
         }}
       >
         {title}
-      </h2>
-    </div>
+      </h3>
+
+      <p
+        style={{
+          color: "#b9c3d0",
+          fontSize: 13,
+          lineHeight: 1.7,
+          margin: "0 0 14px",
+          flex: 1,
+        }}
+      >
+        {description}
+      </p>
+
+      <ArticleLink href={href}>
+        {linkText}
+      </ArticleLink>
+    </article>
   );
 }
 
-function Scoreline({
-  result,
-}: {
-  result: Result;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "7px",
-        padding: "14px 0",
-        borderTop: "1px solid #27303b",
-        borderBottom: "1px solid #27303b",
-        margin: "18px 0",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: "12px",
-        }}
-      >
-        <span
-          style={{
-            fontWeight: 800,
-            fontSize: "14px",
-          }}
-        >
-          {teamName(
-            result.winner,
-            result.game.season
-          )}
-        </span>
-
-        <span
-          style={{
-            fontWeight: 900,
-            fontSize: "17px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {pts(result.winnerScore)}
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: "12px",
-        }}
-      >
-        <span
-          style={{
-            ...muted,
-            fontWeight: 700,
-            fontSize: "14px",
-          }}
-        >
-          {teamName(
-            result.loser,
-            result.game.season
-          )}
-        </span>
-
-        <span
-          style={{
-            ...muted,
-            fontWeight: 800,
-            fontSize: "17px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {pts(result.loserScore)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-export default async function Home() {
+export default async function HomePage() {
   const seasons = await getHistoricalData();
+  const editions = allEditions(seasons);
+  const latest = editions[0];
 
-  const edition = latestEdition(seasons);
-
-  const sorted = edition
-    ? [...edition.results].sort(
-        (a, b) =>
-          storyImportance(b) -
-            storyImportance(a) ||
-          b.margin - a.margin
-      )
-    : [];
-
-  const lead = sorted[0];
-  const roundups = sorted.slice(1);
-
-  const fraud = edition
-    ? [...edition.results].sort(
-        (a, b) => b.margin - a.margin
-      )[0]
+  const base = latest
+    ? `/news/${latest.season}/${latest.week}`
     : null;
 
-  const flashback = edition
-    ? seasons
-        .filter(
-          (season) =>
-            Number(season.league.season) <
-            Number(edition.season)
-        )
-        .flatMap(
-          (season) => season.matchups
-        )
-        .filter(
-          (game) =>
-            game.week === edition.week &&
-            isComplete(game)
-        )
-        .map(toResult)
-        .filter(
-          (result): result is Result =>
-            result !== null
-        )
-        .sort(
-          (a, b) =>
-            storyImportance(b) -
-            storyImportance(a)
-        )[0]
+  const lead = latest?.results[0];
+  const otherGames =
+    latest?.results.slice(1) ?? [];
+
+  const worst = latest
+    ? shitcunt(latest.results, latest.season)
     : null;
 
-  const editionUrl = edition
-    ? `/news/${edition.season}/${edition.week}`
+  const flashback = latest
+    ? historicalFlashback(editions, latest)
     : null;
 
-  const sponsor = edition
+  const sponsor = latest
     ? pick(
         SPONSORS,
-        Number(edition.season) +
-          edition.week
+        latest.season,
+        latest.week
       )
-    : null;
+    : "The Commissioner's Independent Ethics Committee";
 
   return (
     <main
       style={{
-        paddingBottom: "40px",
+        color: "#f4f5f7",
+        paddingBottom: 42,
       }}
     >
       <header
         style={{
           textAlign: "center",
-          borderBottom: "2px solid #ffffff",
-          paddingBottom: "20px",
-          marginBottom: "28px",
+          borderBottom: "3px double #f4f5f7",
+          paddingBottom: 20,
+          marginBottom: 27,
         }}
       >
         <p
           style={{
-            ...muted,
-            fontSize: "10px",
-            fontWeight: 800,
-            letterSpacing: "2px",
-            margin: "0 0 12px",
+            color: MUTED,
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 2,
+            margin: "0 0 13px",
           }}
         >
-          THE OFFICIAL UNOFFICIAL VOICE
-          OF THE SFL
+          THE OFFICIAL UNOFFICIAL VOICE OF THE SFL
         </p>
 
         <h1
           style={{
-            fontSize:
-              "clamp(36px, 10vw, 56px)",
-            letterSpacing: "-2px",
-            fontWeight: 900,
-            lineHeight: 1,
-            margin: "0 0 8px",
+            fontSize: "clamp(43px, 12vw, 76px)",
+            letterSpacing: -3,
+            fontWeight: 950,
+            lineHeight: 0.98,
+            margin: "0 0 12px",
           }}
         >
           SLOOT NEWS
@@ -610,8 +549,8 @@ export default async function Home() {
 
         <p
           style={{
-            fontWeight: 700,
-            fontSize: "14px",
+            fontSize: 14,
+            fontWeight: 800,
             margin: "0 0 18px",
           }}
         >
@@ -620,465 +559,538 @@ export default async function Home() {
 
         <div
           style={{
-            borderTop:
-              "1px solid #27303b",
-            paddingTop: "12px",
+            borderTop: "1px solid #364150",
+            borderBottom: "1px solid #364150",
+            padding: "10px 0",
             display: "flex",
-            justifyContent:
-              "space-between",
-            gap: "10px",
-            color: "#929eae",
-            fontSize: "11px",
-            fontWeight: 800,
-            letterSpacing: "1px",
+            justifyContent: "space-between",
+            gap: 12,
+            color: MUTED,
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 0.7,
           }}
         >
           <span>
-            {edition
-              ? `${edition.season} SEASON`
+            {latest
+              ? `${latest.season} SEASON`
               : "SFL NEWSROOM"}
           </span>
 
           <span>
-            {edition
-              ? `WEEK ${edition.week}`
+            {latest
+              ? `WEEK ${latest.week} EDITION`
               : "AWAITING RESULTS"}
           </span>
         </div>
 
-        {sponsor && (
-          <p
-            style={{
-              ...muted,
-              fontSize: "11px",
-              margin: "14px 0 0",
-              fontStyle: "italic",
-            }}
-          >
-            This edition sponsored by{" "}
-            {sponsor}
-          </p>
-        )}
+        <p
+          style={{
+            color: MUTED,
+            fontSize: 10,
+            lineHeight: 1.6,
+            margin: "12px 0 0",
+          }}
+        >
+          This edition is brought to you by
+          {" "}
+          <strong>{sponsor}</strong>.
+          No questions, please.
+        </p>
       </header>
 
-      {!edition || !lead || !editionUrl ? (
-        <section style={panel}>
-          <SectionHeading
-            eyebrow="Newsroom Notice"
-            title="Nothing to Report. Yet."
-          />
+      {!latest || !lead || !base ? (
+        <section style={PANEL}>
+          <h2
+            style={{
+              fontSize: 25,
+              margin: "0 0 13px",
+            }}
+          >
+            The Newsroom Is Awaiting Its First Edition
+          </h2>
 
           <p
             style={{
-              ...muted,
-              fontSize: "14px",
+              color: MUTED,
+              fontSize: 14,
               lineHeight: 1.8,
-              marginBottom: 0,
+              margin: 0,
             }}
           >
-            Sloot News is waiting for
-            the first fully completed
-            regular-season week.
-            Once all five fixtures
-            are final, the presses
-            will start rolling.
+            Sloot News publishes its weekly
+            front page after all five
+            regular-season matchups are
+            officially complete. No
+            provisional scores, no invented
+            results and absolutely no
+            journalistic integrity.
           </p>
         </section>
       ) : (
         <>
-          <article
+          <section
             style={{
-              ...panel,
-              borderTop:
-                "4px solid #ffffff",
-              marginBottom: "30px",
+              ...PANEL,
+              borderTop: "5px solid #f4f5f7",
+              marginBottom: 27,
             }}
           >
             <p
               style={{
-                ...muted,
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "2px",
-                margin: "0 0 14px",
+                color: MUTED,
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: 2,
+                margin: "0 0 13px",
               }}
             >
-              FRONT-PAGE EXCLUSIVE
+              FRONT PAGE · THE WEEKLY SHITSHOW
             </p>
 
             <h2
               style={{
-                fontSize:
-                  "clamp(28px, 7vw, 40px)",
-                lineHeight: 1.12,
-                letterSpacing: "-0.7px",
-                margin: "0 0 14px",
+                fontSize: "clamp(30px, 8vw, 45px)",
+                lineHeight: 1.1,
+                letterSpacing: -1,
+                margin: "0 0 18px",
               }}
             >
-              <Link
-                href={editionUrl}
-                style={{
-                  color: "inherit",
-                  textDecoration: "none",
-                }}
-              >
-                {headline(lead)}
-              </Link>
+              {headline(lead, latest.season)}
             </h2>
 
-            <Scoreline result={lead} />
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 18,
+              }}
+            >
+              <span
+                style={{
+                  background: "#27303b",
+                  borderRadius: 7,
+                  padding: "7px 10px",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                {teamName(
+                  lead.winner,
+                  latest.season
+                )}
+                {" "}
+                {score(lead.winnerScore)}
+              </span>
+
+              <span
+                style={{
+                  color: MUTED,
+                  fontSize: 11,
+                }}
+              >
+                DEFEATS
+              </span>
+
+              <span
+                style={{
+                  background: "#27303b",
+                  borderRadius: 7,
+                  padding: "7px 10px",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                {teamName(
+                  lead.loser,
+                  latest.season
+                )}
+                {" "}
+                {score(lead.loserScore)}
+              </span>
+            </div>
 
             <p
               style={{
                 color: "#d2d8e0",
-                lineHeight: 1.85,
-                fontSize: "15px",
-                margin: "0 0 20px",
+                fontSize: 15,
+                lineHeight: 1.8,
+                margin: "0 0 14px",
               }}
             >
-              {teaser(lead)}
+              {leadTeaser(
+                lead,
+                latest.season,
+                latest.week
+              )}
             </p>
 
-            <Link
-              href={editionUrl}
+            <p
               style={{
-                display: "inline-block",
-                color: "#ffffff",
-                fontSize: "14px",
-                fontWeight: 900,
-                textDecoration: "none",
-                borderBottom:
-                  "2px solid #ffffff",
-                paddingBottom: "4px",
+                color: MUTED,
+                fontSize: 12,
+                lineHeight: 1.7,
+                margin: "0 0 14px",
               }}
             >
-              READ THE FULL STORY →
-            </Link>
-          </article>
+              Plus: the other four fixtures,
+              questionable management
+              decisions and the complete
+              weekly roundup.
+            </p>
 
-          <section
-            style={{
-              marginBottom: "30px",
-            }}
-          >
-            <SectionHeading
-              eyebrow="The Rest of the Carnage"
-              title="Around the SFL"
-            />
-
-            {roundups.map((result) => (
-              <article
-                key={
-                  `${result.game.season}-` +
-                  `${result.game.week}-` +
-                  `${result.game.rosterA}-` +
-                  `${result.game.rosterB}`
-                }
-                style={{
-                  ...panel,
-                  marginBottom: "12px",
-                }}
-              >
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    letterSpacing: "1.5px",
-                    margin: "0 0 10px",
-                  }}
-                >
-                  MATCH REPORT
-                </p>
-
-                <h3
-                  style={{
-                    fontSize: "21px",
-                    lineHeight: 1.25,
-                    margin: "0 0 12px",
-                  }}
-                >
-                  <Link
-                    href={editionUrl}
-                    style={{
-                      color: "inherit",
-                      textDecoration: "none",
-                    }}
-                  >
-                    {headline(result)}
-                  </Link>
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 800,
-                    margin: "0 0 12px",
-                  }}
-                >
-                  {teamName(
-                    result.winner,
-                    result.game.season
-                  )}
-                  {" "}
-                  {pts(result.winnerScore)}
-                  {" — "}
-                  {pts(result.loserScore)}
-                  {" "}
-                  {teamName(
-                    result.loser,
-                    result.game.season
-                  )}
-                </p>
-
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "14px",
-                    lineHeight: 1.75,
-                    margin: "0 0 14px",
-                  }}
-                >
-                  {teaser(result)}
-                </p>
-
-                <Link
-                  href={editionUrl}
-                  style={{
-                    color: "#ffffff",
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    textDecoration: "none",
-                  }}
-                >
-                  Read the Weekly Roundup →
-                </Link>
-              </article>
-            ))}
+            <ArticleLink href={base}>
+              READ THE FULL WEEKLY SHITSHOW
+            </ArticleLink>
           </section>
 
-          {fraud && (
-            <section
+          <section
+            style={{
+              marginBottom: 29,
+            }}
+          >
+            <div
               style={{
-                ...panel,
-                marginBottom: "30px",
+                borderBottom:
+                  "1px solid #445061",
+                marginBottom: 16,
+                paddingBottom: 10,
               }}
             >
-              <SectionHeading
-                eyebrow="The Awards Committee"
-                title="Shitcunt of the Week"
-              />
-
-              <h3
-                style={{
-                  fontSize: "25px",
-                  margin: "0 0 12px",
-                }}
-              >
-                {manager(fraud.loser)}
-              </h3>
-
               <p
                 style={{
-                  ...muted,
-                  fontSize: "14px",
-                  lineHeight: 1.8,
-                  margin: "0 0 16px",
+                  color: MUTED,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  letterSpacing: 2,
+                  margin: "0 0 5px",
                 }}
               >
-                This week's prestigious
-                dishonour goes to{" "}
-                {manager(fraud.loser)},
-                after{" "}
-                {teamName(
-                  fraud.loser,
-                  edition.season
-                )}{" "}
-                suffered the largest
-                defeat of the round:
-                a{" "}
-                {pts(fraud.margin)}-point
-                hiding at the hands of{" "}
-                {teamName(
-                  fraud.winner,
-                  edition.season
-                )}.
+                THE REST OF THE FRONT PAGE
               </p>
 
-              <Link
-                href={editionUrl}
+              <h2
                 style={{
-                  color: "#ffffff",
-                  fontSize: "13px",
-                  fontWeight: 800,
-                  textDecoration: "none",
+                  fontSize: 25,
+                  margin: 0,
                 }}
               >
-                Read the Full Award Citation →
-              </Link>
-            </section>
-          )}
+                More From the Newsroom
+              </h2>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+                gap: 13,
+              }}
+            >
+              <FeatureCard
+                eyebrow="ANALYSIS · POWER RANKINGS"
+                title="The Sloot Power Index"
+                description="Ten franchises. Four ridiculous tiers. One editorial board with a deeply suspicious relationship to the Ballbags. Find out who's rising and who's been shafted."
+                href={`${base}/power-rankings`}
+                linkText="VIEW THE RANKINGS"
+              />
+
+              <FeatureCard
+                eyebrow="COMING UP · PREDICTIONS"
+                title="Eight Experts. Zero Accountability."
+                description={`The Sloot News panel turns its attention to Week ${latest.week + 1}. Forty exact-score predictions, several personal vendettas and one expert who may not understand the sport.`}
+                href={`${base}/predictions`}
+                linkText="SEE THE PUNDIT PICKS"
+              />
+
+              <FeatureCard
+                eyebrow="THE AWARDS · OBFC & GPFC"
+                title="The Conference Honours"
+                description="Who produced the week's finest individual performances? And which manager managed to waste an absolute masterpiece? The awards committee has reached its verdict."
+                href={`${base}/awards`}
+                linkText="MEET THE WINNERS"
+              />
+            </div>
+          </section>
 
           <section
             style={{
-              ...panel,
-              marginBottom: "30px",
+              ...PANEL,
+              marginBottom: 27,
             }}
           >
-            <SectionHeading
-              eyebrow="The Historical Department"
-              title="From the Vault"
-            />
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: 2,
+                margin: "0 0 10px",
+              }}
+            >
+              THE SHITCUNT OF THE WEEK
+            </p>
+
+            <h2
+              style={{
+                fontSize: 25,
+                lineHeight: 1.2,
+                margin: "0 0 12px",
+              }}
+            >
+              An Honour Nobody Wants
+            </h2>
+
+            <p
+              style={{
+                color: "#d2d8e0",
+                fontSize: 14,
+                lineHeight: 1.8,
+                margin: "0 0 12px",
+              }}
+            >
+              {worst
+                ? `One manager has emerged from Week ${latest.week} with a particularly difficult set of questions to answer. A ${score(worst.margin)}-point defeat has caught the attention of our disciplinary correspondents.`
+                : "The disciplinary committee is reviewing the week's events."}
+            </p>
+
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 12,
+                lineHeight: 1.7,
+                margin: "0 0 12px",
+              }}
+            >
+              The full report, including the
+              unfortunate identity of the
+              accused, appears in this
+              week's main article.
+            </p>
+
+            <ArticleLink href={base}>
+              DISCOVER THE ACCUSED
+            </ArticleLink>
+          </section>
+
+          <section
+            style={{
+              ...PANEL,
+              marginBottom: 27,
+            }}
+          >
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: 2,
+                margin: "0 0 10px",
+              }}
+            >
+              FROM THE VAULT · SFL HISTORY
+            </p>
+
+            <h2
+              style={{
+                fontSize: 25,
+                lineHeight: 1.2,
+                margin: "0 0 12px",
+              }}
+            >
+              The Past Refuses to Stay Buried
+            </h2>
 
             {flashback ? (
               <>
                 <p
                   style={{
-                    ...muted,
-                    fontSize: "11px",
-                    fontWeight: 800,
-                    letterSpacing: "1px",
-                    margin: "0 0 10px",
-                  }}
-                >
-                  {flashback.game.season}
-                  {" · "}
-                  WEEK {flashback.game.week}
-                </p>
-
-                <h3
-                  style={{
-                    fontSize: "21px",
-                    lineHeight: 1.3,
-                    margin: "0 0 14px",
-                  }}
-                >
-                  {headline(flashback)}
-                </h3>
-
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "14px",
+                    color: "#d2d8e0",
+                    fontSize: 14,
                     lineHeight: 1.8,
-                    margin: "0 0 16px",
+                    margin: "0 0 12px",
                   }}
                 >
-                  {teaser(flashback)}
+                  In Week {flashback.week} of
+                  {" "}
+                  {flashback.season},
+                  {" "}
+                  {teamName(
+                    flashback.result.winner,
+                    flashback.season
+                  )}
+                  {" "}
+                  and
+                  {" "}
+                  {teamName(
+                    flashback.result.loser,
+                    flashback.season
+                  )}
+                  {" "}
+                  were involved in a result
+                  worth dragging back into
+                  the public eye. Some
+                  wounds deserve reopening.
                 </p>
 
-                <Link
-                  href={
-                    `/news/` +
-                    `${flashback.game.season}/` +
-                    `${flashback.game.week}`
-                  }
-                  style={{
-                    color: "#ffffff",
-                    fontSize: "13px",
-                    fontWeight: 800,
-                    textDecoration: "none",
-                  }}
+                <ArticleLink
+                  href={`/news/${flashback.season}/${flashback.week}`}
                 >
-                  Revisit the Old Edition →
-                </Link>
+                  REVISIT THE DISASTER
+                </ArticleLink>
               </>
             ) : (
               <p
                 style={{
-                  ...muted,
-                  fontSize: "14px",
-                  lineHeight: 1.8,
+                  color: MUTED,
+                  fontSize: 13,
+                  lineHeight: 1.7,
                   margin: 0,
                 }}
               >
-                The archives are
-                suspiciously quiet.
-                No completed historical
-                fixture is available
-                for this week.
+                The archives are still
+                being examined. The
+                commissioner has reportedly
+                requested that several
+                documents be destroyed.
               </p>
             )}
           </section>
 
           <section
             style={{
-              ...panel,
-              marginBottom: "30px",
+              ...PANEL,
+              marginBottom: 28,
+            }}
+          >
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: 2,
+                margin: "0 0 12px",
+              }}
+            >
+              THE WEEK AT A GLANCE
+            </p>
+
+            <h2
+              style={{
+                fontSize: 23,
+                margin: "0 0 16px",
+              }}
+            >
+              Five Games. Plenty of Damage.
+            </h2>
+
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 13,
+                lineHeight: 1.75,
+                margin: "0 0 16px",
+              }}
+            >
+              The lead story wasn't the
+              only fixture worth talking
+              about. Here's who else
+              featured this week.
+            </p>
+
+            {otherGames.map((result) => (
+              <div
+                key={`${result.winner}-${result.loser}`}
+                style={{
+                  borderTop: "1px solid #27303b",
+                  padding: "14px 0",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    lineHeight: 1.5,
+                    margin: "0 0 5px",
+                  }}
+                >
+                  {teamName(
+                    result.winner,
+                    latest.season
+                  )}
+                  {" "}
+                  vs
+                  {" "}
+                  {teamName(
+                    result.loser,
+                    latest.season
+                  )}
+                </p>
+
+                <p
+                  style={{
+                    color: MUTED,
+                    fontSize: 12,
+                    lineHeight: 1.65,
+                    margin: 0,
+                  }}
+                >
+                  Another result, another
+                  manager with something
+                  to explain.
+                </p>
+              </div>
+            ))}
+
+            <ArticleLink href={base}>
+              READ ALL FIVE MATCH REPORTS
+            </ArticleLink>
+          </section>
+
+          <section
+            style={{
+              borderTop: "1px solid #445061",
+              paddingTop: 20,
               textAlign: "center",
             }}
           >
             <p
               style={{
-                ...muted,
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "2px",
+                color: MUTED,
+                fontSize: 11,
+                lineHeight: 1.8,
                 margin: "0 0 12px",
               }}
             >
-              THE COMPLETE EDITION
+              Want to revisit an older
+              edition? Each weekly article
+              has its own permanent
+              season-and-week URL.
             </p>
 
-            <h2
-              style={{
-                fontSize: "24px",
-                lineHeight: 1.25,
-                margin: "0 0 14px",
-              }}
-            >
-              All Five Games.
-              One Absolutely Disgraceful
-              Newspaper.
-            </h2>
-
-            <p
-              style={{
-                ...muted,
-                fontSize: "14px",
-                lineHeight: 1.75,
-                margin: "0 0 20px",
-              }}
-            >
-              The main scandal,
-              four more match reports,
-              this week's award-winning
-              incompetence and a trip
-              through the SFL archives.
-            </p>
-
-            <Link
-              href={editionUrl}
-              style={{
-                display: "inline-block",
-                background: "#ffffff",
-                color: "#151b23",
-                borderRadius: "10px",
-                padding: "12px 18px",
-                fontSize: "13px",
-                fontWeight: 900,
-                textDecoration: "none",
-              }}
-            >
-              READ WEEK {edition.week} →
-            </Link>
+            <ArticleLink href={base}>
+              OPEN THE LATEST WEEKLY EDITION
+            </ArticleLink>
           </section>
         </>
       )}
 
       <footer
         style={{
+          borderTop: "2px solid #f4f5f7",
           textAlign: "center",
-          borderTop: "1px solid #27303b",
-          paddingTop: "24px",
-          marginTop: "32px",
+          marginTop: 34,
+          paddingTop: 22,
         }}
       >
         <p
           style={{
+            fontSize: 18,
             fontWeight: 900,
-            letterSpacing: "2px",
-            margin: 0,
+            letterSpacing: 2,
+            margin: "0 0 7px",
           }}
         >
           SLOOT NEWS
@@ -1086,9 +1098,9 @@ export default async function Home() {
 
         <p
           style={{
-            ...muted,
-            fontSize: "12px",
-            marginTop: "8px",
+            color: MUTED,
+            fontSize: 12,
+            margin: "0 0 12px",
           }}
         >
           Your Home of Sloot Sport
@@ -1096,15 +1108,15 @@ export default async function Home() {
 
         <p
           style={{
-            ...muted,
-            fontSize: "11px",
-            lineHeight: 1.6,
-            marginTop: "12px",
+            color: MUTED,
+            fontSize: 11,
+            lineHeight: 1.7,
+            margin: 0,
           }}
         >
-          Real scores.
-          Questionable journalism.
-          No refunds.
+          Independent journalism.
+          Dependent on the commissioner's
+          continued financial support.
         </p>
       </footer>
     </main>
