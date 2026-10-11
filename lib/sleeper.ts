@@ -511,13 +511,6 @@ export async function getHistoricalSeason(
       const scoreB =
         teamB.points ?? 0;
 
-      if (
-        scoreA === 0 &&
-        scoreB === 0
-      ) {
-        continue;
-      }
-
       const phase =
         week <= 14
           ? "Regular Season"
