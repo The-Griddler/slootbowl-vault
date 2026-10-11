@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   getHistoricalData,
   type HistoricalMatchup,
-  type HistoricalSeason,
 } from "../../../../lib/sleeper";
 
 type PageProps = {
@@ -548,29 +547,6 @@ export default async function NewsEdition({
     (a, b) => b.margin - a.margin
   )[0];
 
-  const flashback = seasons
-    .filter(
-      (item) =>
-        Number(item.league.season) <
-        Number(season)
-    )
-    .flatMap((item) => item.matchups)
-    .filter(
-      (game) =>
-        game.week === weekNumber &&
-        isComplete(game)
-    )
-    .map(toResult)
-    .filter(
-      (result): result is Result =>
-        result !== null
-    )
-    .sort(
-      (a, b) =>
-        storyImportance(b) -
-        storyImportance(a)
-    )[0];
-
   const sponsor = pick(
     SPONSORS,
     Number(season) + weekNumber
@@ -901,67 +877,59 @@ export default async function NewsEdition({
               marginBottom: "30px",
             }}
           >
-            <SectionHeading
-              eyebrow="The Historical Department"
-              title="From the Vault"
-            />
+            <p
+              style={{
+                ...muted,
+                fontSize: "11px",
+                fontWeight: 800,
+                letterSpacing: "2px",
+                margin: "0 0 10px",
+              }}
+            >
+              MORE FROM THIS EDITION
+            </p>
 
-            {flashback ? (
-              <>
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "11px",
-                    fontWeight: 800,
-                    letterSpacing: "1px",
-                  }}
-                >
-                  {flashback.game.season}
-                  {" · "}
-                  WEEK {flashback.game.week}
-                </p>
+            <h2
+              style={{
+                fontSize: "23px",
+                margin: "0 0 12px",
+              }}
+            >
+              From the Vault
+            </h2>
 
-                <h3
-                  style={{
-                    fontSize: "21px",
-                    lineHeight: 1.3,
-                    margin: "0 0 14px",
-                  }}
-                >
-                  {headline(flashback)}
-                </h3>
+            <p
+              style={{
+                ...muted,
+                fontSize: "14px",
+                lineHeight: 1.8,
+                margin: "0 0 16px",
+              }}
+            >
+              The Sloot News investigative
+              desk has reopened a historical
+              case connected to this week's
+              events. Old scores, fresh
+              embarrassment and another
+              manager wishing the league
+              had never discovered
+              record keeping.
+            </p>
 
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "14px",
-                    lineHeight: 1.8,
-                  }}
-                >
-                  {openingParagraph(flashback)}
-                  {" "}
-                  {personalParagraph(flashback)}
-                </p>
-
-                <Link
-                  href={
-                    `/history/${flashback.game.season}`
-                  }
-                  style={{
-                    color: "#ffffff",
-                    fontSize: "13px",
-                    fontWeight: 800,
-                  }}
-                >
-                  Visit the Season Archive →
-                </Link>
-              </>
-            ) : (
-              <p style={muted}>
-                No earlier completed fixture
-                is available for this week.
-              </p>
-            )}
+            <Link
+              href={
+                `/news/${season}/${week}` +
+                `/from-the-vault`
+              }
+              style={{
+                color: "#ffffff",
+                fontSize: "13px",
+                fontWeight: 800,
+                textDecoration: "none",
+              }}
+            >
+              READ FROM THE VAULT →
+            </Link>
           </section>
         </>
       )}
