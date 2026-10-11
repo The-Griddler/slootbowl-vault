@@ -13,23 +13,23 @@ type PageProps = {
   }>;
 };
 
-type TeamStats = {
+type Fixture = {
+  a: number;
+  b: number;
+  game: HistoricalMatchup;
+};
+
+type Prediction = {
+  a: number;
+  b: number;
+  winner: number;
+};
+
+type Pundit = {
   id: number;
   name: string;
-  manager: string;
-  wins: number;
-  losses: number;
-  pointsFor: number;
-  pointsAgainst: number;
-  average: number;
-  recentWins: number;
-  recentGames: number;
-  latestPoints: number;
-  latestMargin: number;
-  latestWon: boolean;
-  score: number;
-  rank: number;
-  previousRank: number | null;
+  title: string;
+  character: string;
 };
 
 const TEAMS: Record<number, string> = {
@@ -45,79 +45,73 @@ const TEAMS: Record<number, string> = {
   10: "Chad Moist Discharge",
 };
 
-const MANAGERS: Record<number, string> = {
-  1: "Ed Nelms",
-  2: "Ben Smith",
-  3: "Jake Greenwood",
-  4: "George Pendleton",
-  5: "Ryan Whiting",
-  6: "Garrett Etheridge",
-  7: "Ollie Payne",
-  8: "Jack Brannigan",
-  9: "Tarl Brayer",
-  10: "Josh Thomas",
-};
-
-const CONFERENCES: Record<number, string> = {
-  1: "GPFC",
-  2: "GPFC",
-  3: "GPFC",
-  4: "OBFC",
-  5: "GPFC",
-  6: "OBFC",
-  7: "OBFC",
-  8: "OBFC",
-  9: "OBFC",
-  10: "GPFC",
-};
+const PUNDITS: Pundit[] = [
+  {
+    id: 1,
+    name: "Professor Hugh Jass",
+    title: "Head of Advanced Bollocks",
+    character:
+      "Claims to operate a proprietary predictive model. It is understood to be a spreadsheet with three broken formulas.",
+  },
+  {
+    id: 2,
+    name: "Big Kev",
+    title: "Former Pub Darts Champion",
+    character:
+      "Believes every contest will be settled by at least forty points. Has never knowingly predicted a close game.",
+  },
+  {
+    id: 3,
+    name: "Mystic Margaret",
+    title: "Astrologer & Football Medium",
+    character:
+      "Consults the stars, the spirits and occasionally the league table. Only one of these methods has produced useful information.",
+  },
+  {
+    id: 4,
+    name: "Sir Reginald Bellend III",
+    title: "Traditional Football Correspondent",
+    character:
+      "Educated at an expensive institution where the concept of fantasy football was considered a disciplinary offence.",
+  },
+  {
+    id: 5,
+    name: "Darren from the Pub",
+    title: "Independent Football Expert",
+    character:
+      "Hasn't watched an entire NFL game in years. Remains convinced that this makes him more objective.",
+  },
+  {
+    id: 6,
+    name: "ChadGPT",
+    title: "Artificially Unintelligent Analyst",
+    character:
+      "An experimental football intelligence system trained on league gossip, championship propaganda and several corrupted PDFs.",
+  },
+  {
+    id: 7,
+    name: "The Commissioner's Solicitor",
+    title: "Legal & Ballbags Affairs",
+    character:
+      "Maintains that all predictions are entirely independent, provided the Ballbags are given the respect they deserve.",
+  },
+  {
+    id: 8,
+    name: "The Grim Reaper",
+    title: "Senior Misfortune Correspondent",
+    character:
+      "Specialises in identifying promising teams and predicting that something terrible is about to happen to them.",
+  },
+];
 
 const PANEL: CSSProperties = {
   background: "#151b23",
   border: "1px solid #27303b",
-  borderRadius: "18px",
-  padding: "20px",
+  borderRadius: 16,
+  padding: 18,
 };
 
 const MUTED = "#929eae";
-
-const TIER_COLLECTIONS = [
-  [
-    "The Commissioner's Inner Circle",
-    "Men Who Could Actually Win Something",
-    "The Department of Wishful Thinking",
-    "The League's Unflushable Turds",
-  ],
-  [
-    "The Cocaine-Fuelled Champions League",
-    "Dangerous Men With Questionable Intentions",
-    "The Human Participation Trophies",
-    "Should Be Investigated by the RSPCA",
-  ],
-  [
-    "The Alleged Professional Football Teams",
-    "Potentially Dangerous, Mostly to Themselves",
-    "The Financially Irresponsible Middle Class",
-    "Tenancy Agreement in the League Basement",
-  ],
-  [
-    "The Elite Establishment",
-    "One Injury Away From Public Humiliation",
-    "The Great Unwashed",
-    "The Emergency Contact List",
-  ],
-  [
-    "People the Commissioner Respects",
-    "Technically Still Contenders",
-    "The Department of False Hope",
-    "Whiting and Other Public Health Concerns",
-  ],
-  [
-    "The SFL's Most Wanted",
-    "Good Teams With Terrible Personalities",
-    "The Inexplicably Employed",
-    "The Footballing Witness Protection Programme",
-  ],
-];
 
 function teamName(id: number, season: string) {
   if (id === 1 && Number(season) < 2026) {
@@ -127,11 +121,7 @@ function teamName(id: number, season: string) {
   return TEAMS[id] ?? `Franchise ${id}`;
 }
 
-function points(value: number) {
-  return value.toFixed(2);
-}
-
-function complete(game: HistoricalMatchup) {
+function completed(game: HistoricalMatchup) {
   return (
     game.phase === "Regular Season" &&
     game.isComplete === true &&
@@ -145,365 +135,319 @@ function complete(game: HistoricalMatchup) {
   );
 }
 
-function completedWeeks(
+function validWeek(
   games: HistoricalMatchup[],
-  throughWeek: number
+  week: number
 ) {
-  const validWeeks = new Set<number>();
+  const matches = games.filter(
+    (game) =>
+      game.week === week &&
+      completed(game)
+  );
 
-  for (let week = 1; week <= throughWeek; week++) {
-    const fixtures = games.filter(
-      (game) => game.week === week && complete(game)
-    );
+  const teams = new Set<number>();
 
-    const teams = new Set<number>();
-
-    for (const fixture of fixtures) {
-      teams.add(fixture.rosterA);
-      teams.add(fixture.rosterB);
-    }
-
-    if (fixtures.length === 5 && teams.size === 10) {
-      validWeeks.add(week);
-    }
+  for (const game of matches) {
+    teams.add(game.rosterA);
+    teams.add(game.rosterB);
   }
 
-  return validWeeks;
+  return matches.length === 5 && teams.size === 10;
 }
 
-function calculateRankings(
+function fixturesFor(
   games: HistoricalMatchup[],
-  season: string,
-  throughWeek: number
-): TeamStats[] {
-  const validWeeks = completedWeeks(games, throughWeek);
-
-  const eligible = games
-    .filter(
-      (game) =>
-        validWeeks.has(game.week) &&
-        complete(game)
-    )
-    .sort((a, b) => a.week - b.week);
-
-  const teams: TeamStats[] = Array.from(
-    { length: 10 },
-    (_, index) => {
-      const id = index + 1;
-
-      return {
-        id,
-        name: teamName(id, season),
-        manager: MANAGERS[id],
-        wins: 0,
-        losses: 0,
-        pointsFor: 0,
-        pointsAgainst: 0,
-        average: 0,
-        recentWins: 0,
-        recentGames: 0,
-        latestPoints: 0,
-        latestMargin: 0,
-        latestWon: false,
-        score: 0,
-        rank: 0,
-        previousRank: null,
-      };
-    }
+  week: number
+): Fixture[] {
+  const matches = games.filter(
+    (game) =>
+      game.week === week &&
+      game.phase === "Regular Season" &&
+      game.rosterA >= 1 &&
+      game.rosterA <= 10 &&
+      game.rosterB >= 1 &&
+      game.rosterB <= 10 &&
+      game.rosterA !== game.rosterB
   );
 
-  const results = new Map<
-    number,
-    { week: number; scored: number; conceded: number; won: boolean }[]
-  >();
+  const teams = new Set<number>();
 
-  for (const team of teams) {
-    results.set(team.id, []);
+  for (const game of matches) {
+    teams.add(game.rosterA);
+    teams.add(game.rosterB);
   }
 
-  for (const game of eligible) {
-    if (game.scoreA === game.scoreB) {
-      continue;
-    }
-
-    results.get(game.rosterA)?.push({
-      week: game.week,
-      scored: game.scoreA,
-      conceded: game.scoreB,
-      won: game.scoreA > game.scoreB,
-    });
-
-    results.get(game.rosterB)?.push({
-      week: game.week,
-      scored: game.scoreB,
-      conceded: game.scoreA,
-      won: game.scoreB > game.scoreA,
-    });
+  if (matches.length !== 5 || teams.size !== 10) {
+    return [];
   }
 
-  for (const team of teams) {
-    const history = results.get(team.id) ?? [];
-    const recent = history.slice(-3);
-    const latest = history[history.length - 1];
-
-    team.wins = history.filter(
-      (game) => game.won
-    ).length;
-
-    team.losses = history.filter(
-      (game) => !game.won
-    ).length;
-
-    team.pointsFor = history.reduce(
-      (sum, game) => sum + game.scored,
-      0
-    );
-
-    team.pointsAgainst = history.reduce(
-      (sum, game) => sum + game.conceded,
-      0
-    );
-
-    team.average = history.length
-      ? team.pointsFor / history.length
-      : 0;
-
-    team.recentWins = recent.filter(
-      (game) => game.won
-    ).length;
-
-    team.recentGames = recent.length;
-
-    team.latestPoints = latest?.scored ?? 0;
-
-    team.latestMargin = latest
-      ? latest.scored - latest.conceded
-      : 0;
-
-    team.latestWon = latest?.won ?? false;
-
-    const played = team.wins + team.losses;
-
-    const winRate = played
-      ? team.wins / played
-      : 0;
-
-    const recentRate = team.recentGames
-      ? team.recentWins / team.recentGames
-      : 0;
-
-    // Genuine football performance is the
-    // overwhelming basis of the rankings.
-    const performance =
-      team.average * 0.55 +
-      winRate * 45 +
-      recentRate * 24 +
-      Math.max(
-        -10,
-        Math.min(10, team.latestMargin * 0.12)
-      );
-
-    // Editorial interference is intentionally
-    // small enough to keep the rankings credible.
-    const editorialAdjustment =
-      team.id === 1
-        ? 5
-        : team.id === 5
-          ? -4
-          : team.id === 6
-            ? -3
-            : 0;
-
-    team.score =
-      performance + editorialAdjustment;
-  }
-
-  teams.sort(
-    (a, b) =>
-      b.score - a.score ||
-      b.pointsFor - a.pointsFor ||
-      a.id - b.id
-  );
-
-  return teams.map((team, index) => ({
-    ...team,
-    rank: index + 1,
+  return matches.map((game) => ({
+    a: game.rosterA,
+    b: game.rosterB,
+    game,
   }));
 }
 
-function selectTiers(season: string, week: number) {
-  const index =
-    (Number(season) * 7 + week * 3) %
-    TIER_COLLECTIONS.length;
+function averageBefore(
+  games: HistoricalMatchup[],
+  team: number,
+  week: number
+) {
+  const scores: number[] = [];
 
-  return TIER_COLLECTIONS[index];
-}
+  for (let w = 1; w < week; w++) {
+    if (!validWeek(games, w)) continue;
 
-function tierForRank(rank: number) {
-  if (rank <= 2) return 0;
-  if (rank <= 4) return 1;
-  if (rank <= 7) return 2;
-  return 3;
-}
+    for (const game of games) {
+      if (game.week !== w || !completed(game)) {
+        continue;
+      }
 
-function movement(team: TeamStats) {
-  if (team.previousRank === null) {
-    return "NEW";
+      if (game.rosterA === team) {
+        scores.push(game.scoreA);
+      } else if (game.rosterB === team) {
+        scores.push(game.scoreB);
+      }
+    }
   }
 
-  const change = team.previousRank - team.rank;
+  if (!scores.length) return 115;
 
-  if (change > 0) return `▲ ${change}`;
-  if (change < 0) return `▼ ${Math.abs(change)}`;
+  const seasonAverage =
+    scores.reduce((sum, score) => sum + score, 0) /
+    scores.length;
 
-  return "—";
+  const recent = scores.slice(-3);
+
+  const recentAverage =
+    recent.reduce((sum, score) => sum + score, 0) /
+    recent.length;
+
+  return seasonAverage * 0.6 + recentAverage * 0.4;
 }
 
-function editorial(team: TeamStats, week: number) {
-  const seed = (week + team.id * 7) % 3;
+// A repeatable pseudo-random number, not a live
+// random call. Old editions stay unchanged.
+function noise(seed: number) {
+  const x = Math.sin(seed * 12.9898 + 78.233) *
+    43758.5453;
 
-  if (team.id === 1) {
-    if (team.latestWon) {
-      return [
-        "The commissioner has hailed this result as further proof that the Ballbags are the most exciting sporting institution since the invention of competitive drinking. Independent analysts have requested access to the evidence. Their requests have been denied.",
-        "Another victory for the Ballbags, and another difficult week for those who insist that Ed Nelms should be judged by the same standards as the rest of the league. The newsroom considers such suggestions deeply offensive.",
-        "The Ballbags continue their march towards whatever glorious destiny the commissioner has promised them this month. Sloot News has already begun preparing the commemorative merchandise.",
-      ][seed];
+  return (x - Math.floor(x)) * 2 - 1;
+}
+
+function predict(
+  games: HistoricalMatchup[],
+  season: string,
+  week: number,
+  fixture: Fixture,
+  pundit: Pundit
+): Prediction {
+  const baseA = averageBefore(games, fixture.a, week);
+  const baseB = averageBefore(games, fixture.b, week);
+
+  const seed =
+    Number(season) * 100003 +
+    week * 1009 +
+    fixture.a * 97 +
+    fixture.b * 31 +
+    pundit.id * 271;
+
+  const n1 = noise(seed);
+  const n2 = noise(seed + 19);
+
+  let a = baseA;
+  let b = baseB;
+
+  switch (pundit.id) {
+    case 1:
+      // Professor: conservative statistical model.
+      a += n1 * 7;
+      b += n2 * 7;
+      break;
+
+    case 2:
+      // Big Kev: everything is a demolition.
+      if (a + n1 * 15 >= b + n2 * 15) {
+        a += 29;
+        b -= 19;
+      } else {
+        b += 29;
+        a -= 19;
+      }
+      break;
+
+    case 3:
+      // Margaret: stars over statistics.
+      a = 121 + n1 * 34;
+      b = 121 + n2 * 34;
+      break;
+
+    case 4:
+      // Reginald: values the establishment.
+      a += fixture.a === 4 || fixture.a === 8
+        ? 12
+        : n1 * 12;
+
+      b += fixture.b === 4 || fixture.b === 8
+        ? 12
+        : n2 * 12;
+      break;
+
+    case 5:
+      // Darren: almost completely winging it.
+      a = 112 + n1 * 40;
+      b = 112 + n2 * 40;
+      break;
+
+    case 6:
+      // ChadGPT: unreasonably bullish on Chad.
+      a += fixture.a === 10 ? 38 : n1 * 15;
+      b += fixture.b === 10 ? 38 : n2 * 15;
+      break;
+
+    case 7:
+      // Commissioner's solicitor: a slight
+      // conflict of interest.
+      a += fixture.a === 1 ? 30 : n1 * 10;
+      b += fixture.b === 1 ? 30 : n2 * 10;
+      break;
+
+    case 8:
+      // Grim Reaper: expects strong teams to
+      // suffer catastrophic disappointment.
+      a += baseA > baseB ? -25 : n1 * 16;
+      b += baseB > baseA ? -25 : n2 * 16;
+      break;
+  }
+
+  a = Math.max(55, Math.round(a));
+  b = Math.max(55, Math.round(b));
+
+  // Every pundit must actually pick a winner.
+  if (a === b) {
+    if (n1 >= n2) a += 1;
+    else b += 1;
+  }
+
+  return {
+    a,
+    b,
+    winner: a > b ? fixture.a : fixture.b,
+  };
+}
+
+function punditVerdict(
+  pundit: Pundit,
+  prediction: Prediction,
+  fixture: Fixture,
+  season: string
+) {
+  const winner = teamName(prediction.winner, season);
+
+  switch (pundit.id) {
+    case 1:
+      return `The model favours ${winner}. The professor insists the mathematics is beyond the understanding of ordinary men.`;
+    case 2:
+      return `${winner} by a fucking mile. Big Kev has also backed them to win the Grand National.`;
+    case 3:
+      return `Mercury is behaving suspiciously. Margaret believes ${winner} will benefit from a favourable cosmic alignment.`;
+    case 4:
+      return `Sir Reginald expects ${winner} to demonstrate the sort of discipline he has not witnessed since his boarding-school days.`;
+    case 5:
+      return `Darren has gone with ${winner}, having mistaken one of the managers for a bloke he once met in Tenerife.`;
+    case 6:
+      return `ChadGPT selects ${winner}. System diagnostics report a 94% probability of complete fucking nonsense.`;
+    case 7:
+      return `Legal counsel backs ${winner}. Any suggestion of editorial interference is defamatory and will be dealt with accordingly.`;
+    default:
+      return `The Reaper has chosen ${winner}, although he remains more interested in the emotional devastation awaiting the loser.`;
+  }
+}
+
+function leaderboard(
+  games: HistoricalMatchup[],
+  season: string,
+  throughWeek: number
+) {
+  return PUNDITS.map((pundit) => {
+    let correct = 0;
+    let total = 0;
+    let error = 0;
+
+    // Week 1 has no completed same-season week
+    // on which to base a preview. Score previews
+    // for Weeks 2 onward only.
+    for (let week = 2; week <= throughWeek; week++) {
+      if (
+        !validWeek(games, week - 1) ||
+        !validWeek(games, week)
+      ) {
+        continue;
+      }
+
+      const fixtures = fixturesFor(games, week);
+
+      for (const fixture of fixtures) {
+        const prediction = predict(
+          games,
+          season,
+          week,
+          fixture,
+          pundit
+        );
+
+        const actualWinner =
+          fixture.game.scoreA > fixture.game.scoreB
+            ? fixture.a
+            : fixture.game.scoreB > fixture.game.scoreA
+              ? fixture.b
+              : null;
+
+        if (actualWinner === null) continue;
+
+        total += 1;
+
+        if (prediction.winner === actualWinner) {
+          correct += 1;
+        }
+
+        error +=
+          Math.abs(prediction.a - fixture.game.scoreA) +
+          Math.abs(prediction.b - fixture.game.scoreB);
+      }
     }
 
-    return [
-      "A defeat on paper, perhaps, but the commissioner's office has confirmed that the underlying performance was morally victorious. The investigation into why fantasy football insists on using actual scores is ongoing.",
-      "The Ballbags have suffered a temporary setback. Sloot News understands that Ed Nelms has described the result as an encouraging sign of progress, although nobody has yet worked out what the fuck he was looking at.",
-      "Critics will point to the defeat. Visionaries will point to the long-term project. The commissioner has asked us to remind readers that only one of these groups understands the Ballbags' true potential.",
-    ][seed];
-  }
-
-  if (team.id === 5) {
-    if (team.latestWon) {
-      return [
-        "Ryan Whiting has somehow won another football match. The newsroom congratulates him on this achievement and would like to clarify that a police investigation remains an option.",
-        "Grays Town's latest victory is an unfortunate development for those of us who had already prepared several excellent jokes about Whiting's incompetence. We have decided to publish them anyway.",
-        "The Fingerblasters are showing signs of genuine quality, an observation that has caused considerable distress within the Sloot News editorial department. We expect normal service to resume shortly.",
-      ][seed];
-    }
-
-    return [
-      "Ryan Whiting has once again demonstrated that owning a fantasy football team and being qualified to operate one are two very different things. The Fingerblasters' supporters deserve answers, or at least a refund.",
-      "The newsroom has spent years investigating the Grays Town project. Our latest findings suggest that Whiting's greatest obstacle may be the continued involvement of Ryan Whiting.",
-      "Another setback for the Fingerblasters. Sloot News has been advised that Whiting remains confident, which historically has not been a particularly reassuring sign.",
-    ][seed];
-  }
-
-  if (team.id === 6) {
-    if (team.latestWon) {
-      return [
-        "Garrett Etheridge has produced another impressive performance, confirming once again that Lincoln are capable of winning football matches during the portion of the calendar in which trophies are not awarded.",
-        "The Nonces continue to look formidable. Sloot News would like to congratulate Garrett and remind readers that the regular season is not, technically speaking, the entire competition.",
-        "Lincoln have impressed the statistical department. The historical department, however, would like to know whether Garrett intends to keep this up when the games start mattering.",
-      ][seed];
-    }
-
-    return [
-      "Lincoln's latest performance has raised an uncomfortable question: what happens if Garrett starts bottling it before the playoffs even arrive? The newsroom has requested an emergency meeting.",
-      "Garrett Etheridge has built a reputation for impressive regular seasons followed by disappointment. This latest result suggests he may be experimenting with a more efficient timetable.",
-      "The Nonces have stumbled, leaving Garrett to explain why a franchise with such lofty ambitions occasionally performs like somebody has unplugged the controller.",
-    ][seed];
-  }
-
-  if (team.id === 10) {
-    return [
-      "Josh Thomas remains the owner of two consecutive Slootbowl titles, a deeply irritating fact that the editorial team is legally obliged to acknowledge. Whatever the latest result, Chad's history makes them difficult to dismiss.",
-      "The Moist Discharge continue to operate according to a sporting philosophy best described as 'fuck around until December'. Unfortunately for the rest of the league, it has previously worked.",
-      "Josh Thomas has already demonstrated that regular-season appearances can be deceiving. The newsroom is therefore refusing to declare Chad finished until somebody physically removes them from the postseason.",
-    ][seed];
-  }
-
-  if (team.id === 9) {
-    return [
-      "Tarl Brayer knows all about building a competitive franchise. He also knows an extraordinary amount about losing important games by margins that would make a grown man consider moving to a remote island.",
-      "East Rutherford remain capable of causing serious damage. Whether that damage will ultimately be inflicted on their opponents or Tarl's emotional wellbeing is another matter.",
-      "The Shitlickers have the pedigree to frighten anybody in the OBFC. Their biggest enemy, as several painful chapters of SFL history suggest, may be the concept of hope itself.",
-    ][seed];
-  }
-
-  if (team.id === 4) {
-    return [
-      "George Pendleton's championship pedigree remains undeniable. His ability to discuss that pedigree without sounding like an unbearable prick remains a work in progress.",
-      "The Happy Endings have earned the right to be taken seriously, even if their manager has repeatedly demonstrated that he cannot be trusted with the resulting attention.",
-      "George's franchise has spent years behaving like a genuine contender. The rest of the OBFC would appreciate it if he could occasionally develop a hobby.",
-    ][seed];
-  }
-
-  if (team.id === 3) {
-    return [
-      "Jake Greenwood's Grimsby project remains an impressive monument to almost achieving something. The Chode Chokers have had plenty of chances to write a championship story and keep misplacing the final chapter.",
-      "Grimsby have the look of a side capable of making noise. Whether that noise is a championship celebration or Jake swearing at his phone remains uncertain.",
-      "The Chode Chokers continue to pursue their first Slootbowl title. Sloot News wishes Jake every success, largely because the resulting celebrations would probably be fucking unbearable.",
-    ][seed];
-  }
-
-  if (team.id === 2) {
-    return [
-      "Ben Smith has already climbed the mountain once, winning the inaugural Slootbowl. Cambridge's current task is to prove that the franchise has something to offer beyond a very impressive collection of old photographs.",
-      "The Cum Sluts remain a reminder that championship success is not necessarily a permanent condition. Ben will be hoping that his next great era arrives before everyone forgets the first one.",
-      "Cambridge's place in SFL history is secure. Its place in the current power rankings, however, must unfortunately be determined by football rather than nostalgia.",
-    ][seed];
-  }
-
-  if (team.id === 8) {
-    return [
-      "Jack Brannigan continues his campaign to prove that future draft picks are an unnecessary luxury. Weybiza supporters have been assured that everything is under control, which has done little to calm them.",
-      "The BAB's have previously reached the Slootbowl, so the ambition is certainly there. Whether Jack's long-term planning survives contact with reality is less clear.",
-      "Weybiza remain one of the league's more fascinating experiments in aggressive roster management. The results may eventually vindicate Jack, although the newsroom has declined to place a bet.",
-    ][seed];
-  }
-
-  return [
-    "Ollie Payne's Kalamata side remain a deeply unpredictable organisation. Some weeks they resemble a serious football team. Other weeks they resemble a cry for help.",
-    "The Dirty Vegans continue to occupy that peculiar space between genuine danger and complete fucking nonsense. Ollie appears entirely comfortable with the arrangement.",
-    "Kalamata's latest performance adds another chapter to a franchise history that could generously be described as inconsistent and less generously be described as a complete shitshow.",
-  ][seed];
+    return {
+      ...pundit,
+      correct,
+      total,
+      error,
+    };
+  }).sort(
+    (a, b) =>
+      b.correct - a.correct ||
+      a.error - b.error ||
+      a.id - b.id
+  );
 }
 
-function formComment(team: TeamStats) {
-  if (team.recentGames === 0) {
-    return "The form department has nothing to report.";
-  }
-
-  if (team.recentWins === team.recentGames) {
-    return `They've won all ${team.recentGames} of their most recent fixtures. Even the newsroom is struggling to find a way to call that bad football.`;
-  }
-
-  if (team.recentWins === 0) {
-    return `They've lost their last ${team.recentGames} fixtures. At this point, the club might consider replacing its training facilities with a large bin.`;
-  }
-
-  return `Their last ${team.recentGames} fixtures have produced ${team.recentWins} wins, suggesting a side with enough talent to be dangerous and enough inconsistency to remain deeply annoying.`;
-}
-
-function rankingSummary(team: TeamStats) {
-  const record = `${team.wins}-${team.losses}`;
-
-  return `${record} record, ${points(team.average)} points per game and ${points(team.pointsFor)} total points scored. ${formComment(team)}`;
-}
-
-function SectionHeading({
+function SectionTitle({
   eyebrow,
-  title,
+  children,
 }: {
   eyebrow: string;
-  title: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: "18px" }}>
+    <div style={{ marginBottom: 18 }}>
       <p
         style={{
           color: MUTED,
-          fontSize: "11px",
+          fontSize: 11,
           fontWeight: 800,
-          letterSpacing: "2px",
-          margin: "0 0 7px",
+          letterSpacing: 2,
           textTransform: "uppercase",
+          margin: "0 0 8px",
         }}
       >
         {eyebrow}
@@ -511,118 +455,73 @@ function SectionHeading({
 
       <h2
         style={{
-          fontSize: "25px",
+          fontSize: 25,
           lineHeight: 1.2,
           margin: 0,
         }}
       >
-        {title}
+        {children}
       </h2>
     </div>
   );
 }
 
-export default async function PowerRankings({
+export default async function PredictionsPage({
   params,
 }: PageProps) {
   const { season, week } = await params;
-  const weekNumber = Number(week);
+  const editionWeek = Number(week);
+  const previewWeek = editionWeek + 1;
 
-  const seasons = await getHistoricalData();
+  const history = await getHistoricalData();
 
-  const selected = seasons.find(
+  const selected = history.find(
     (item) => item.league.season === season
   );
 
-  const validWeek =
-    Number.isInteger(weekNumber) &&
-    weekNumber >= 1 &&
-    weekNumber <= 14;
-
   const games = selected?.matchups ?? [];
 
-  const completed = validWeek
-    ? completedWeeks(games, weekNumber)
-    : new Set<number>();
+  const editionReady =
+    Number.isInteger(editionWeek) &&
+    editionWeek >= 1 &&
+    editionWeek <= 14 &&
+    validWeek(games, editionWeek);
 
-  const ready =
-    validWeek && completed.has(weekNumber);
+  const previewSupported = previewWeek <= 14;
 
-  let rankings: TeamStats[] = [];
+  const fixtures =
+    editionReady && previewSupported
+      ? fixturesFor(games, previewWeek)
+      : [];
 
-  if (ready) {
-    rankings = calculateRankings(
-      games,
-      season,
-      weekNumber
-    );
+  const ranks = editionReady
+    ? leaderboard(games, season, editionWeek)
+    : [];
 
-    const previous =
-      weekNumber > 1 &&
-      completed.has(weekNumber - 1)
-        ? calculateRankings(
-            games,
-            season,
-            weekNumber - 1
-          )
-        : [];
-
-    const previousPositions = new Map(
-      previous.map((team) => [
-        team.id,
-        team.rank,
-      ])
-    );
-
-    rankings = rankings.map((team) => ({
-      ...team,
-      previousRank:
-        previousPositions.get(team.id) ?? null,
-    }));
-  }
-
-  const tiers = selectTiers(
-    season,
-    validWeek ? weekNumber : 1
+  const hasResults = ranks.some(
+    (pundit) => pundit.total > 0
   );
 
-  const topTeam = rankings[0];
-
-  const biggestRiser = [...rankings]
-    .filter(
-      (team) => team.previousRank !== null
-    )
-    .sort(
-      (a, b) =>
-        (b.previousRank! - b.rank) -
-        (a.previousRank! - a.rank)
-    )[0];
-
-  const biggestFaller = [...rankings]
-    .filter(
-      (team) => team.previousRank !== null
-    )
-    .sort(
-      (a, b) =>
-        (a.previousRank! - a.rank) -
-        (b.previousRank! - b.rank)
-    )[0];
-
   return (
-    <main style={{ paddingBottom: "40px" }}>
+    <main
+      style={{
+        color: "#f4f5f7",
+        paddingBottom: 40,
+      }}
+    >
       <header
         style={{
           textAlign: "center",
-          borderBottom: "2px solid #ffffff",
-          paddingBottom: "20px",
-          marginBottom: "28px",
+          borderBottom: "2px solid #f4f5f7",
+          paddingBottom: 20,
+          marginBottom: 28,
         }}
       >
         <Link
           href={`/news/${season}/${week}`}
           style={{
             color: MUTED,
-            fontSize: "12px",
+            fontSize: 12,
             textDecoration: "none",
             fontWeight: 700,
           }}
@@ -633,7 +532,7 @@ export default async function PowerRankings({
         <h1
           style={{
             fontSize: "clamp(36px, 10vw, 56px)",
-            letterSpacing: "-2px",
+            letterSpacing: -2,
             fontWeight: 900,
             lineHeight: 1,
             margin: "24px 0 8px",
@@ -645,7 +544,7 @@ export default async function PowerRankings({
         <p
           style={{
             fontWeight: 700,
-            fontSize: "14px",
+            fontSize: 14,
             margin: "0 0 18px",
           }}
         >
@@ -655,454 +554,601 @@ export default async function PowerRankings({
         <div
           style={{
             borderTop: "1px solid #27303b",
-            paddingTop: "12px",
+            paddingTop: 12,
             display: "flex",
             justifyContent: "space-between",
-            gap: "10px",
+            gap: 10,
             color: MUTED,
-            fontSize: "11px",
+            fontSize: 11,
             fontWeight: 800,
-            letterSpacing: "1px",
+            letterSpacing: 1,
           }}
         >
           <span>{season} SEASON</span>
-          <span>WEEK {validWeek ? weekNumber : "—"}</span>
+          <span>
+            WEEK {Number.isInteger(editionWeek)
+              ? editionWeek
+              : "—"} EDITION
+          </span>
         </div>
       </header>
 
-      {!ready ? (
+      <section
+        style={{
+          ...PANEL,
+          borderTop: "4px solid #f4f5f7",
+          marginBottom: 28,
+        }}
+      >
+        <p
+          style={{
+            color: MUTED,
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: 2,
+            margin: "0 0 12px",
+          }}
+        >
+          THE SLOOT NEWS PREDICTION PANEL
+        </p>
+
+        <h2
+          style={{
+            fontSize: "clamp(28px, 7vw, 40px)",
+            lineHeight: 1.12,
+            letterSpacing: -1,
+            margin: "0 0 16px",
+          }}
+        >
+          Eight Experts. Five Games.
+          Zero Accountability.
+        </h2>
+
+        <p
+          style={{
+            color: "#d2d8e0",
+            lineHeight: 1.85,
+            fontSize: 15,
+            margin: "0 0 14px",
+          }}
+        >
+          With Week {editionWeek} in the books,
+          the SFL turns its attention to
+          {previewSupported
+            ? ` Week ${previewWeek}.`
+            : " the postseason."}
+          {" "}
+          Sloot News has assembled eight
+          individuals whose collective
+          qualifications include a pub darts
+          trophy, several restraining orders
+          and a suspiciously close relationship
+          with the commissioner.
+        </p>
+
+        <p
+          style={{
+            color: "#d2d8e0",
+            lineHeight: 1.85,
+            fontSize: 15,
+            margin: 0,
+          }}
+        >
+          Every expert must predict both teams'
+          scores. Their forecasts are based
+          on information available at the
+          time of the edition, with varying
+          degrees of statistical competence.
+          Absolutely none should be used
+          for financial decisions.
+        </p>
+      </section>
+
+      {!editionReady ? (
         <section style={PANEL}>
-          <SectionHeading
-            eyebrow="Editorial Notice"
-            title="Rankings Under Embargo"
-          />
+          <SectionTitle eyebrow="Broadcast Notice">
+            Predictions Under Embargo
+          </SectionTitle>
 
           <p
             style={{
               color: MUTED,
               lineHeight: 1.8,
+              margin: 0,
             }}
           >
-            The editorial board will not publish
-            this week's power rankings until all
-            five regular-season fixtures have
-            officially finished.
+            The prediction panel opens only
+            after all five fixtures from the
+            selected regular-season week
+            have officially finished.
           </p>
+        </section>
+      ) : !previewSupported ? (
+        <section style={PANEL}>
+          <SectionTitle eyebrow="End of Regular Season">
+            Playoff Preview Coming Later
+          </SectionTitle>
 
           <p
             style={{
               color: MUTED,
               lineHeight: 1.8,
-              marginBottom: 0,
+              margin: 0,
             }}
           >
-            The commissioner has requested an
-            exception for the Ballbags. The
-            request is being considered by the
-            commissioner.
+            Week 14 has concluded. The next
+            fixtures belong to the playoffs,
+            which require a separate bracket
+            preview rather than the normal
+            five-game regular-season panel.
+          </p>
+        </section>
+      ) : fixtures.length !== 5 ? (
+        <section style={PANEL}>
+          <SectionTitle eyebrow="Fixture Desk">
+            The Schedule Has Gone Missing
+          </SectionTitle>
+
+          <p
+            style={{
+              color: MUTED,
+              lineHeight: 1.8,
+              margin: 0,
+            }}
+          >
+            Sleeper hasn't supplied a complete
+            set of five Week {previewWeek}
+            regular-season fixtures in the
+            historical data available to this
+            page. The newsroom refuses to
+            invent opponents, despite
+            considerable pressure from
+            Darren from the Pub.
           </p>
         </section>
       ) : (
         <>
-          <section
-            style={{
-              ...PANEL,
-              borderTop: "4px solid #ffffff",
-              marginBottom: "30px",
-            }}
-          >
-            <p
-              style={{
-                color: MUTED,
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "2px",
-                margin: "0 0 14px",
-              }}
-            >
-              THE SLOOT POWER INDEX
-            </p>
+          <section style={{ marginBottom: 32 }}>
+            <SectionTitle eyebrow="The Fixtures">
+              Week {previewWeek}: The Picks Are In
+            </SectionTitle>
 
-            <h2
-              style={{
-                fontSize: "clamp(27px, 7vw, 38px)",
-                lineHeight: 1.12,
-                letterSpacing: "-0.7px",
-                margin: "0 0 18px",
-              }}
-            >
-              Ten Franchises. Four Tiers.
-              Absolutely No Editorial Integrity.
-            </h2>
-
-            <p
-              style={{
-                color: "#d2d8e0",
-                fontSize: "15px",
-                lineHeight: 1.85,
-                margin: "0 0 16px",
-              }}
-            >
-              Welcome to Week {weekNumber} of
-              the Sloot Power Index, the SFL's
-              premier source of football
-              analysis, personal vendettas and
-              occasionally accurate mathematics.
-            </p>
-
-            <p
-              style={{
-                color: "#d2d8e0",
-                fontSize: "15px",
-                lineHeight: 1.85,
-                margin: 0,
-              }}
-            >
-              This week's rankings combine
-              scoring, results and recent form,
-              before being submitted to an
-              editorial committee whose
-              commitment to impartiality is
-              best described as theoretical.
-              The Ballbags have been granted
-              favourable treatment. Whiting
-              and Garrett have been denied
-              the right to appeal.
-            </p>
-          </section>
-
-          {topTeam && (
-            <section
-              style={{
-                ...PANEL,
-                marginBottom: "30px",
-              }}
-            >
-              <SectionHeading
-                eyebrow="The View From the Summit"
-                title="King of the Shit Mountain"
-              />
-
-              <h3
+            {fixtures.map((fixture, fixtureIndex) => (
+              <article
+                key={`${fixture.a}-${fixture.b}`}
                 style={{
-                  fontSize: "24px",
-                  margin: "0 0 12px",
+                  ...PANEL,
+                  marginBottom: 20,
+                  overflow: "hidden",
                 }}
               >
-                {topTeam.name}
-              </h3>
-
-              <p
-                style={{
-                  color: MUTED,
-                  fontSize: "14px",
-                  lineHeight: 1.8,
-                  margin: 0,
-                }}
-              >
-                {topTeam.manager} occupies
-                the top spot with a
-                {" "}
-                {topTeam.wins}-{topTeam.losses}
-                {" "}
-                record and an average of
-                {" "}
-                {points(topTeam.average)}
-                {" "}
-                points per fixture. The
-                editorial team has examined
-                the evidence and, with
-                varying degrees of
-                enthusiasm, agreed that
-                somebody has to be first.
-              </p>
-            </section>
-          )}
-
-          <section style={{ marginBottom: "30px" }}>
-            <SectionHeading
-              eyebrow="The Officially Unofficial List"
-              title="The Rankings"
-            />
-
-            {tiers.map((tierName, tierIndex) => {
-              const members = rankings.filter(
-                (team) =>
-                  tierForRank(team.rank) ===
-                  tierIndex
-              );
-
-              if (!members.length) return null;
-
-              return (
-                <div
-                  key={tierName}
+                <p
                   style={{
-                    marginBottom: "28px",
+                    color: MUTED,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: 2,
+                    margin: "0 0 15px",
                   }}
                 >
-                  <div
+                  MATCHUP {fixtureIndex + 1} OF 5
+                </p>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto 1fr",
+                    alignItems: "center",
+                    gap: 10,
+                    textAlign: "center",
+                    marginBottom: 18,
+                  }}
+                >
+                  <h3
                     style={{
-                      borderBottom:
-                        "1px solid #445061",
-                      paddingBottom: "12px",
-                      marginBottom: "14px",
+                      fontSize: 17,
+                      lineHeight: 1.3,
+                      margin: 0,
                     }}
                   >
-                    <p
-                      style={{
-                        color: MUTED,
-                        fontSize: "10px",
-                        fontWeight: 800,
-                        letterSpacing: "2px",
-                        margin: "0 0 6px",
-                      }}
-                    >
-                      TIER {tierIndex + 1}
-                    </p>
+                    {teamName(fixture.a, season)}
+                  </h3>
 
-                    <h3
-                      style={{
-                        fontSize: "22px",
-                        lineHeight: 1.25,
-                        margin: 0,
-                      }}
-                    >
-                      {tierName}
-                    </h3>
-                  </div>
+                  <span
+                    style={{
+                      color: MUTED,
+                      fontSize: 12,
+                      fontWeight: 900,
+                    }}
+                  >
+                    VS
+                  </span>
 
-                  {members.map((team) => (
-                    <article
-                      key={team.id}
-                      style={{
-                        ...PANEL,
-                        marginBottom: "12px",
-                      }}
-                    >
+                  <h3
+                    style={{
+                      fontSize: 17,
+                      lineHeight: 1.3,
+                      margin: 0,
+                    }}
+                  >
+                    {teamName(fixture.b, season)}
+                  </h3>
+                </div>
+
+                <div
+                  style={{
+                    borderTop: "1px solid #27303b",
+                    borderBottom: "1px solid #27303b",
+                  }}
+                >
+                  {PUNDITS.map((pundit) => {
+                    const prediction = predict(
+                      games,
+                      season,
+                      previewWeek,
+                      fixture,
+                      pundit
+                    );
+
+                    return (
                       <div
+                        key={pundit.id}
                         style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "14px",
-                          marginBottom: "16px",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "minmax(0, 1fr) 55px 20px 55px",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "13px 0",
+                          borderBottom:
+                            pundit.id === 8
+                              ? "none"
+                              : "1px solid #27303b",
                         }}
                       >
-                        <div
-                          style={{
-                            fontSize: "34px",
-                            fontWeight: 900,
-                            lineHeight: 1,
-                            minWidth: "45px",
-                          }}
-                        >
-                          {team.rank}
-                        </div>
-
-                        <div style={{ flex: 1 }}>
-                          <h4
+                        <div style={{ minWidth: 0 }}>
+                          <p
                             style={{
-                              fontSize: "19px",
-                              lineHeight: 1.25,
-                              margin: "0 0 6px",
+                              fontSize: 13,
+                              fontWeight: 800,
+                              margin: "0 0 3px",
                             }}
                           >
-                            {team.name}
-                          </h4>
+                            {pundit.name}
+                          </p>
 
                           <p
                             style={{
                               color: MUTED,
-                              fontSize: "12px",
+                              fontSize: 10,
                               margin: 0,
                             }}
                           >
-                            {team.manager}
-                            {" · "}
-                            {CONFERENCES[team.id]}
+                            {pundit.title}
                           </p>
+                        </div>
+
+                        <div
+                          style={{
+                            textAlign: "center",
+                            fontWeight: 900,
+                            fontSize: 20,
+                            color:
+                              prediction.winner === fixture.a
+                                ? "#ffffff"
+                                : MUTED,
+                            background:
+                              prediction.winner === fixture.a
+                                ? "#344052"
+                                : "#202731",
+                            borderRadius: 7,
+                            padding: "9px 3px",
+                          }}
+                        >
+                          {prediction.a}
                         </div>
 
                         <span
                           style={{
-                            color:
-                              team.previousRank !==
-                                null &&
-                              team.previousRank >
-                                team.rank
-                                ? "#73c69a"
-                                : team.previousRank !==
-                                      null &&
-                                    team.previousRank <
-                                      team.rank
-                                  ? "#ed9393"
-                                  : MUTED,
-                            fontSize: "12px",
-                            fontWeight: 900,
-                            whiteSpace: "nowrap",
+                            color: MUTED,
+                            textAlign: "center",
                           }}
                         >
-                          {movement(team)}
+                          –
                         </span>
+
+                        <div
+                          style={{
+                            textAlign: "center",
+                            fontWeight: 900,
+                            fontSize: 20,
+                            color:
+                              prediction.winner === fixture.b
+                                ? "#ffffff"
+                                : MUTED,
+                            background:
+                              prediction.winner === fixture.b
+                                ? "#344052"
+                                : "#202731",
+                            borderRadius: 7,
+                            padding: "9px 3px",
+                          }}
+                        >
+                          {prediction.b}
+                        </div>
                       </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "8px",
-                          marginBottom: "16px",
-                        }}
-                      >
-                        {[
-                          `${team.wins}-${team.losses}`,
-                          `${points(team.average)} AVG`,
-                          `${points(team.pointsFor)} PF`,
-                        ].map((stat) => (
-                          <span
-                            key={stat}
-                            style={{
-                              background: "#27303b",
-                              borderRadius: "7px",
-                              padding: "6px 9px",
-                              fontSize: "11px",
-                              fontWeight: 800,
-                            }}
-                          >
-                            {stat}
-                          </span>
-                        ))}
-                      </div>
-
-                      <p
-                        style={{
-                          color: "#d2d8e0",
-                          fontSize: "14px",
-                          lineHeight: 1.8,
-                          margin: "0 0 14px",
-                        }}
-                      >
-                        {rankingSummary(team)}
-                      </p>
-
-                      <p
-                        style={{
-                          color: MUTED,
-                          fontSize: "14px",
-                          lineHeight: 1.8,
-                          margin: 0,
-                        }}
-                      >
-                        {editorial(team, weekNumber)}
-                      </p>
-                    </article>
-                  ))}
+                    );
+                  })}
                 </div>
-              );
-            })}
+
+                <div
+                  style={{
+                    marginTop: 17,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  {[PUNDITS[0], PUNDITS[4]].map(
+                    (pundit) => {
+                      const prediction = predict(
+                        games,
+                        season,
+                        previewWeek,
+                        fixture,
+                        pundit
+                      );
+
+                      return (
+                        <p
+                          key={pundit.id}
+                          style={{
+                            color: "#c4ccd6",
+                            fontSize: 13,
+                            lineHeight: 1.7,
+                            margin: 0,
+                          }}
+                        >
+                          <strong>
+                            {pundit.name}:
+                          </strong>
+                          {" "}
+                          {punditVerdict(
+                            pundit,
+                            prediction,
+                            fixture,
+                            season
+                          )}
+                        </p>
+                      );
+                    }
+                  )}
+                </div>
+              </article>
+            ))}
           </section>
-
-          {weekNumber > 1 && (
-            <section
-              style={{
-                ...PANEL,
-                marginBottom: "30px",
-              }}
-            >
-              <SectionHeading
-                eyebrow="Market Movements"
-                title="The Movers and Shakers"
-              />
-
-              {biggestRiser &&
-                biggestRiser.previousRank !== null &&
-                biggestRiser.previousRank >
-                  biggestRiser.rank && (
-                  <p
-                    style={{
-                      color: "#d2d8e0",
-                      fontSize: "14px",
-                      lineHeight: 1.8,
-                    }}
-                  >
-                    <strong>Biggest riser:</strong>
-                    {" "}
-                    {biggestRiser.name},
-                    climbing from
-                    {" "}
-                    #{biggestRiser.previousRank}
-                    {" "}
-                    to #{biggestRiser.rank}.
-                    Somebody in that
-                    organisation has
-                    apparently discovered
-                    how to play fantasy
-                    football.
-                  </p>
-                )}
-
-              {biggestFaller &&
-                biggestFaller.previousRank !== null &&
-                biggestFaller.previousRank <
-                  biggestFaller.rank && (
-                  <p
-                    style={{
-                      color: "#d2d8e0",
-                      fontSize: "14px",
-                      lineHeight: 1.8,
-                      marginBottom: 0,
-                    }}
-                  >
-                    <strong>Biggest faller:</strong>
-                    {" "}
-                    {biggestFaller.name},
-                    dropping from
-                    {" "}
-                    #{biggestFaller.previousRank}
-                    {" "}
-                    to #{biggestFaller.rank}.
-                    The newsroom has
-                    attempted to contact
-                    management for comment,
-                    but understands the
-                    telephone may have
-                    been thrown into a
-                    nearby body of water.
-                  </p>
-                )}
-            </section>
-          )}
 
           <section
             style={{
               ...PANEL,
-              marginBottom: "30px",
+              marginBottom: 28,
             }}
           >
-            <SectionHeading
-              eyebrow="A Statement From Management"
-              title="Editorial Independence"
-            />
+            <SectionTitle eyebrow="Meet the Experts">
+              The Rogues' Gallery
+            </SectionTitle>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 15,
+              }}
+            >
+              {PUNDITS.map((pundit) => (
+                <div
+                  key={pundit.id}
+                  style={{
+                    borderBottom: "1px solid #27303b",
+                    paddingBottom: 14,
+                  }}
+                >
+                  <h3
+                    style={{
+                      fontSize: 16,
+                      margin: "0 0 4px",
+                    }}
+                  >
+                    {pundit.name}
+                  </h3>
+
+                  <p
+                    style={{
+                      color: MUTED,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    {pundit.title}
+                  </p>
+
+                  <p
+                    style={{
+                      color: "#d2d8e0",
+                      fontSize: 13,
+                      lineHeight: 1.75,
+                      margin: 0,
+                    }}
+                  >
+                    {pundit.character}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section
+            style={{
+              ...PANEL,
+              marginBottom: 28,
+            }}
+          >
+            <SectionTitle eyebrow="The Accountability Department">
+              Pundit League Table
+            </SectionTitle>
 
             <p
               style={{
                 color: MUTED,
-                fontSize: "14px",
+                fontSize: 13,
+                lineHeight: 1.75,
+                margin: "0 0 18px",
+              }}
+            >
+              Predictions are scored against
+              completed fixtures from Weeks 2
+              through {editionWeek}. Correct
+              winners determine the rankings;
+              total score-prediction error
+              breaks ties. Smaller error is
+              better.
+            </p>
+
+            {!hasResults ? (
+              <p
+                style={{
+                  color: MUTED,
+                  lineHeight: 1.7,
+                }}
+              >
+                No predictions have been
+                settled yet. All eight
+                experts remain undefeated,
+                a situation Darren has
+                described as historic.
+              </p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 12,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        color: MUTED,
+                        textAlign: "left",
+                        borderBottom:
+                          "1px solid #445061",
+                      }}
+                    >
+                      <th style={{ padding: "10px 5px" }}>
+                        #
+                      </th>
+                      <th style={{ padding: "10px 5px" }}>
+                        Expert
+                      </th>
+                      <th style={{ padding: "10px 5px" }}>
+                        Correct
+                      </th>
+                      <th style={{ padding: "10px 5px" }}>
+                        Error
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {ranks.map((pundit, index) => (
+                      <tr
+                        key={pundit.id}
+                        style={{
+                          borderBottom:
+                            "1px solid #27303b",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "13px 5px",
+                            fontWeight: 900,
+                          }}
+                        >
+                          {index + 1}
+                        </td>
+
+                        <td
+                          style={{
+                            padding: "13px 5px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {pundit.name}
+                        </td>
+
+                        <td
+                          style={{
+                            padding: "13px 5px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {pundit.correct}/{pundit.total}
+                        </td>
+
+                        <td
+                          style={{
+                            padding: "13px 5px",
+                          }}
+                        >
+                          {Math.round(pundit.error)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <p
+              style={{
+                color: MUTED,
+                fontSize: 11,
+                lineHeight: 1.7,
+                margin: "16px 0 0",
+              }}
+            >
+              All pundits are fictional.
+              Their predictions use fixed
+              formulas and historical data
+              available before each game.
+              No actual game results are
+              used to generate predictions
+              for that game.
+            </p>
+          </section>
+
+          <section style={PANEL}>
+            <SectionTitle eyebrow="Final Word">
+              The Panel Has Spoken
+            </SectionTitle>
+
+            <p
+              style={{
+                color: "#d2d8e0",
                 lineHeight: 1.8,
+                fontSize: 14,
                 margin: 0,
               }}
             >
-              Sloot News categorically denies
-              that its rankings are influenced
-              by the personal preferences of
-              the commissioner. The newsroom
-              would also like to congratulate
-              Ed Nelms on his excellent
-              leadership and remind Ryan
-              Whiting and Garrett Etheridge
-              that complaints must be
-              submitted in writing to an
-              address that does not exist.
+              Forty predictions have now been
+              committed to the public record.
+              By next week, at least one
+              member of the panel will be
+              claiming they were misquoted.
+              The commissioner has already
+              instructed the legal department
+              to prepare a statement in the
+              event of a Ballbags defeat.
             </p>
           </section>
         </>
@@ -1112,14 +1158,14 @@ export default async function PowerRankings({
         style={{
           textAlign: "center",
           borderTop: "1px solid #27303b",
-          paddingTop: "24px",
-          marginTop: "32px",
+          paddingTop: 24,
+          marginTop: 32,
         }}
       >
         <p
           style={{
             fontWeight: 900,
-            letterSpacing: "2px",
+            letterSpacing: 2,
             margin: 0,
           }}
         >
@@ -1129,8 +1175,8 @@ export default async function PowerRankings({
         <p
           style={{
             color: MUTED,
-            fontSize: "12px",
-            marginTop: "8px",
+            fontSize: 12,
+            marginTop: 8,
           }}
         >
           Your Home of Sloot Sport
@@ -1139,13 +1185,12 @@ export default async function PowerRankings({
         <p
           style={{
             color: MUTED,
-            fontSize: "11px",
-            lineHeight: 1.6,
-            marginTop: "12px",
+            fontSize: 11,
+            marginTop: 12,
           }}
         >
-          Real statistics. Corrupt analysis.
-          Absolutely no right of appeal.
+          Eight experts. One brain cell.
+          Shared custody.
         </p>
       </footer>
     </main>
