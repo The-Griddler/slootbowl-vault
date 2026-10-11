@@ -1,15 +1,19 @@
+
 import { notFound } from "next/navigation";
 import { getHistoricalData } from "../../../lib/sleeper";
 import { getFranchiseName } from "../../../lib/franchises";
 import { getPlayers, getPlayerName } from "../../../lib/players";
+
 const SLOOTBOWLS = [
   { season: "2025", champion: 10, runnerUp: 9 },
   { season: "2024", champion: 10, runnerUp: 4 },
   { season: "2023", champion: 4, runnerUp: 2 },
   { season: "2022", champion: 2, runnerUp: 8 },
 ];
+
 const OBFC = [4, 6, 8, 7, 9];
 const GPFC = [1, 2, 10, 3, 5];
+
 function cardStyle() {
   return {
     background: "#151b23",
@@ -19,6 +23,7 @@ function cardStyle() {
     marginBottom: "14px",
   } as const;
 }
+
 function labelStyle() {
   return {
     fontSize: "11px",
@@ -27,25 +32,84 @@ function labelStyle() {
     color: "#687384",
   } as const;
 }
+
 export default async function SeasonPage({
   params,
 }: {
   params: Promise<{ season: string }>;
 }) {
   const { season } = await params;
+
   const [historicalData, players] = await Promise.all([
     getHistoricalData(),
     getPlayers(),
   ]);
+
   const seasonData = historicalData.find(
     (item) => item.league.season === season
   );
+
   if (!seasonData) {
     notFound();
   }
+
   const championship = SLOOTBOWLS.find(
     (item) => item.season === season
   );
+
+  /*
+   * Only completed NFL weeks are eligible
+   * for official SFL results and statistics.
+   */
+  const completedRegularMatchups =
+    seasonData.matchups.filter(
+      (matchup) =>
+        matchup.phase === "Regular Season" &&
+        matchup.isComplete === true &&
+        Number.isFinite(matchup.scoreA) &&
+        Number.isFinite(matchup.scoreB) &&
+        matchup.scoreA >= 0 &&
+        matchup.scoreB >= 0 &&
+        (matchup.scoreA > 0 || matchup.scoreB > 0)
+    );
+
+  /*
+   * A regular season is complete only if
+   * all 14 weeks contain five valid matchups
+   * involving all ten franchises.
+   */
+  const regularSeasonComplete = Array.from(
+    { length: 14 },
+    (_, index) => index + 1
+  ).every((week) => {
+    const weekly = completedRegularMatchups.filter(
+      (matchup) => matchup.week === week
+    );
+
+    if (weekly.length !== 5) {
+      return false;
+    }
+
+    const rosterIds = new Set<number>();
+
+    for (const matchup of weekly) {
+      rosterIds.add(matchup.rosterA);
+      rosterIds.add(matchup.rosterB);
+    }
+
+    return rosterIds.size === 10;
+  });
+
+  const standingsLabel = regularSeasonComplete
+    ? "FINAL STANDINGS"
+    : "CURRENT STANDINGS";
+
+  /*
+   * Regular-season standings.
+   *
+   * Provisional matchups do not affect
+   * wins, losses, ties or points scored.
+   */
   const standings = new Map<
     number,
     {
@@ -56,6 +120,7 @@ export default async function SeasonPage({
       points: number;
     }
   >();
+
   for (const rosterId of [...OBFC, ...GPFC]) {
     standings.set(rosterId, {
       rosterId,
@@ -65,17 +130,18 @@ export default async function SeasonPage({
       points: 0,
     });
   }
-  for (const matchup of seasonData.matchups) {
-    if (matchup.phase !== "Regular Season") {
-      continue;
-    }
+
+  for (const matchup of completedRegularMatchups) {
     const teamA = standings.get(matchup.rosterA);
     const teamB = standings.get(matchup.rosterB);
+
     if (!teamA || !teamB) {
       continue;
     }
+
     teamA.points += matchup.scoreA;
     teamB.points += matchup.scoreB;
+
     if (matchup.scoreA > matchup.scoreB) {
       teamA.wins++;
       teamB.losses++;
@@ -87,6 +153,7 @@ export default async function SeasonPage({
       teamB.ties++;
     }
   }
+
   const sortStandings = (rosterIds: number[]) =>
     rosterIds
       .map((rosterId) => standings.get(rosterId)!)
@@ -94,41 +161,72 @@ export default async function SeasonPage({
         if (b.wins !== a.wins) {
           return b.wins - a.wins;
         }
+
         if (b.ties !== a.ties) {
           return b.ties - a.ties;
         }
+
         return b.points - a.points;
       });
+
   const obfcStandings = sortStandings(OBFC);
   const gpfcStandings = sortStandings(GPFC);
+
+  /*
+   * Only completed main-bracket games
+   * establish official playoff results.
+   */
   const playoffMatchups = seasonData.matchups
-    .filter((matchup) => matchup.phase === "Main Playoffs")
+    .filter(
+      (matchup) =>
+        matchup.phase === "Main Playoffs"
+    )
     .sort((a, b) => a.week - b.week);
+
+  const completedPlayoffMatchups =
+    playoffMatchups.filter(
+      (matchup) =>
+        matchup.isComplete === true &&
+        Number.isFinite(matchup.scoreA) &&
+        Number.isFinite(matchup.scoreB) &&
+        (matchup.scoreA > 0 || matchup.scoreB > 0)
+    );
+
   const playoffTeams = new Set<number>();
-  for (const matchup of playoffMatchups) {
+
+  for (const matchup of completedPlayoffMatchups) {
     playoffTeams.add(matchup.rosterA);
     playoffTeams.add(matchup.rosterB);
   }
+
   /*
-   * Build regular-season player totals.
+   * Player award calculations use only
+   * officially completed regular-season
+   * performances.
    */
   const regularSeasonPerformances =
-    seasonData.matchups
-      .filter(
-        (matchup) => matchup.phase === "Regular Season"
-      )
-      .flatMap((matchup) => [
-        ...matchup.startersA.map((playerId, index) => ({
-          playerId,
-          rosterId: matchup.rosterA,
-          points: matchup.startersPointsA[index] ?? 0,
-        })),
-        ...matchup.startersB.map((playerId, index) => ({
-          playerId,
-          rosterId: matchup.rosterB,
-          points: matchup.startersPointsB[index] ?? 0,
-        })),
-      ]);
+    completedRegularMatchups.flatMap(
+      (matchup) => [
+        ...matchup.startersA.map(
+          (playerId, index) => ({
+            playerId,
+            rosterId: matchup.rosterA,
+            points:
+              matchup.startersPointsA[index] ?? 0,
+          })
+        ),
+
+        ...matchup.startersB.map(
+          (playerId, index) => ({
+            playerId,
+            rosterId: matchup.rosterB,
+            points:
+              matchup.startersPointsB[index] ?? 0,
+          })
+        ),
+      ]
+    );
+
   const playerTotals = new Map<
     string,
     {
@@ -137,10 +235,20 @@ export default async function SeasonPage({
       rosters: Set<number>;
     }
   >();
+
   for (const performance of regularSeasonPerformances) {
+    if (
+      !performance.playerId ||
+      performance.playerId === "0" ||
+      !Number.isFinite(performance.points)
+    ) {
+      continue;
+    }
+
     const existing = playerTotals.get(
       performance.playerId
     );
+
     if (!existing) {
       playerTotals.set(performance.playerId, {
         playerId: performance.playerId,
@@ -152,81 +260,109 @@ export default async function SeasonPage({
       existing.rosters.add(performance.rosterId);
     }
   }
+
   /*
-   * MVP
-   * Highest regular-season scorer whose team made
-   * the playoffs.
+   * MVP: highest-scoring regular-season
+   * starter whose franchise reached
+   * the main playoffs.
    */
   const mvpCandidates = Array.from(
     playerTotals.values()
   )
     .filter((player) =>
-      Array.from(player.rosters).some((rosterId) =>
-        playoffTeams.has(rosterId)
+      Array.from(player.rosters).some(
+        (rosterId) => playoffTeams.has(rosterId)
       )
     )
     .sort((a, b) => b.points - a.points);
-  const mvp = mvpCandidates[0];
+
   /*
-   * OPOY
-   * Highest regular-season scorer at a different
-   * position from the MVP.
+   * Awards are final only after the
+   * regular season has finished.
+   */
+  const mvp = regularSeasonComplete
+    ? mvpCandidates[0]
+    : undefined;
+
+  /*
+   * OPOY: highest-scoring eligible player
+   * at a different position from the MVP.
    */
   const mvpPlayer = mvp
     ? players[mvp.playerId]
     : null;
+
   const mvpPosition =
     mvpPlayer?.position ??
     mvpPlayer?.fantasy_positions?.[0] ??
     null;
-  const opoy = mvpCandidates.find((candidate) => {
-    const player = players[candidate.playerId];
-    const position =
-      player?.position ??
-      player?.fantasy_positions?.[0] ??
-      null;
-    return position && position !== mvpPosition;
-  });
-/*
- * ROY
- * Highest regular-season scorer whose NFL rookie
- * season matches this SFL season.
- *
- * Sleeper's years_exp represents experience in the
- * current 2026 NFL season, so the player's NFL rookie
- * season is 2026 - years_exp.
- */
-const seasonNumber = Number(season);
 
-const rookieCandidates = Array.from(
-  playerTotals.values()
-)
-  .filter((candidate) => {
-    const player = players[candidate.playerId];
+  const opoy = regularSeasonComplete
+    ? mvpCandidates.find((candidate) => {
+        const player = players[candidate.playerId];
 
-    if (
-      player?.years_exp === null ||
-      player?.years_exp === undefined
-    ) {
-      return false;
-    }
+        const position =
+          player?.position ??
+          player?.fantasy_positions?.[0] ??
+          null;
 
-    const rookieSeason =
-      2026 - player.years_exp;
+        return (
+          position &&
+          position !== mvpPosition
+        );
+      })
+    : undefined;
 
-    return rookieSeason === seasonNumber;
-  })
-  .sort((a, b) => b.points - a.points);
-
-const roy = rookieCandidates[0];
   /*
-   * Slootbowl MVP
-   * Highest-scoring starter in the Slootbowl
-   * on the championship-winning team.
+   * ROY: highest-scoring eligible rookie
+   * whose NFL rookie season matches the
+   * selected SFL season.
+   *
+   * Sleeper years_exp is relative to
+   * the current NFL player dataset.
    */
-  const slootbowl = playoffMatchups.find(
-    (matchup) => matchup.week === 17
+  const seasonNumber = Number(season);
+  const currentPlayerDataSeason = Math.max(
+    ...historicalData.map((item) =>
+      Number(item.league.season)
+    )
   );
+
+  const rookieCandidates = Array.from(
+    playerTotals.values()
+  )
+    .filter((candidate) => {
+      const player = players[candidate.playerId];
+
+      if (
+        player?.years_exp === null ||
+        player?.years_exp === undefined
+      ) {
+        return false;
+      }
+
+      const rookieSeason =
+        currentPlayerDataSeason -
+        player.years_exp;
+
+      return rookieSeason === seasonNumber;
+    })
+    .sort((a, b) => b.points - a.points);
+
+  const roy = regularSeasonComplete
+    ? rookieCandidates[0]
+    : undefined;
+
+  /*
+   * Slootbowl MVP: highest-scoring starter
+   * on the winning franchise in a
+   * completed Week 17 championship game.
+   */
+  const slootbowl =
+    completedPlayoffMatchups.find(
+      (matchup) => matchup.week === 17
+    );
+
   let sbMvp:
     | {
         playerId: string;
@@ -234,6 +370,7 @@ const roy = rookieCandidates[0];
         points: number;
       }
     | undefined;
+
   if (slootbowl) {
     const winningRosterId =
       slootbowl.scoreA > slootbowl.scoreB
@@ -241,29 +378,40 @@ const roy = rookieCandidates[0];
         : slootbowl.scoreB > slootbowl.scoreA
         ? slootbowl.rosterB
         : null;
+
     if (winningRosterId !== null) {
       const winningStarters =
         winningRosterId === slootbowl.rosterA
           ? slootbowl.startersA
           : slootbowl.startersB;
+
       const winningStarterPoints =
         winningRosterId === slootbowl.rosterA
           ? slootbowl.startersPointsA
           : slootbowl.startersPointsB;
-      const candidates = winningStarters.map(
-        (playerId, index) => ({
+
+      const candidates = winningStarters
+        .map((playerId, index) => ({
           playerId,
           rosterId: winningRosterId,
           points:
             winningStarterPoints[index] ?? 0,
-        })
-      );
+        }))
+        .filter(
+          (candidate) =>
+            candidate.playerId &&
+            candidate.playerId !== "0" &&
+            Number.isFinite(candidate.points)
+        );
+
       sbMvp = candidates.sort(
         (a, b) => b.points - a.points
       )[0];
     }
   }
+
   const playoffWeeks = [15, 16, 17];
+
   return (
     <main>
       <header style={{ marginBottom: "28px" }}>
@@ -275,13 +423,17 @@ const roy = rookieCandidates[0];
         >
           SFL HISTORY
         </p>
+
         <h1>{season} Season</h1>
+
         <p style={{ marginTop: "6px" }}>
           The Sluts Football League {season} season.
         </p>
       </header>
+
       <section style={cardStyle()}>
         <p style={labelStyle()}>SLOOTBOWL</p>
+
         {championship ? (
           <>
             <h2
@@ -292,6 +444,7 @@ const roy = rookieCandidates[0];
             >
               🏆 {getFranchiseName(championship.champion)}
             </h2>
+
             <p>
               Defeated{" "}
               {getFranchiseName(championship.runnerUp)}
@@ -307,13 +460,20 @@ const roy = rookieCandidates[0];
             >
               Slootbowl not yet played
             </h2>
-            <p>2026 season is still underway.</p>
+
+            <p>
+              {season} season is still underway.
+            </p>
           </>
         )}
       </section>
+
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>FINAL STANDINGS</p>
+          <p style={labelStyle()}>
+            {standingsLabel}
+          </p>
+
           <h2
             style={{
               margin: "4px 0 0",
@@ -323,18 +483,21 @@ const roy = rookieCandidates[0];
             OBFC
           </h2>
         </div>
+
         <article style={cardStyle()}>
           {obfcStandings.map((team, index) => (
             <div
               key={team.rosterId}
               style={{
                 display: "grid",
-                gridTemplateColumns: "30px 1fr auto",
+                gridTemplateColumns:
+                  "30px 1fr auto",
                 gap: "10px",
                 alignItems: "center",
                 padding: "12px 0",
                 borderBottom:
-                  index === obfcStandings.length - 1
+                  index ===
+                  obfcStandings.length - 1
                     ? "none"
                     : "1px solid #27303b",
               }}
@@ -342,14 +505,18 @@ const roy = rookieCandidates[0];
               <strong
                 style={{
                   color:
-                    index === 0 ? "#f5f7fa" : "#687384",
+                    index === 0
+                      ? "#f5f7fa"
+                      : "#687384",
                 }}
               >
                 {index + 1}
               </strong>
+
               <strong>
                 {getFranchiseName(team.rosterId)}
               </strong>
+
               <div
                 style={{
                   textAlign: "right",
@@ -362,6 +529,7 @@ const roy = rookieCandidates[0];
                     ? `-${team.ties}`
                     : ""}
                 </strong>
+
                 <div
                   style={{
                     color: "#687384",
@@ -375,9 +543,13 @@ const roy = rookieCandidates[0];
           ))}
         </article>
       </section>
+
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>FINAL STANDINGS</p>
+          <p style={labelStyle()}>
+            {standingsLabel}
+          </p>
+
           <h2
             style={{
               margin: "4px 0 0",
@@ -387,18 +559,21 @@ const roy = rookieCandidates[0];
             GPFC
           </h2>
         </div>
+
         <article style={cardStyle()}>
           {gpfcStandings.map((team, index) => (
             <div
               key={team.rosterId}
               style={{
                 display: "grid",
-                gridTemplateColumns: "30px 1fr auto",
+                gridTemplateColumns:
+                  "30px 1fr auto",
                 gap: "10px",
                 alignItems: "center",
                 padding: "12px 0",
                 borderBottom:
-                  index === gpfcStandings.length - 1
+                  index ===
+                  gpfcStandings.length - 1
                     ? "none"
                     : "1px solid #27303b",
               }}
@@ -406,14 +581,18 @@ const roy = rookieCandidates[0];
               <strong
                 style={{
                   color:
-                    index === 0 ? "#f5f7fa" : "#687384",
+                    index === 0
+                      ? "#f5f7fa"
+                      : "#687384",
                 }}
               >
                 {index + 1}
               </strong>
+
               <strong>
                 {getFranchiseName(team.rosterId)}
               </strong>
+
               <div
                 style={{
                   textAlign: "right",
@@ -426,6 +605,7 @@ const roy = rookieCandidates[0];
                     ? `-${team.ties}`
                     : ""}
                 </strong>
+
                 <div
                   style={{
                     color: "#687384",
@@ -439,9 +619,13 @@ const roy = rookieCandidates[0];
           ))}
         </article>
       </section>
+
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>INDIVIDUAL AWARDS</p>
+          <p style={labelStyle()}>
+            INDIVIDUAL AWARDS
+          </p>
+
           <h2
             style={{
               margin: "4px 0 0",
@@ -451,6 +635,7 @@ const roy = rookieCandidates[0];
             SFL honours
           </h2>
         </div>
+
         <article style={cardStyle()}>
           {[
             {
@@ -475,9 +660,11 @@ const roy = rookieCandidates[0];
             },
           ].map((award, index, awards) => {
             const result = award.result;
+
             const player = result
               ? players[result.playerId]
               : null;
+
             return (
               <div
                 key={award.award}
@@ -499,11 +686,13 @@ const roy = rookieCandidates[0];
                 >
                   {award.icon} {award.award}
                 </div>
+
                 {result && player ? (
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
+                      justifyContent:
+                        "space-between",
                       alignItems: "center",
                       gap: "12px",
                       marginTop: "6px",
@@ -518,6 +707,7 @@ const roy = rookieCandidates[0];
                       >
                         {getPlayerName(player)}
                       </strong>
+
                       <span
                         style={{
                           display: "block",
@@ -529,10 +719,13 @@ const roy = rookieCandidates[0];
                         {getFranchiseName(
                           "rosterId" in result
                             ? result.rosterId
-                            : Array.from(result.rosters)[0]
+                            : Array.from(
+                                result.rosters
+                              )[0]
                         )}
                       </span>
                     </div>
+
                     <strong
                       style={{
                         whiteSpace: "nowrap",
@@ -551,9 +744,11 @@ const roy = rookieCandidates[0];
           })}
         </article>
       </section>
+
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
           <p style={labelStyle()}>PLAYOFFS</p>
+
           <h2
             style={{
               margin: "4px 0 0",
@@ -563,19 +758,23 @@ const roy = rookieCandidates[0];
             Road to the Slootbowl
           </h2>
         </div>
+
         {playoffWeeks.map((week) => {
           const games = playoffMatchups.filter(
             (matchup) => matchup.week === week
           );
+
           if (games.length === 0) {
             return null;
           }
+
           const title =
             week === 15
               ? "Week 15 — First Round"
               : week === 16
               ? "Week 16 — Conference Championships"
               : "Week 17 — Slootbowl";
+
           return (
             <article
               key={week}
@@ -592,46 +791,71 @@ const roy = rookieCandidates[0];
               >
                 {title}
               </h3>
+
               {games.map((matchup, index) => {
                 const aWon =
-                  matchup.scoreA > matchup.scoreB;
+                  matchup.isComplete &&
+                  matchup.scoreA >
+                    matchup.scoreB;
+
                 const bWon =
-                  matchup.scoreB > matchup.scoreA;
+                  matchup.isComplete &&
+                  matchup.scoreB >
+                    matchup.scoreA;
+
                 return (
                   <div
                     key={`${matchup.rosterA}-${matchup.rosterB}-${index}`}
                     style={{
                       padding: "12px 0",
                       borderBottom:
-                        index === games.length - 1
+                        index ===
+                        games.length - 1
                           ? "none"
                           : "1px solid #27303b",
                     }}
                   >
+                    {!matchup.isComplete && (
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#9da7b3",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        PROVISIONAL RESULT
+                      </div>
+                    )}
+
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "space-between",
+                        justifyContent:
+                          "space-between",
                         gap: "12px",
                       }}
                     >
                       <strong
                         style={{
-                          fontWeight: aWon ? 700 : 400,
+                          fontWeight:
+                            aWon ? 700 : 400,
                         }}
                       >
                         {getFranchiseName(
                           matchup.rosterA
                         )}
                       </strong>
+
                       <strong>
                         {matchup.scoreA.toFixed(1)}
                       </strong>
                     </div>
+
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "space-between",
+                        justifyContent:
+                          "space-between",
                         gap: "12px",
                         marginTop: "7px",
                         color: bWon
@@ -641,13 +865,15 @@ const roy = rookieCandidates[0];
                     >
                       <strong
                         style={{
-                          fontWeight: bWon ? 700 : 400,
+                          fontWeight:
+                            bWon ? 700 : 400,
                         }}
                       >
                         {getFranchiseName(
                           matchup.rosterB
                         )}
                       </strong>
+
                       <strong>
                         {matchup.scoreB.toFixed(1)}
                       </strong>
