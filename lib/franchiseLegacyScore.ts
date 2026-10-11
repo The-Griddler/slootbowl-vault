@@ -75,6 +75,26 @@ type SeasonalContribution = {
   rosterWeeks: number;
 };
 
+function isOfficialMatchup(
+  matchup: HistoricalSeason["matchups"][number]
+): boolean {
+  return (
+    matchup.isComplete === true &&
+    (
+      matchup.phase === "Regular Season" ||
+      matchup.phase === "Main Playoffs"
+    ) &&
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
+    (
+      matchup.scoreA > 0 ||
+      matchup.scoreB > 0
+    )
+  );
+}
+
 function buildSeasonalContributions(
   historicalSeasons: HistoricalSeason[],
   careers: FranchisePlayerCareer[]
@@ -84,6 +104,13 @@ function buildSeasonalContributions(
     SeasonalContribution
   >();
 
+  /*
+   * Begin with completed roster-membership
+   * weeks from franchiseLegacy.ts.
+   *
+   * This preserves attribution for players
+   * who were rostered but never started.
+   */
   for (const career of careers) {
     for (const [
       season,
@@ -105,12 +132,18 @@ function buildSeasonalContributions(
     }
   }
 
+  /*
+   * Only officially completed regular-season
+   * and main-playoff games contribute to
+   * franchise award attribution.
+   *
+   * Live fantasy points are excluded.
+   * Toilet Bowl and placement games remain
+   * excluded.
+   */
   for (const season of historicalSeasons) {
     for (const matchup of season.matchups) {
-      if (
-        matchup.phase !== "Regular Season" &&
-        matchup.phase !== "Main Playoffs"
-      ) {
+      if (!isOfficialMatchup(matchup)) {
         continue;
       }
 
@@ -135,6 +168,12 @@ function buildSeasonalContributions(
             return;
           }
 
+          const points = starterPoints[index];
+
+          if (!Number.isFinite(points)) {
+            return;
+          }
+
           const key =
             `${season.league.season}:${rosterId}:${playerId}`;
 
@@ -155,12 +194,7 @@ function buildSeasonalContributions(
           }
 
           contribution.starts++;
-
-          const points = starterPoints[index];
-
-          if (Number.isFinite(points)) {
-            contribution.points += points;
-          }
+          contribution.points += points;
         });
       }
     }
