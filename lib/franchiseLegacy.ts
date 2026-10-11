@@ -3,6 +3,8 @@ import {
   getLeagueHistory,
   getMatchups,
   getHistoricalData,
+  getNFLState,
+  isNFLWeekComplete,
   type SleeperMatchup,
 } from "./sleeper";
 
@@ -49,50 +51,35 @@ function calculateLoyaltyPoints(
   return total;
 }
 
-function hasRecordedResult(
-  roster: SleeperMatchup
-): boolean {
-  return (
-    typeof roster.points === "number" &&
-    Number.isFinite(roster.points) &&
-    roster.points > 0
-  );
-}
-
-function isLeagueWeekComplete(
-  rosters: SleeperMatchup[]
-): boolean {
-  return (
-    rosters.length === 10 &&
-    rosters.every(hasRecordedResult)
-  );
-}
-
 export async function getFranchisePlayerCareers():
   Promise<FranchisePlayerCareer[]> {
-  const [leagues, historicalData] =
+  const [leagues, historicalData, nflState] =
     await Promise.all([
       getLeagueHistory(),
       getHistoricalData(),
+      getNFLState(),
     ]);
 
   if (leagues.length === 0) return [];
-
-  const latestSeason = Math.max(
-    ...leagues.map((league) =>
-      Number(league.season)
-    )
-  );
 
   const careers = new Map<
     string,
     CareerAccumulator
   >();
 
-  // Build weekly roster membership histories.
-  for (const league of leagues) {
-    const year = Number(league.season);
+  // =====================================
+  // WEEKLY ROSTER MEMBERSHIP
+  // =====================================
+  //
+  // Loyalty is awarded only for weeks
+  // confirmed complete by Sleeper's
+  // NFL season state.
+  //
+  // A positive fantasy score does NOT
+  // mean the week is finished.
+  // =====================================
 
+  for (const league of leagues) {
     const weeklyData = await Promise.all(
       Array.from({ length: 17 }, (_, index) =>
         getMatchups(index + 1, league.league_id)
@@ -105,14 +92,22 @@ export async function getFranchisePlayerCareers():
       weekIndex++
     ) {
       const week = weekIndex + 1;
+
+      if (
+        !isNFLWeekComplete(
+          league.season,
+          week,
+          nflState
+        )
+      ) {
+        continue;
+      }
+
       const rosters = weeklyData[weekIndex];
 
-      // For the latest season, only count
-      // completed league-wide matchup weeks.
-      if (
-        year === latestSeason &&
-        !isLeagueWeekComplete(rosters)
-      ) {
+      // An empty week cannot establish
+      // roster membership.
+      if (rosters.length === 0) {
         continue;
       }
 
@@ -170,8 +165,17 @@ export async function getFranchisePlayerCareers():
     }
   }
 
-  // Official starts and production only.
-  // Excludes Toilet Bowl and placement games.
+  // =====================================
+  // OFFICIAL STARTS AND PRODUCTION
+  // =====================================
+  //
+  // Only completed regular-season and
+  // main-playoff matchups are counted.
+  //
+  // Toilet Bowl and placement games
+  // remain excluded.
+  // =====================================
+
   const officialPerformance = new Map<
     string,
     { starts: number; points: number }
@@ -180,8 +184,17 @@ export async function getFranchisePlayerCareers():
   for (const season of historicalData) {
     for (const matchup of season.matchups) {
       if (
-        matchup.phase !== "Regular Season" &&
-        matchup.phase !== "Main Playoffs"
+        matchup.isComplete !== true ||
+        (
+          matchup.phase !== "Regular Season" &&
+          matchup.phase !== "Main Playoffs"
+        ) ||
+        !Number.isFinite(matchup.scoreA) ||
+        !Number.isFinite(matchup.scoreB) ||
+        (
+          matchup.scoreA === 0 &&
+          matchup.scoreB === 0
+        )
       ) {
         continue;
       }
@@ -230,6 +243,10 @@ export async function getFranchisePlayerCareers():
       }
     }
   }
+
+  // =====================================
+  // BUILD FRANCHISE PLAYER CAREERS
+  // =====================================
 
   return [...careers.values()]
     .map((career) => {
