@@ -6,6 +6,22 @@ import {
   type HistoricalSeason,
 } from "../lib/sleeper";
 
+type Result = {
+  game: HistoricalMatchup;
+  winner: number;
+  loser: number;
+  winnerScore: number;
+  loserScore: number;
+  margin: number;
+  total: number;
+};
+
+type Edition = {
+  season: string;
+  week: number;
+  results: Result[];
+};
+
 const TEAMS: Record<number, string> = {
   1: "Mt Isa Ballbags",
   2: "Cambridge Cum Sluts",
@@ -32,112 +48,39 @@ const MANAGERS: Record<number, string> = {
   10: "Josh Thomas",
 };
 
-const MANAGER_LORE: Record<number, string[]> = {
-  1: [
-    "The commissioner has demanded an independent investigation. He will, naturally, be conducting it himself.",
-    "Ed Nelms has reportedly described this as a pivotal moment in the Ballbags dynasty. The newsroom has requested evidence that such a dynasty exists.",
-    "The Ballbags' performance will be discussed at the next league meeting, assuming the commissioner can find a way to make it about himself.",
-  ],
-  2: [
-    "Ben Smith has seen Cambridge reach the biggest stage before. The question is whether the Cum Sluts can remember how to get back there.",
-    "Cambridge's former reputation as a GPFC heavyweight continues to do an extraordinary amount of unpaid labour.",
-    "Ben Smith will be hoping the Cum Sluts can produce something more substantial than nostalgia.",
-  ],
-  3: [
-    "Jake Greenwood has spent years building a reputation for reaching the playoffs. The trophy cabinet remains a considerably quieter subject.",
-    "The Chode Chokers have once again provided compelling evidence that enthusiasm and competence are not necessarily related.",
-    "Grimsby's supporters remain optimistic, a condition for which modern medicine has apparently found no cure.",
-  ],
-  4: [
-    "George Pendleton has won a Slootbowl and still somehow finds new reasons to be furious about fantasy football.",
-    "The Happy Endings remain one of the SFL's most decorated franchises, a fact George is unlikely to let anyone forget.",
-    "Pendleton's relationship with the OBFC has long resembled an abusive marriage in which he keeps winning custody of the trophy.",
-  ],
-  5: [
-    "Ryan Whiting's Fingerblasters have developed a habit of looking dangerous, which is not quite the same as actually finishing the job.",
-    "Grays Town's ambitions remain enormous. Their tolerance for December disappointment is being tested.",
-    "The Fingerblasters have promised that this time things will be different. Sloot News has heard that one before.",
-  ],
-  6: [
-    "Garrett Etheridge has assembled some formidable Lincoln sides. Converting regular-season success into playoff glory remains an ongoing administrative issue.",
-    "The Nonces continue to pursue the elusive combination of a strong roster and a functioning postseason.",
-    "Lincoln's trophy ambitions remain intact, despite the inconvenient absence of the trophy itself.",
-  ],
-  7: [
-    "Ollie Payne has survived enough public humiliation to qualify for diplomatic immunity.",
-    "The Dirty Vegans continue their campaign to prove that unpredictability is a legitimate team-building strategy.",
-    "Kalamata's relationship with consistency remains strictly casual.",
-  ],
-  8: [
-    "Jack Brannigan's long-term planning has previously involved trading tomorrow's problems for today's slightly different problems.",
-    "Weybiza's draft-pick history remains the sort of material best examined by a forensic accountant.",
-    "The BAB's continue to insist that the grand plan is coming together. Nobody has been given a completion date.",
-  ],
-  9: [
-    "Tarl Brayer has endured enough agonising postseason defeats to qualify as an expert witness in sporting cruelty.",
-    "East Rutherford's history suggests that hope is a dangerous substance and should be handled with protective equipment.",
-    "The Shitlickers have already demonstrated that a fraction of a fantasy point can ruin an entire winter.",
-  ],
-  10: [
-    "Josh Thomas has previously demonstrated that the regular season is apparently an optional part of winning championships.",
-    "Chad's back-to-back Slootbowl titles remain an insult to everyone who believes good teams should occasionally win games before December.",
-    "The Moist Discharge have made a mockery of conventional sporting logic, which is frankly impressive in a league with such low standards.",
-  ],
-};
-
-const RIVALRIES: {
-  a: number;
-  b: number;
-  name: string;
-  description: string;
-}[] = [
+const RIVALRIES = [
   {
     a: 1,
     b: 3,
-    name: "The Shotty Bowl",
-    description:
-      "Ed Nelms and Jake Greenwood have been making this personal since the early days of the SFL. Neither man's dignity has survived.",
+    title: "The Shotty Bowl",
   },
   {
     a: 4,
     b: 7,
-    name: "The Paddletap Bowl",
-    description:
-      "George Pendleton and Ollie Payne have never needed a good reason to make a fantasy football fixture deeply unpleasant.",
+    title: "The Paddletap Bowl",
   },
   {
     a: 4,
     b: 9,
-    name: "The OBFC Grudge Match",
-    description:
-      "George Pendleton and Tarl Brayer have produced enough postseason trauma to keep the newsroom employed indefinitely.",
+    title: "The OBFC Grudge Match",
   },
   {
     a: 1,
     b: 10,
-    name: "The Commissioner's Nightmare",
-    description:
-      "Josh Thomas has made an unfortunate habit of reminding the commissioner that regular-season records do not guarantee playoff survival.",
+    title: "The Commissioner's Nightmare",
   },
 ];
 
-type Game = HistoricalMatchup;
-
-type Result = {
-  game: Game;
-  winner: number;
-  loser: number;
-  winningScore: number;
-  losingScore: number;
-  margin: number;
-  total: number;
-};
-
-type Edition = {
-  season: string;
-  week: number;
-  games: Game[];
-};
+const SPONSORS = [
+  "The SFL Department of Questionable Decisions",
+  "Jack Brannigan's Retirement Fund",
+  "Tarl Brayer's Postseason Counselling Service",
+  "The Garrett Etheridge Trophy Cabinet Company",
+  "Ed Nelms' Independent Ethics Committee",
+  "The Josh Thomas Regular Season Appreciation Society",
+  "The Ollie Payne School of Financial Planning",
+  "Grimsby Chode Chokers' Championship Museum",
+];
 
 const panel: React.CSSProperties = {
   background: "#151b23",
@@ -150,7 +93,7 @@ const muted: React.CSSProperties = {
   color: "#929eae",
 };
 
-function name(id: number, season: string): string {
+function teamName(id: number, season: string) {
   if (id === 1 && Number(season) < 2026) {
     return "Perth Ballbags";
   }
@@ -158,11 +101,11 @@ function name(id: number, season: string): string {
   return TEAMS[id] ?? `Franchise ${id}`;
 }
 
-function manager(id: number): string {
+function manager(id: number) {
   return MANAGERS[id] ?? "Unknown Manager";
 }
 
-function points(value: number): string {
+function pts(value: number) {
   return value.toFixed(2);
 }
 
@@ -172,7 +115,24 @@ function pick<T>(items: T[], seed: number): T {
   ];
 }
 
-function completed(game: Game): boolean {
+function seedFor(result: Result) {
+  return (
+    Number(result.game.season) * 31 +
+    result.game.week * 17 +
+    result.winner * 13 +
+    result.loser * 7
+  );
+}
+
+function rivalryFor(a: number, b: number) {
+  return RIVALRIES.find(
+    (rivalry) =>
+      (rivalry.a === a && rivalry.b === b) ||
+      (rivalry.a === b && rivalry.b === a)
+  );
+}
+
+function isComplete(game: HistoricalMatchup) {
   return (
     game.isComplete === true &&
     game.phase === "Regular Season" &&
@@ -184,8 +144,10 @@ function completed(game: Game): boolean {
   );
 }
 
-function resultOf(game: Game): Result | null {
-  if (!completed(game)) return null;
+function toResult(
+  game: HistoricalMatchup
+): Result | null {
+  if (!isComplete(game)) return null;
   if (game.scoreA === game.scoreB) return null;
 
   const aWon = game.scoreA > game.scoreB;
@@ -194,38 +156,224 @@ function resultOf(game: Game): Result | null {
     game,
     winner: aWon ? game.rosterA : game.rosterB,
     loser: aWon ? game.rosterB : game.rosterA,
-    winningScore: aWon ? game.scoreA : game.scoreB,
-    losingScore: aWon ? game.scoreB : game.scoreA,
+    winnerScore: aWon ? game.scoreA : game.scoreB,
+    loserScore: aWon ? game.scoreB : game.scoreA,
     margin: Math.abs(game.scoreA - game.scoreB),
     total: game.scoreA + game.scoreB,
   };
 }
 
-function editionOf(
+// This is deliberately identical to the
+// Game of the Week scoring on the edition page.
+function storyImportance(result: Result) {
+  let importance = result.margin * 0.4;
+
+  if (result.margin <= 3) importance += 40;
+  if (result.margin >= 40) importance += 20;
+  if (result.winnerScore >= 175) importance += 25;
+  if (result.total >= 330) importance += 30;
+
+  if (rivalryFor(result.winner, result.loser)) {
+    importance += 45;
+  }
+
+  return importance;
+}
+
+// These headline rules match the edition page.
+function headline(result: Result) {
+  const winner = teamName(
+    result.winner,
+    result.game.season
+  );
+
+  const loser = teamName(
+    result.loser,
+    result.game.season
+  );
+
+  const seed = seedFor(result);
+
+  const rivalry = rivalryFor(
+    result.winner,
+    result.loser
+  );
+
+  if (rivalry) {
+    return pick(
+      [
+        `${rivalry.title} Ends in Tears as ${winner} Claim the Spoils`,
+        `${winner} Win ${rivalry.title}; ${loser} Left Holding Their Own Bollocks`,
+        `Another Chapter of Absolute Filth as ${winner} Conquer ${loser}`,
+      ],
+      seed
+    );
+  }
+
+  if (result.margin <= 2) {
+    return pick(
+      [
+        `${winner} Escape by ${pts(result.margin)} Points in Outrageous SFL Shitshow`,
+        `${loser} Lose by a Pubic Hair; Local Supporters Demand Answers`,
+        `Heartbreak, Bollocks and Bad Decisions: ${winner} Survive`,
+      ],
+      seed
+    );
+  }
+
+  if (result.margin >= 45) {
+    return pick(
+      [
+        `${winner} Batter ${loser} Into Next Fucking Week`,
+        `${loser} Absolutely Annihilated; Funeral Arrangements Underway`,
+        `Authorities Called as ${winner} Commit Unholy Act of Football Violence`,
+      ],
+      seed
+    );
+  }
+
+  if (result.winnerScore >= 175) {
+    return pick(
+      [
+        `${winner} Unleash Offensive Filth on Helpless ${loser}`,
+        `${winner} Produce ${pts(result.winnerScore)}-Point Masterclass in Being a Bastard`,
+        `${loser} Powerless to Stop ${winner} Scoring Like a Man Possessed`,
+      ],
+      seed
+    );
+  }
+
+  return pick(
+    [
+      `${winner} Defeat ${loser} in Another Week of Questionable Football`,
+      `${loser} Come Up Short as ${winner} Take the Piss`,
+      `${winner} Claim the Points; ${loser} Claim Absolutely Fuck All`,
+    ],
+    seed
+  );
+}
+
+function teaser(result: Result) {
+  const winner = teamName(
+    result.winner,
+    result.game.season
+  );
+
+  const loser = teamName(
+    result.loser,
+    result.game.season
+  );
+
+  const seed = seedFor(result);
+  const rivalry = rivalryFor(
+    result.winner,
+    result.loser
+  );
+
+  if (rivalry) {
+    return pick(
+      [
+        `Old grudges, new humiliations. ${winner} emerged victorious against ${loser}, and the SFL's least healthy relationship has somehow become even more unpleasant.`,
+        `The ${rivalry.title} delivered another chapter of competitive hostility, with ${winner} claiming the points and ${loser} claiming the right to be absolutely fucking furious.`,
+      ],
+      seed
+    );
+  }
+
+  if (result.margin <= 3) {
+    return pick(
+      [
+        `Just ${pts(result.margin)} points separated the two sides. ${manager(result.loser)} is expected to spend the next several days conducting a forensic investigation into every single lineup decision.`,
+        `${loser} came within ${pts(result.margin)} points of victory. Unfortunately, fantasy football does not award consolation trophies for almost managing not to fuck it up.`,
+      ],
+      seed
+    );
+  }
+
+  if (result.margin >= 40) {
+    return pick(
+      [
+        `${winner} inflicted a ${pts(result.margin)}-point demolition on ${loser}. Sloot News has contacted the losing franchise for comment but understands the manager may currently be hiding beneath a duvet.`,
+        `An absolute massacre. ${loser} were dismantled by ${pts(result.margin)} points, raising serious questions about whether ${manager(result.loser)} should be permitted near a starting lineup next Sunday.`,
+      ],
+      seed
+    );
+  }
+
+  if (result.total >= 320) {
+    return pick(
+      [
+        `A combined ${pts(result.total)} points made this one of the week's great scoring spectacles. ${manager(result.loser)} contributed admirably before discovering that losing while scoring loads is still fucking losing.`,
+        `${winner} and ${loser} combined for ${pts(result.total)} points. Only one manager got to enjoy it, which is precisely why this league is such a magnificent little cesspit.`,
+      ],
+      seed
+    );
+  }
+
+  return pick(
+    [
+      `${winner} took the points, ${loser} took the emotional damage, and another entirely avoidable fantasy football argument entered the SFL history books.`,
+      `${manager(result.winner)} will be celebrating. ${manager(result.loser)} will be searching for excuses. Sloot News will be giving both the respect they deserve, which is very little.`,
+      `${winner} came out on top in a fixture that leaves ${loser} with another week of soul-searching and absolutely no sympathy from the rest of the league.`,
+    ],
+    seed
+  );
+}
+
+function editionFrom(
+  season: HistoricalSeason,
+  week: number
+): Edition | null {
+  const games = season.matchups.filter(
+    (game) =>
+      game.week === week &&
+      isComplete(game)
+  );
+
+  const teams = new Set<number>();
+
+  for (const game of games) {
+    teams.add(game.rosterA);
+    teams.add(game.rosterB);
+  }
+
+  // All five fixtures must be complete.
+  if (games.length !== 5 || teams.size !== 10) {
+    return null;
+  }
+
+  const results = games
+    .map(toResult)
+    .filter(
+      (result): result is Result =>
+        result !== null
+    );
+
+  if (results.length !== 5) {
+    return null;
+  }
+
+  return {
+    season: season.league.season,
+    week,
+    results,
+  };
+}
+
+function latestEdition(
   seasons: HistoricalSeason[]
 ): Edition | null {
   const editions: Edition[] = [];
 
   for (const season of seasons) {
     for (let week = 1; week <= 14; week++) {
-      const games = season.matchups.filter(
-        (game) =>
-          game.week === week && completed(game)
+      const edition = editionFrom(
+        season,
+        week
       );
 
-      const rosters = new Set<number>();
-
-      for (const game of games) {
-        rosters.add(game.rosterA);
-        rosters.add(game.rosterB);
-      }
-
-      if (games.length === 5 && rosters.size === 10) {
-        editions.push({
-          season: season.league.season,
-          week,
-          games,
-        });
+      if (edition) {
+        editions.push(edition);
       }
     }
   }
@@ -239,177 +387,6 @@ function editionOf(
   return editions[0] ?? null;
 }
 
-function storySeed(result: Result): number {
-  return (
-    Number(result.game.season) * 31 +
-    result.game.week * 17 +
-    result.winner * 11 +
-    result.loser * 7
-  );
-}
-
-function rivalryFor(
-  a: number,
-  b: number
-) {
-  return RIVALRIES.find(
-    (rivalry) =>
-      (rivalry.a === a && rivalry.b === b) ||
-      (rivalry.a === b && rivalry.b === a)
-  );
-}
-
-function headline(result: Result): string {
-  const season = result.game.season;
-  const winner = name(result.winner, season);
-  const loser = name(result.loser, season);
-  const seed = storySeed(result);
-  const rivalry = rivalryFor(
-    result.winner,
-    result.loser
-  );
-
-  if (rivalry) {
-    return pick(
-      [
-        `${rivalry.name} Descends Into Farce as ${winner} Claim Bragging Rights`,
-        `${winner} Win ${rivalry.name}; ${loser} Left to Contemplate Their Life Choices`,
-        `Bad Blood, Worse Decisions: ${winner} Take ${rivalry.name}`,
-      ],
-      seed
-    );
-  }
-
-  if (result.margin <= 2) {
-    return pick(
-      [
-        `${winner} Survive by ${points(result.margin)} as ${loser} Suffer Fresh Psychological Damage`,
-        `${loser} Lose by a Pubic Hair; ${winner} Somehow Escape`,
-        `Scenes of Absolute Misery as ${winner} Edge ${loser}`,
-      ],
-      seed
-    );
-  }
-
-  if (result.margin >= 45) {
-    return pick(
-      [
-        `${winner} Commit Football Atrocity Against Helpless ${loser}`,
-        `${loser} Found Dead in Fantasy Football Massacre`,
-        `${winner} Demolish ${loser}; Police Decline to Investigate`,
-      ],
-      seed
-    );
-  }
-
-  if (result.winningScore >= 175) {
-    return pick(
-      [
-        `${winner} Go Absolutely Feral in Victory Over ${loser}`,
-        `${winner} Unleash ${points(result.winningScore)}-Point Nightmare`,
-        `${loser} Powerless as ${winner} Put on Offensive Filth`,
-      ],
-      seed
-    );
-  }
-
-  return pick(
-    [
-      `${winner} Beat ${loser}; Standards Across League Remain Abysmal`,
-      `${loser} Fail to Prevent Entirely Predictable ${winner} Victory`,
-      `${winner} Claim Win as ${loser} Offer Nothing But Excuses`,
-      `${winner} Get the Job Done; ${loser} Get the Piss Taken`,
-    ],
-    seed
-  );
-}
-
-function matchReport(result: Result): string {
-  const season = result.game.season;
-  const winner = name(result.winner, season);
-  const loser = name(result.loser, season);
-  const seed = storySeed(result);
-
-  const opening =
-    `${winner} defeated ${loser} ` +
-    `${points(result.winningScore)}–` +
-    `${points(result.losingScore)} in Week ` +
-    `${result.game.week}, a margin of ` +
-    `${points(result.margin)} points.`;
-
-  let analysis: string;
-
-  if (result.margin <= 2) {
-    analysis = pick(
-      [
-        `For ${manager(result.loser)}, the defeat was narrow enough to be agonising and decisive enough to be completely irreversible.`,
-        `The margin was so small that ${manager(result.loser)} may spend the next several days examining individual catches like a deranged forensic scientist.`,
-        `${manager(result.winner)} will call it resilience. ${manager(result.loser)} will probably call it a fucking disgrace.`,
-      ],
-      seed
-    );
-  } else if (result.margin >= 45) {
-    analysis = pick(
-      [
-        `At some point this stopped resembling a competitive fixture and became an elaborate public humiliation of ${manager(result.loser)}.`,
-        `The losing side contributed admirably to the spectacle by providing absolutely no meaningful resistance.`,
-        `${manager(result.winner)} enjoyed the sort of afternoon normally reserved for people playing video games against children.`,
-      ],
-      seed
-    );
-  } else if (result.winningScore >= 175) {
-    analysis = pick(
-      [
-        `${manager(result.winner)} produced a scoring performance bordering on indecent. Unfortunately for ${manager(result.loser)}, the league has no mercy rule.`,
-        `The winning total was outrageous. ${manager(result.loser)} may wish to check whether the opposition fielded more than the permitted number of players.`,
-      ],
-      seed
-    );
-  } else {
-    analysis = pick(
-      [
-        `${manager(result.winner)} takes the points and the bragging rights. ${manager(result.loser)} takes another unwanted entry in the league archives.`,
-        `It was a thoroughly respectable victory, which makes it all the more irritating for the losing manager.`,
-        `The result will delight one dressing room and inspire several increasingly unconvincing excuses in the other.`,
-      ],
-      seed
-    );
-  }
-
-  const rivalry = rivalryFor(
-    result.winner,
-    result.loser
-  );
-
-  const context = rivalry
-    ? ` ${rivalry.description}`
-    : "";
-
-  const personal = pick(
-    MANAGER_LORE[result.loser] ?? [
-      "The losing manager declined to improve the result.",
-    ],
-    seed + 3
-  );
-
-  return `${opening} ${analysis}${context} ${personal}`;
-}
-
-function leadScore(result: Result): number {
-  let score = result.margin * 0.45;
-
-  if (result.margin <= 3) score += 35;
-  if (result.margin >= 40) score += 25;
-  if (result.winningScore >= 175) score += 20;
-  if (result.total >= 330) score += 25;
-
-  if (rivalryFor(result.winner, result.loser)) {
-    score += 45;
-  }
-
-  return score;
-}
-
 function SectionHeading({
   eyebrow,
   title,
@@ -418,14 +395,14 @@ function SectionHeading({
   title: string;
 }) {
   return (
-    <div style={{ marginBottom: "16px" }}>
+    <div style={{ marginBottom: "18px" }}>
       <p
         style={{
           ...muted,
-          margin: "0 0 5px",
           fontSize: "11px",
           fontWeight: 800,
           letterSpacing: "2px",
+          margin: "0 0 6px",
           textTransform: "uppercase",
         }}
       >
@@ -434,7 +411,7 @@ function SectionHeading({
 
       <h2
         style={{
-          fontSize: "24px",
+          fontSize: "25px",
           lineHeight: 1.2,
           margin: 0,
         }}
@@ -445,105 +422,187 @@ function SectionHeading({
   );
 }
 
+function Scoreline({
+  result,
+}: {
+  result: Result;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "7px",
+        padding: "14px 0",
+        borderTop: "1px solid #27303b",
+        borderBottom: "1px solid #27303b",
+        margin: "18px 0",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: "12px",
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 800,
+            fontSize: "14px",
+          }}
+        >
+          {teamName(
+            result.winner,
+            result.game.season
+          )}
+        </span>
+
+        <span
+          style={{
+            fontWeight: 900,
+            fontSize: "17px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {pts(result.winnerScore)}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: "12px",
+        }}
+      >
+        <span
+          style={{
+            ...muted,
+            fontWeight: 700,
+            fontSize: "14px",
+          }}
+        >
+          {teamName(
+            result.loser,
+            result.game.season
+          )}
+        </span>
+
+        <span
+          style={{
+            ...muted,
+            fontWeight: 800,
+            fontSize: "17px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {pts(result.loserScore)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default async function Home() {
   const seasons = await getHistoricalData();
-  const edition = editionOf(seasons);
 
-  const results = edition
-    ? edition.games
-        .map(resultOf)
+  const edition = latestEdition(seasons);
+
+  const sorted = edition
+    ? [...edition.results].sort(
+        (a, b) =>
+          storyImportance(b) -
+            storyImportance(a) ||
+          b.margin - a.margin
+      )
+    : [];
+
+  const lead = sorted[0];
+  const roundups = sorted.slice(1);
+
+  const fraud = edition
+    ? [...edition.results].sort(
+        (a, b) => b.margin - a.margin
+      )[0]
+    : null;
+
+  const flashback = edition
+    ? seasons
+        .filter(
+          (season) =>
+            Number(season.league.season) <
+            Number(edition.season)
+        )
+        .flatMap(
+          (season) => season.matchups
+        )
+        .filter(
+          (game) =>
+            game.week === edition.week &&
+            isComplete(game)
+        )
+        .map(toResult)
         .filter(
           (result): result is Result =>
             result !== null
         )
-    : [];
+        .sort(
+          (a, b) =>
+            storyImportance(b) -
+            storyImportance(a)
+        )[0]
+    : null;
 
-  const ranked = [...results].sort(
-    (a, b) =>
-      leadScore(b) - leadScore(a) ||
-      b.margin - a.margin
-  );
+  const editionUrl = edition
+    ? `/news/${edition.season}/${edition.week}`
+    : null;
 
-  const lead = ranked[0];
-
-  const biggestWin = [...results].sort(
-    (a, b) => b.margin - a.margin
-  )[0];
-
-  const closest = [...results].sort(
-    (a, b) => a.margin - b.margin
-  )[0];
-
-  const highestScoring = [...results].sort(
-    (a, b) => b.winningScore - a.winningScore
-  )[0];
-
-  const flashbackCandidates = seasons
-    .filter(
-      (season) =>
-        edition &&
-        Number(season.league.season) <
-          Number(edition.season)
-    )
-    .flatMap((season) => season.matchups)
-    .filter(
-      (game) =>
-        edition &&
-        game.week === edition.week &&
-        completed(game)
-    )
-    .map(resultOf)
-    .filter(
-      (result): result is Result =>
-        result !== null
-    );
-
-  const flashback = flashbackCandidates.sort(
-    (a, b) =>
-      leadScore(b) - leadScore(a)
-  )[0];
-
-  const rivalryResult = results.find(
-    (result) =>
-      rivalryFor(result.winner, result.loser)
-  );
-
-  const rivalry = rivalryResult
-    ? rivalryFor(
-        rivalryResult.winner,
-        rivalryResult.loser
+  const sponsor = edition
+    ? pick(
+        SPONSORS,
+        Number(edition.season) +
+          edition.week
       )
     : null;
 
   return (
-    <main style={{ paddingBottom: "32px" }}>
+    <main
+      style={{
+        paddingBottom: "40px",
+      }}
+    >
       <header
         style={{
           textAlign: "center",
-          marginBottom: "28px",
           borderBottom: "2px solid #ffffff",
           paddingBottom: "20px",
+          marginBottom: "28px",
         }}
       >
         <p
           style={{
             ...muted,
-            fontSize: "11px",
-            letterSpacing: "3px",
+            fontSize: "10px",
             fontWeight: 800,
+            letterSpacing: "2px",
             margin: "0 0 12px",
           }}
         >
-          THE SFL CLUBHOUSE PRESENTS
+          THE OFFICIAL UNOFFICIAL VOICE
+          OF THE SFL
         </p>
 
         <h1
           style={{
-            fontSize: "clamp(36px, 10vw, 56px)",
-            fontWeight: 900,
+            fontSize:
+              "clamp(36px, 10vw, 56px)",
             letterSpacing: "-2px",
+            fontWeight: 900,
             lineHeight: 1,
-            margin: 0,
+            margin: "0 0 8px",
           }}
         >
           SLOOT NEWS
@@ -551,9 +610,9 @@ export default async function Home() {
 
         <p
           style={{
-            margin: "12px 0 0",
-            fontSize: "14px",
             fontWeight: 700,
+            fontSize: "14px",
+            margin: "0 0 18px",
           }}
         >
           Your Home of Sloot Sport
@@ -561,58 +620,78 @@ export default async function Home() {
 
         <div
           style={{
-            marginTop: "20px",
+            borderTop:
+              "1px solid #27303b",
             paddingTop: "12px",
-            borderTop: "1px solid #27303b",
             display: "flex",
-            justifyContent: "space-between",
-            gap: "12px",
+            justifyContent:
+              "space-between",
+            gap: "10px",
+            color: "#929eae",
             fontSize: "11px",
             fontWeight: 800,
             letterSpacing: "1px",
-            color: "#929eae",
           }}
         >
-          <span>DYNASTY SLUTS</span>
           <span>
             {edition
-              ? `${edition.season} · WEEK ${edition.week}`
-              : "THE ARCHIVES"}
+              ? `${edition.season} SEASON`
+              : "SFL NEWSROOM"}
+          </span>
+
+          <span>
+            {edition
+              ? `WEEK ${edition.week}`
+              : "AWAITING RESULTS"}
           </span>
         </div>
-      </header>
 
-      {!edition || !lead ? (
-        <section style={panel}>
+        {sponsor && (
           <p
             style={{
               ...muted,
               fontSize: "11px",
-              letterSpacing: "2px",
-              fontWeight: 800,
+              margin: "14px 0 0",
+              fontStyle: "italic",
             }}
           >
-            NEWSROOM NOTICE
+            This edition sponsored by{" "}
+            {sponsor}
           </p>
+        )}
+      </header>
 
-          <h2 style={{ fontSize: "25px" }}>
-            The Presses Are Temporarily Silent
-          </h2>
+      {!edition || !lead || !editionUrl ? (
+        <section style={panel}>
+          <SectionHeading
+            eyebrow="Newsroom Notice"
+            title="Nothing to Report. Yet."
+          />
 
-          <p style={muted}>
-            No fully completed regular-season
-            matchweek is available yet.
-            The editorial staff have been sent
-            to the pub until further notice.
+          <p
+            style={{
+              ...muted,
+              fontSize: "14px",
+              lineHeight: 1.8,
+              marginBottom: 0,
+            }}
+          >
+            Sloot News is waiting for
+            the first fully completed
+            regular-season week.
+            Once all five fixtures
+            are final, the presses
+            will start rolling.
           </p>
         </section>
       ) : (
         <>
-          <section
+          <article
             style={{
               ...panel,
+              borderTop:
+                "4px solid #ffffff",
               marginBottom: "30px",
-              borderTop: "4px solid #ffffff",
             }}
           >
             <p
@@ -621,78 +700,73 @@ export default async function Home() {
                 fontSize: "11px",
                 fontWeight: 800,
                 letterSpacing: "2px",
-                margin: "0 0 12px",
+                margin: "0 0 14px",
               }}
             >
-              FRONT PAGE EXCLUSIVE
+              FRONT-PAGE EXCLUSIVE
             </p>
 
             <h2
               style={{
-                fontSize: "clamp(26px, 7vw, 36px)",
+                fontSize:
+                  "clamp(28px, 7vw, 40px)",
                 lineHeight: 1.12,
-                letterSpacing: "-0.8px",
-                margin: "0 0 16px",
+                letterSpacing: "-0.7px",
+                margin: "0 0 14px",
               }}
             >
-              {headline(lead)}
+              <Link
+                href={editionUrl}
+                style={{
+                  color: "inherit",
+                  textDecoration: "none",
+                }}
+              >
+                {headline(lead)}
+              </Link>
             </h2>
+
+            <Scoreline result={lead} />
 
             <p
               style={{
                 color: "#d2d8e0",
-                lineHeight: 1.75,
+                lineHeight: 1.85,
                 fontSize: "15px",
-                margin: "0 0 18px",
+                margin: "0 0 20px",
               }}
             >
-              {matchReport(lead)}
+              {teaser(lead)}
             </p>
 
-            <div
+            <Link
+              href={editionUrl}
               style={{
-                borderTop: "1px solid #27303b",
-                paddingTop: "15px",
+                display: "inline-block",
+                color: "#ffffff",
+                fontSize: "14px",
+                fontWeight: 900,
+                textDecoration: "none",
+                borderBottom:
+                  "2px solid #ffffff",
+                paddingBottom: "4px",
               }}
             >
-              <p
-                style={{
-                  ...muted,
-                  fontSize: "11px",
-                  fontWeight: 800,
-                  letterSpacing: "1px",
-                  margin: "0 0 8px",
-                }}
-              >
-                THE FINAL SCORE
-              </p>
+              READ THE FULL STORY →
+            </Link>
+          </article>
 
-              <p
-                style={{
-                  fontWeight: 800,
-                  fontSize: "17px",
-                  lineHeight: 1.5,
-                  margin: 0,
-                }}
-              >
-                {name(lead.winner, edition.season)}
-                {" "}
-                {points(lead.winningScore)}
-                <span style={muted}> — </span>
-                {points(lead.losingScore)}
-                {" "}
-                {name(lead.loser, edition.season)}
-              </p>
-            </div>
-          </section>
-
-          <section style={{ marginBottom: "32px" }}>
+          <section
+            style={{
+              marginBottom: "30px",
+            }}
+          >
             <SectionHeading
-              eyebrow="Five Games. Ten Suspects."
+              eyebrow="The Rest of the Carnage"
               title="Around the SFL"
             />
 
-            {ranked.map((result) => (
+            {roundups.map((result) => (
               <article
                 key={
                   `${result.game.season}-` +
@@ -702,62 +776,88 @@ export default async function Home() {
                 }
                 style={{
                   ...panel,
-                  marginBottom: "10px",
+                  marginBottom: "12px",
                 }}
               >
                 <p
                   style={{
                     ...muted,
-                    margin: "0 0 10px",
                     fontSize: "10px",
-                    letterSpacing: "1.5px",
                     fontWeight: 800,
+                    letterSpacing: "1.5px",
+                    margin: "0 0 10px",
                   }}
                 >
-                  {rivalryFor(
-                    result.winner,
-                    result.loser
-                  )
-                    ? "RIVALRY REPORT"
-                    : "MATCH REPORT"}
+                  MATCH REPORT
                 </p>
 
                 <h3
                   style={{
-                    fontSize: "18px",
-                    margin: "0 0 10px",
-                    lineHeight: 1.3,
+                    fontSize: "21px",
+                    lineHeight: 1.25,
+                    margin: "0 0 12px",
                   }}
                 >
-                  {headline(result)}
+                  <Link
+                    href={editionUrl}
+                    style={{
+                      color: "inherit",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {headline(result)}
+                  </Link>
                 </h3>
 
                 <p
                   style={{
+                    fontSize: "13px",
                     fontWeight: 800,
                     margin: "0 0 12px",
                   }}
                 >
-                  {points(result.winningScore)}
+                  {teamName(
+                    result.winner,
+                    result.game.season
+                  )}
+                  {" "}
+                  {pts(result.winnerScore)}
                   {" — "}
-                  {points(result.losingScore)}
+                  {pts(result.loserScore)}
+                  {" "}
+                  {teamName(
+                    result.loser,
+                    result.game.season
+                  )}
                 </p>
 
                 <p
                   style={{
                     ...muted,
-                    lineHeight: 1.7,
-                    margin: 0,
                     fontSize: "14px",
+                    lineHeight: 1.75,
+                    margin: "0 0 14px",
                   }}
                 >
-                  {matchReport(result)}
+                  {teaser(result)}
                 </p>
+
+                <Link
+                  href={editionUrl}
+                  style={{
+                    color: "#ffffff",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    textDecoration: "none",
+                  }}
+                >
+                  Read the Weekly Roundup →
+                </Link>
               </article>
             ))}
           </section>
 
-          {biggestWin && (
+          {fraud && (
             <section
               style={{
                 ...panel,
@@ -765,172 +865,57 @@ export default async function Home() {
               }}
             >
               <SectionHeading
-                eyebrow="Sloot News Investigates"
-                title="The Fraud Watch"
-              />
-
-              <p
-                style={{
-                  fontSize: "20px",
-                  fontWeight: 800,
-                  lineHeight: 1.3,
-                }}
-              >
-                {name(
-                  biggestWin.loser,
-                  edition.season
-                )}
-              </p>
-
-              <p
-                style={{
-                  ...muted,
-                  lineHeight: 1.7,
-                  fontSize: "14px",
-                }}
-              >
-                {manager(biggestWin.loser)}
-                {" "}
-                presided over the week's
-                largest defeat, losing by
-                {" "}
-                {points(biggestWin.margin)}
-                {" "}
-                points to
-                {" "}
-                {name(
-                  biggestWin.winner,
-                  edition.season
-                )}.
-                {" "}
-                {pick(
-                  MANAGER_LORE[biggestWin.loser],
-                  Number(edition.season) +
-                    edition.week
-                )}
-              </p>
-            </section>
-          )}
-
-          <section
-            style={{
-              ...panel,
-              marginBottom: "30px",
-            }}
-          >
-            <SectionHeading
-              eyebrow="The Numbers Don't Lie"
-              title="This Week's Disgrace"
-            />
-
-            {closest && (
-              <p
-                style={{
-                  fontSize: "14px",
-                  lineHeight: 1.7,
-                }}
-              >
-                <strong>Closest contest:</strong>
-                {" "}
-                {name(closest.winner, edition.season)}
-                {" "}
-                over
-                {" "}
-                {name(closest.loser, edition.season)}
-                {" "}
-                by
-                {" "}
-                {points(closest.margin)}
-                {" "}
-                points.
-              </p>
-            )}
-
-            {highestScoring && (
-              <p
-                style={{
-                  fontSize: "14px",
-                  lineHeight: 1.7,
-                }}
-              >
-                <strong>Highest team score:</strong>
-                {" "}
-                {name(
-                  highestScoring.winner,
-                  edition.season
-                )}
-                {" "}
-                with
-                {" "}
-                {points(
-                  highestScoring.winningScore
-                )}
-                {" "}
-                points.
-              </p>
-            )}
-
-            {biggestWin && (
-              <p
-                style={{
-                  fontSize: "14px",
-                  lineHeight: 1.7,
-                }}
-              >
-                <strong>Biggest demolition:</strong>
-                {" "}
-                {points(biggestWin.margin)}
-                {" "}
-                points.
-                An entirely unnecessary
-                amount of suffering.
-              </p>
-            )}
-          </section>
-
-          {rivalry && rivalryResult && (
-            <section
-              style={{
-                ...panel,
-                marginBottom: "30px",
-              }}
-            >
-              <SectionHeading
-                eyebrow="Bad Blood Department"
-                title="Rivalry Watch"
+                eyebrow="The Awards Committee"
+                title="Shitcunt of the Week"
               />
 
               <h3
                 style={{
-                  fontSize: "20px",
+                  fontSize: "25px",
                   margin: "0 0 12px",
                 }}
               >
-                {rivalry.name}
+                {manager(fraud.loser)}
               </h3>
 
               <p
                 style={{
                   ...muted,
-                  lineHeight: 1.7,
                   fontSize: "14px",
+                  lineHeight: 1.8,
+                  margin: "0 0 16px",
                 }}
               >
-                {rivalry.description}
-                {" "}
-                This week,
-                {" "}
-                {name(
-                  rivalryResult.winner,
+                This week's prestigious
+                dishonour goes to{" "}
+                {manager(fraud.loser)},
+                after{" "}
+                {teamName(
+                  fraud.loser,
                   edition.season
-                )}
-                {" "}
-                took the bragging rights
-                with a
-                {" "}
-                {points(rivalryResult.margin)}
-                -point victory.
+                )}{" "}
+                suffered the largest
+                defeat of the round:
+                a{" "}
+                {pts(fraud.margin)}-point
+                hiding at the hands of{" "}
+                {teamName(
+                  fraud.winner,
+                  edition.season
+                )}.
               </p>
+
+              <Link
+                href={editionUrl}
+                style={{
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 800,
+                  textDecoration: "none",
+                }}
+              >
+                Read the Full Award Citation →
+              </Link>
             </section>
           )}
 
@@ -953,6 +938,7 @@ export default async function Home() {
                     fontSize: "11px",
                     fontWeight: 800,
                     letterSpacing: "1px",
+                    margin: "0 0 10px",
                   }}
                 >
                   {flashback.game.season}
@@ -962,8 +948,9 @@ export default async function Home() {
 
                 <h3
                   style={{
-                    fontSize: "20px",
+                    fontSize: "21px",
                     lineHeight: 1.3,
+                    margin: "0 0 14px",
                   }}
                 >
                   {headline(flashback)}
@@ -972,32 +959,109 @@ export default async function Home() {
                 <p
                   style={{
                     ...muted,
-                    lineHeight: 1.7,
                     fontSize: "14px",
+                    lineHeight: 1.8,
+                    margin: "0 0 16px",
                   }}
                 >
-                  {matchReport(flashback)}
+                  {teaser(flashback)}
                 </p>
 
                 <Link
                   href={
-                    `/history/${flashback.game.season}`
+                    `/news/` +
+                    `${flashback.game.season}/` +
+                    `${flashback.game.week}`
                   }
                   style={{
                     color: "#ffffff",
-                    fontWeight: 800,
                     fontSize: "13px",
+                    fontWeight: 800,
+                    textDecoration: "none",
                   }}
                 >
-                  Visit the Season Archive →
+                  Revisit the Old Edition →
                 </Link>
               </>
             ) : (
-              <p style={muted}>
-                No previous-season fixture
-                is available for this week.
+              <p
+                style={{
+                  ...muted,
+                  fontSize: "14px",
+                  lineHeight: 1.8,
+                  margin: 0,
+                }}
+              >
+                The archives are
+                suspiciously quiet.
+                No completed historical
+                fixture is available
+                for this week.
               </p>
             )}
+          </section>
+
+          <section
+            style={{
+              ...panel,
+              marginBottom: "30px",
+              textAlign: "center",
+            }}
+          >
+            <p
+              style={{
+                ...muted,
+                fontSize: "11px",
+                fontWeight: 800,
+                letterSpacing: "2px",
+                margin: "0 0 12px",
+              }}
+            >
+              THE COMPLETE EDITION
+            </p>
+
+            <h2
+              style={{
+                fontSize: "24px",
+                lineHeight: 1.25,
+                margin: "0 0 14px",
+              }}
+            >
+              All Five Games.
+              One Absolutely Disgraceful
+              Newspaper.
+            </h2>
+
+            <p
+              style={{
+                ...muted,
+                fontSize: "14px",
+                lineHeight: 1.75,
+                margin: "0 0 20px",
+              }}
+            >
+              The main scandal,
+              four more match reports,
+              this week's award-winning
+              incompetence and a trip
+              through the SFL archives.
+            </p>
+
+            <Link
+              href={editionUrl}
+              style={{
+                display: "inline-block",
+                background: "#ffffff",
+                color: "#151b23",
+                borderRadius: "10px",
+                padding: "12px 18px",
+                fontSize: "13px",
+                fontWeight: 900,
+                textDecoration: "none",
+              }}
+            >
+              READ WEEK {edition.week} →
+            </Link>
           </section>
         </>
       )}
@@ -1006,7 +1070,7 @@ export default async function Home() {
         style={{
           textAlign: "center",
           borderTop: "1px solid #27303b",
-          paddingTop: "22px",
+          paddingTop: "24px",
           marginTop: "32px",
         }}
       >
@@ -1024,7 +1088,7 @@ export default async function Home() {
           style={{
             ...muted,
             fontSize: "12px",
-            marginTop: "7px",
+            marginTop: "8px",
           }}
         >
           Your Home of Sloot Sport
@@ -1038,8 +1102,9 @@ export default async function Home() {
             marginTop: "12px",
           }}
         >
-          Accurate results. Questionable journalism.
-          Absolutely no editorial oversight.
+          Real scores.
+          Questionable journalism.
+          No refunds.
         </p>
       </footer>
     </main>
