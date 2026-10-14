@@ -22,6 +22,38 @@ type Result = {
   total: number;
 };
 
+type PlayerInfo = {
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  position?: string;
+};
+
+type PlayerDatabase = Record<string, PlayerInfo>;
+
+type Performance = {
+  id: string;
+  name: string;
+  points: number;
+  roster: number;
+  average: number | null;
+  starts: number;
+  difference: number | null;
+  share: number;
+};
+
+type Intelligence = {
+  winningStar: Performance | null;
+  losingStar: Performance | null;
+  disappointment: Performance | null;
+  surprise: Performance | null;
+};
+
+type Article = {
+  title: string;
+  paragraphs: string[];
+};
+
 const TEAMS: Record<number, string> = {
   1: "Mt Isa Ballbags",
   2: "Cambridge Cum Sluts",
@@ -50,54 +82,54 @@ const MANAGERS: Record<number, string> = {
 
 const LORE: Record<number, string[]> = {
   1: [
-    "The commissioner has requested that the result be reviewed by an independent panel consisting of himself, his reflection and whichever member of the league group chat agrees with him.",
-    "Ed Nelms has always maintained that the Ballbags are on the verge of something special. Unfortunately, the verge appears to be several thousand miles long.",
-    "Sloot News remains the only publication willing to provide the Ballbags with the glowing coverage their commissioner believes they deserve. Even that relationship is beginning to look strained.",
+    "Ed Nelms has requested an independent investigation. The proposed panel consists of Ed, his reflection and whichever member of the group chat agrees with him.",
+    "The Ballbags remain on the verge of something special. Unfortunately, the verge appears to be several thousand miles long.",
+    "Sloot News remains committed to providing the Ballbags with the favourable coverage their commissioner believes he deserves.",
   ],
   2: [
-    "Ben Smith once guided Cambridge to the inaugural Slootbowl title. These days, memories of that championship are doing more heavy lifting than several members of his starting lineup.",
-    "The Cum Sluts have previously occupied the summit of SFL football. Ben's attempts to recreate those glory days are beginning to resemble a man repeatedly microwaving the same disappointing leftovers.",
-    "Cambridge's championship pedigree is beyond dispute. Whether it remains useful in the present day is another matter entirely.",
+    "Ben Smith remains the inaugural Slootbowl champion, a fact Cambridge supporters are contractually obliged to mention whenever the present becomes uncomfortable.",
+    "Cambridge have conquered the SFL before. Their attempts to recreate those glory days increasingly resemble a man microwaving the same disappointing leftovers.",
+    "The Cum Sluts' championship pedigree is beyond dispute. Its usefulness in the present day is another matter.",
   ],
   3: [
-    "Jake Greenwood has made a habit of turning up for the postseason, although the concept of actually winning the whole thing continues to elude him.",
-    "Grimsby supporters have been promised progress so many times that the word has effectively lost all meaning.",
-    "The Chode Chokers have built an impressive collection of playoff appearances and absolutely no Slootbowl trophies. At this stage, Jake may be collecting the wrong things.",
+    "Jake Greenwood has accumulated an impressive collection of postseason appearances and absolutely no Slootbowl trophies.",
+    "Grimsby supporters have been promised progress so often that the word has effectively lost all meaning.",
+    "The Chode Chokers continue pursuing a championship, which remains an unusually elaborate way of avoiding actually winning one.",
   ],
   4: [
-    "George Pendleton's Happy Endings have already conquered the SFL once, which is apparently sufficient justification for George to treat every subsequent defeat as a personal insult from God.",
-    "The Isle of Wight has a proud championship history, and George is more than happy to explain it to anyone unfortunate enough to make eye contact.",
-    "George's ability to build a contender remains impressive. His ability to remain normal about fantasy football is considerably less developed.",
+    "George Pendleton has won the Slootbowl before and considers that sufficient evidence that every subsequent defeat is an administrative error.",
+    "The Isle of Wight's championship history is a source of enormous pride, particularly to George, who will explain it without being asked.",
+    "George's ability to build contenders remains impressive. His ability to behave normally about fantasy football does not.",
   ],
   5: [
-    "Ryan Whiting has worked hard to turn Grays Town into a genuine contender. The problem with becoming respectable is that people start expecting you to actually win something.",
-    "The Fingerblasters continue their pursuit of SFL glory. Whether this ends in a championship parade or another deeply uncomfortable December remains to be seen.",
-    "Grays Town have spent years building a side capable of frightening opponents. Occasionally they even remember to frighten them on the scoreboard.",
+    "Ryan Whiting has spent years trying to turn Grays Town into a serious contender. Unfortunately, serious contenders are expected to produce actual results.",
+    "The Fingerblasters remain committed to pursuing glory, despite mounting evidence that glory has blocked their number.",
+    "Grays Town's relationship with success remains complicated, although Ryan insists the paperwork is progressing nicely.",
   ],
   6: [
-    "Garrett Etheridge has demonstrated an extraordinary talent for building strong regular-season teams and an equally extraordinary talent for watching them achieve fuck all in the playoffs.",
-    "Lincoln's championship window remains open. Garrett is currently standing beneath it, wondering why nobody has thrown him a trophy.",
-    "The Nonces have assembled enough talent to threaten the entire OBFC. Unfortunately, talent has never been a guaranteed cure for whatever the fuck happens to Garrett in December.",
+    "Garrett Etheridge's regular-season competence continues to raise questions about what precisely happens when the playoffs arrive.",
+    "Lincoln's championship window remains open. Garrett is standing beneath it, wondering why nobody has thrown him a trophy.",
+    "The Nonces have assembled plenty of talent. Whether talent can cure Garrett's traditional December difficulties remains unknown.",
   ],
   7: [
-    "Ollie Payne remains one of the league's great mysteries. Every time Kalamata look finished, they produce a performance that forces everyone to acknowledge their existence again.",
-    "The Dirty Vegans have spent their SFL careers alternating between genuine promise and performances that should come with a public health warning.",
-    "Kalamata's relationship with consistency remains about as stable as the average kebab-shop toilet at four in the morning.",
+    "Ollie Payne has developed an unusual talent for making Kalamata appear either extremely dangerous or completely unfit for organised sport.",
+    "The Dirty Vegans remain one of the league's least predictable institutions, occasionally including their own management.",
+    "Kalamata's relationship with consistency remains about as stable as a kebab-shop toilet at four in the morning.",
   ],
   8: [
-    "Jack Brannigan's long-term strategy has previously involved treating future draft picks like the loose change in a pub fruit machine.",
-    "Weybiza's supporters continue to await the return on Jack's investment strategy. Financial experts have advised them not to hold their breath.",
-    "The BAB's once looked like the future of the OBFC. Jack has since spent a considerable amount of time attempting to explain where that future went.",
+    "Jack Brannigan has historically treated future draft picks like loose change in a pub fruit machine.",
+    "Weybiza supporters continue awaiting the promised return on Jack's investment strategy. Financial experts recommend patience and possibly a solicitor.",
+    "The BAB's once looked like the future of the OBFC. Jack has since devoted considerable resources to locating that future.",
   ],
   9: [
-    "Tarl Brayer has suffered enough narrow postseason defeats to qualify for a government-funded counselling programme.",
-    "East Rutherford's supporters know better than most that a few fantasy points can be the difference between eternal glory and several months of being called a useless cunt.",
+    "Tarl Brayer has suffered enough narrow postseason defeats to qualify for government-funded counselling.",
+    "East Rutherford supporters know better than most that a few fantasy points can separate eternal glory from several months of public humiliation.",
     "The Shitlickers have spent years flirting with greatness, only to discover that greatness has a boyfriend and his name is usually George Pendleton.",
   ],
   10: [
-    "Josh Thomas has won consecutive Slootbowls despite previously treating large portions of the regular season like an optional warm-up exercise.",
-    "Chad's ability to turn mediocrity into December glory remains one of the most irritating phenomena in professional pretend football.",
-    "The Moist Discharge have repeatedly demonstrated that the usual laws of sporting logic do not apply to Josh Thomas. The rest of the league would quite like an explanation.",
+    "Josh Thomas has won consecutive Slootbowls despite previously treating the regular season like an optional warm-up exercise.",
+    "Chad's ability to turn questionable regular-season performances into December glory remains deeply irritating to everyone else.",
+    "The Moist Discharge have repeatedly demonstrated that the normal laws of sporting logic do not apply to Josh Thomas.",
   ],
 };
 
@@ -118,7 +150,7 @@ const RIVALRIES = [
     b: 3,
     title: "The Shotty Bowl",
     description:
-      "Ed Nelms and Jake Greenwood have been treating this fixture like a personal vendetta since the league's earliest days.",
+      "Ed Nelms and Jake Greenwood have treated this fixture like a personal vendetta since the league's earliest days.",
   },
   {
     a: 4,
@@ -132,7 +164,7 @@ const RIVALRIES = [
     b: 9,
     title: "The OBFC Grudge Match",
     description:
-      "The history between George Pendleton and Tarl Brayer is littered with heartbreak, narrow margins and a frankly unhealthy amount of resentment.",
+      "George Pendleton and Tarl Brayer share a history littered with heartbreak, narrow margins and an unhealthy amount of resentment.",
   },
   {
     a: 1,
@@ -158,7 +190,6 @@ function teamName(id: number, season: string) {
   if (id === 1 && Number(season) < 2026) {
     return "Perth Ballbags";
   }
-
   return TEAMS[id] ?? `Franchise ${id}`;
 }
 
@@ -187,9 +218,9 @@ function seedFor(result: Result) {
 
 function rivalryFor(a: number, b: number) {
   return RIVALRIES.find(
-    (rivalry) =>
-      (rivalry.a === a && rivalry.b === b) ||
-      (rivalry.a === b && rivalry.b === a)
+    (r) =>
+      (r.a === a && r.b === b) ||
+      (r.a === b && r.b === a)
   );
 }
 
@@ -205,9 +236,7 @@ function isComplete(game: HistoricalMatchup) {
   );
 }
 
-function toResult(
-  game: HistoricalMatchup
-): Result | null {
+function toResult(game: HistoricalMatchup): Result | null {
   if (!isComplete(game)) return null;
   if (game.scoreA === game.scoreB) return null;
 
@@ -224,235 +253,517 @@ function toResult(
   };
 }
 
-function storyImportance(result: Result) {
-  let importance = result.margin * 0.4;
+async function getPlayerDatabase(): Promise<PlayerDatabase> {
+  try {
+    const response = await fetch(
+      "https://api.sleeper.app/v1/players/nfl",
+      { next: { revalidate: 86400 } }
+    );
 
-  if (result.margin <= 3) importance += 40;
-  if (result.margin >= 40) importance += 20;
-  if (result.winnerScore >= 175) importance += 25;
-  if (result.total >= 330) importance += 30;
-  if (rivalryFor(result.winner, result.loser)) {
-    importance += 45;
+    if (!response.ok) return {};
+
+    return (await response.json()) as PlayerDatabase;
+  } catch {
+    return {};
   }
-
-  return importance;
 }
 
-function headline(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
+function historicalScores(
+  playerId: string,
+  game: HistoricalMatchup,
+  history: HistoricalMatchup[]
+): number[] {
+  const scores: number[] = [];
+
+  for (const previous of history) {
+    if (!isComplete(previous)) continue;
+
+    const earlier =
+      Number(previous.season) < Number(game.season) ||
+      (
+        previous.season === game.season &&
+        previous.week < game.week
+      );
+
+    if (!earlier) continue;
+
+    const sides = [
+      {
+        starters: previous.startersA,
+        points: previous.startersPointsA,
+      },
+      {
+        starters: previous.startersB,
+        points: previous.startersPointsB,
+      },
+    ];
+
+    for (const side of sides) {
+      const index = side.starters.indexOf(playerId);
+
+      if (
+        index >= 0 &&
+        Number.isFinite(side.points[index])
+      ) {
+        scores.push(side.points[index]);
+      }
+    }
+  }
+
+  return scores;
+}
+
+function getIntelligence(
+  result: Result,
+  history: HistoricalMatchup[],
+  database: PlayerDatabase
+): Intelligence {
+  const performances: Performance[] = [];
+
+  const sides = [
+    {
+      roster: result.game.rosterA,
+      starters: result.game.startersA,
+      scores: result.game.startersPointsA,
+      total: result.game.scoreA,
+    },
+    {
+      roster: result.game.rosterB,
+      starters: result.game.startersB,
+      scores: result.game.startersPointsB,
+      total: result.game.scoreB,
+    },
+  ];
+
+  for (const side of sides) {
+    side.starters.forEach((id, index) => {
+      const points = side.scores[index];
+
+      if (
+        !id ||
+        id === "0" ||
+        !Number.isFinite(points)
+      ) {
+        return;
+      }
+
+      const player = database[id];
+
+      const name =
+        player?.full_name ||
+        [player?.first_name, player?.last_name]
+          .filter(Boolean)
+          .join(" ") ||
+        `Player ${id}`;
+
+      const previous = historicalScores(
+        id,
+        result.game,
+        history
+      );
+
+      const average =
+        previous.length
+          ? previous.reduce(
+              (sum, score) => sum + score,
+              0
+            ) / previous.length
+          : null;
+
+      performances.push({
+        id,
+        name,
+        points,
+        roster: side.roster,
+        average,
+        starts: previous.length,
+        difference:
+          average === null ? null : points - average,
+        share: side.total > 0 ? points / side.total : 0,
+      });
+    });
+  }
+
+  const winners = performances
+    .filter((p) => p.roster === result.winner)
+    .sort((a, b) => b.points - a.points);
+
+  const losers = performances
+    .filter((p) => p.roster === result.loser)
+    .sort((a, b) => b.points - a.points);
+
+  const disappointment =
+    [...losers]
+      .filter(
+        (p) =>
+          p.starts >= 3 &&
+          p.difference !== null &&
+          p.difference <= -8
+      )
+      .sort(
+        (a, b) =>
+          (a.difference ?? 0) - (b.difference ?? 0)
+      )[0] ?? null;
+
+  const surprise =
+    [...winners]
+      .filter(
+        (p) =>
+          p.starts >= 3 &&
+          p.difference !== null &&
+          p.difference >= 12 &&
+          p.points >= 18
+      )
+      .sort(
+        (a, b) =>
+          (b.difference ?? 0) - (a.difference ?? 0)
+      )[0] ?? null;
+
+  return {
+    winningStar: winners[0] ?? null,
+    losingStar: losers[0] ?? null,
+    disappointment,
+    surprise,
+  };
+}
+
+function importance(
+  result: Result,
+  intel: Intelligence
+) {
+  let score = result.margin * 0.4;
+
+  if (result.margin <= 3) score += 40;
+  if (result.margin >= 40) score += 20;
+  if (result.winnerScore >= 175) score += 25;
+  if (result.total >= 330) score += 30;
+  if (rivalryFor(result.winner, result.loser)) score += 45;
+  if ((intel.winningStar?.points ?? 0) >= 35) score += 12;
+
+  return score;
+}
+
+function playerParagraph(
+  result: Result,
+  intel: Intelligence
+): string | null {
   const seed = seedFor(result);
+  const options: string[] = [];
+
+  const star = intel.winningStar;
+  const poor = intel.disappointment;
+  const surprise = intel.surprise;
+
+  if (star && star.points >= 25) {
+    options.push(
+      pick(
+        [
+          `${star.name} delivered ${pts(star.points)} fantasy points for ${teamName(result.winner, result.game.season)}, accounting for ${(star.share * 100).toFixed(1)}% of the winning total. ${manager(result.winner)} will doubtless call this a tactical masterstroke, although the player did most of the actual work.`,
+          `${star.name} supplied ${pts(star.points)} points for the winning side. It was a substantial individual contribution, and ${manager(result.winner)} has already begun the difficult task of explaining why he deserves the credit.`,
+          `Among the more useful employees of ${teamName(result.winner, result.game.season)} this week was ${star.name}, whose ${pts(star.points)}-point performance made his manager look considerably cleverer than usual.`,
+        ],
+        seed
+      )
+    );
+  }
+
+  if (
+    poor &&
+    poor.average !== null
+  ) {
+    options.push(
+      pick(
+        [
+          `${poor.name} managed ${pts(poor.points)} points for the defeated side, compared with an average of ${pts(poor.average)} across ${poor.starts} previous SFL starts. The shortfall of ${pts(Math.abs(poor.difference ?? 0))} points will not be pleasant reading for ${manager(result.loser)}.`,
+          `Questions are being asked of ${poor.name}, whose ${pts(poor.points)}-point contribution fell well short of his previous SFL starting average of ${pts(poor.average)}. Sloot News understands a strongly worded letter is being prepared for a man who has absolutely no idea this league exists.`,
+        ],
+        seed + 3
+      )
+    );
+  }
+
+  if (
+    surprise &&
+    surprise.average !== null
+  ) {
+    options.push(
+      `${surprise.name} chose this particular week to produce ${pts(surprise.points)} points, compared with a previous SFL starting average of ${pts(surprise.average)}. ${manager(result.winner)} insists he saw it coming. The newsroom has found no supporting evidence.`
+    );
+  }
+
+  if (
+    !options.length &&
+    intel.losingStar &&
+    intel.losingStar.points >= 25
+  ) {
+    options.push(
+      `${intel.losingStar.name} contributed ${pts(intel.losingStar.points)} points for ${teamName(result.loser, result.game.season)}, only to discover that personal excellence offers no protection against the incompetence of one's fantasy colleagues.`
+    );
+  }
+
+  return options.length
+    ? pick(options, seed + 7)
+    : null;
+}
+
+function buildArticle(
+  result: Result,
+  intel: Intelligence,
+  featured: boolean
+): Article {
+  const season = result.game.season;
+  const winner = teamName(result.winner, season);
+  const loser = teamName(result.loser, season);
+  const winnerManager = manager(result.winner);
+  const loserManager = manager(result.loser);
+  const seed = seedFor(result);
+
+  const score =
+    `${pts(result.winnerScore)}–${pts(result.loserScore)}`;
+
   const rivalry = rivalryFor(
     result.winner,
     result.loser
   );
 
-  if (rivalry) {
-    return pick(
+  const star = intel.winningStar;
+  const poor = intel.disappointment;
+
+  const angles: string[] = [];
+
+  if (rivalry) angles.push("rivalry", "rivalry");
+  if (result.margin <= 3) angles.push("heartbreak", "heartbreak");
+  if (result.margin >= 40) angles.push("demolition", "demolition");
+  if (result.total >= 300) angles.push("shootout");
+  if ((star?.points ?? 0) >= 28) angles.push("star");
+  if (poor && result.margin <= 15) angles.push("inquest");
+  if (intel.surprise) angles.push("surprise");
+
+  angles.push("manager", "investigation", "report");
+
+  const angle = pick(angles, seed + 23);
+
+  let title = "";
+  let paragraphs: string[] = [];
+
+  if (angle === "rivalry" && rivalry) {
+    title = pick(
       [
-        `${rivalry.title} Ends in Tears as ${winner} Claim the Spoils`,
-        `${winner} Win ${rivalry.title}; ${loser} Left Holding Their Own Bollocks`,
-        `Another Chapter of Absolute Filth as ${winner} Conquer ${loser}`,
+        `${rivalry.title}: ${winner} Take the Spoils as Old Wounds Reopen`,
+        `Hostilities Resume as ${winner} Win ${rivalry.title}`,
+        `${loser} Lose the Match and the Argument in ${rivalry.title}`,
       ],
       seed
     );
-  }
 
-  if (result.margin <= 2) {
-    return pick(
+    paragraphs = [
+      `There was never much prospect of a civilised afternoon when ${winnerManager} and ${loserManager} met again. The latest instalment of ${rivalry.title} ended ${score} in favour of ${winner}, adding another grievance to a relationship already beyond repair.`,
+      rivalry.description,
+      `The decisive difference was ${pts(result.margin)} points. In an ordinary fixture that might be regarded as a statistic. In this rivalry, it will almost certainly become evidence in an argument lasting several years.`,
+    ];
+  } else if (angle === "heartbreak") {
+    title = pick(
       [
-        `${winner} Escape by ${pts(result.margin)} Points in Outrageous SFL Shitshow`,
-        `${loser} Lose by a Pubic Hair; Local Supporters Demand Answers`,
-        `Heartbreak, Bollocks and Bad Decisions: ${winner} Survive`,
+        `${loser} Lose by ${pts(result.margin)} Points; Emergency Counselling Requested`,
+        `A Margin of ${pts(result.margin)} Points and a Lifetime of Regret`,
+        `${winner} Survive as ${loser} Discover New Depths of Misery`,
       ],
       seed
     );
-  }
 
-  if (result.margin >= 45) {
-    return pick(
+    paragraphs = [
+      `At some point in the coming days, ${loserManager} will revisit this ${score} defeat and begin identifying tiny moments that could have changed everything. It is unlikely to improve his mental health.`,
+      `Only ${pts(result.margin)} points separated ${winner} and ${loser}. That is a margin small enough to inspire several hours of furious arithmetic and at least one deeply unreasonable complaint about the scoring system.`,
+      `For ${winnerManager}, the same numbers represent tactical brilliance. Such is the extraordinary power of being on the correct side of a decimal point.`,
+    ];
+  } else if (angle === "demolition") {
+    title = pick(
       [
-        `${winner} Batter ${loser} Into Next Fucking Week`,
-        `${loser} Absolutely Annihilated; Funeral Arrangements Underway`,
-        `Authorities Called as ${winner} Commit Unholy Act of Football Violence`,
+        `Authorities Investigate ${pts(result.margin)}-Point Massacre of ${loser}`,
+        `${winner} Dismantle ${loser}; Structural Engineers Called`,
+        `${loser} Reportedly Still Looking for Their Defence`,
       ],
       seed
     );
-  }
 
-  if (result.winnerScore >= 175) {
-    return pick(
+    paragraphs = [
+      `Sloot News regrets to report that ${loser} have suffered an incident of considerable sporting violence. ${winner} won ${score}, a margin of ${pts(result.margin)} points, and there are now serious questions about whether the defeated franchise should be permitted to operate heavy machinery.`,
+      `This was not the sort of defeat that can be explained away by a missed reception. The gap between the teams was substantial enough to require its own postcode.`,
+      `${loserManager} is entitled to demand improvements. Whether any of his players are still answering his calls is another matter.`,
+    ];
+  } else if (angle === "shootout") {
+    title = pick(
       [
-        `${winner} Unleash Offensive Filth on Helpless ${loser}`,
-        `${winner} Produce ${pts(result.winnerScore)}-Point Masterclass in Being a Bastard`,
-        `${loser} Powerless to Stop ${winner} Scoring Like a Man Possessed`,
+        `${pts(result.total)} Points of Absolute Filth as ${winner} Prevail`,
+        `${loser} Score Plenty, Win Fuck All`,
+        `Offensive Explosion Leaves ${loserManager} Empty-Handed`,
       ],
       seed
     );
-  }
 
-  return pick(
-    [
-      `${winner} Defeat ${loser} in Another Week of Questionable Football`,
-      `${loser} Come Up Short as ${winner} Take the Piss`,
-      `${winner} Claim the Points; ${loser} Claim Absolutely Fuck All`,
-    ],
-    seed
-  );
-}
-
-function openingParagraph(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
-
-  const seed = seedFor(result);
-
-  if (result.margin <= 2) {
-    return pick(
+    paragraphs = [
+      `The SFL scoring department recorded ${pts(result.total)} combined points as ${winner} defeated ${loser} ${score}. Both franchises contributed handsomely to the spectacle. Only one was rewarded.`,
+      `${loserManager} might ordinarily celebrate a score of ${pts(result.loserScore)}. Unfortunately, ${winnerManager} had the spectacularly inconsiderate idea of scoring ${pts(result.winnerScore)}.`,
+      `It is difficult to know what more the losing side could reasonably have demanded from its attack. A functioning defence would have been an excellent start.`,
+    ];
+  } else if (angle === "star" && star) {
+    title = pick(
       [
-        `Ladies and gentlemen, we have witnessed another absolute bastard of a finish. ${winner} scraped past ${loser} ${pts(result.winnerScore)}–${pts(result.loserScore)}, leaving just ${pts(result.margin)} points between joy and a week spent staring blankly at the ceiling.`,
-        `Some defeats hurt. Others crawl into your brain, unpack their bags and spend the next six months reminding you what a useless cunt you are. Unfortunately for ${manager(result.loser)}, this ${pts(result.margin)}-point defeat to ${winner} belongs firmly in the second category.`,
+        `${star.name} Takes Control as ${winner} Beat ${loser}`,
+        `${star.name} Delivers ${pts(star.points)}-Point Statement`,
+        `${winnerManager} Claims Credit for ${star.name}'s Heroics`,
       ],
       seed
     );
-  }
 
-  if (result.margin >= 45) {
-    return pick(
+    paragraphs = [
+      `The official result reads ${winner} ${pts(result.winnerScore)}, ${loser} ${pts(result.loserScore)}. But the more interesting number belongs to ${star.name}, who contributed ${pts(star.points)} points to the winning effort.`,
+      `That represents ${(star.share * 100).toFixed(1)}% of ${winner}'s total. ${winnerManager} may have assembled the lineup, but ${star.name} provided a persuasive argument that the players should receive some credit.`,
+      `The victory margin was ${pts(result.margin)} points. ${loserManager} must now work out how to prevent another performance like this while resisting the urge to throw his phone into the sea.`,
+    ];
+  } else if (angle === "inquest" && poor) {
+    title = pick(
       [
-        `There are beatings, there are demolitions, and then there is whatever the fuck ${winner} just did to ${loser}. A ${pts(result.margin)}-point margin suggests that one of these franchises may have accidentally brought a children's birthday party to a professional sporting event.`,
-        `Sloot News would like to extend its condolences to the friends, family and remaining supporters of ${loser}, following a ${pts(result.winnerScore)}–${pts(result.loserScore)} dismantling at the hands of ${winner}. The match was technically competitive for several seconds.`,
+        `${poor.name} Summoned to Explain ${loser}'s Defeat`,
+        `Questions Asked After ${loser} Fall Short Against ${winner}`,
+        `${loserManager} Opens Inquiry into Missing Fantasy Points`,
       ],
       seed
     );
-  }
 
-  return pick(
-    [
-      `Another week, another collection of grown men allowing American footballers to dictate their emotional wellbeing. This particular episode saw ${winner} beat ${loser} ${pts(result.winnerScore)}–${pts(result.loserScore)}, leaving ${manager(result.loser)} with precious little to celebrate.`,
-      `${winner} walked away with a ${pts(result.margin)}-point victory over ${loser}, continuing the SFL tradition of one man having a wonderful weekend at the direct expense of another man's mental health.`,
-      `Week ${result.game.week} brought plenty of misery to the SFL, but ${loser} made a particularly generous contribution, losing ${pts(result.winnerScore)}–${pts(result.loserScore)} to ${winner}.`,
-    ],
-    seed
-  );
-}
+    paragraphs = [
+      `The investigation into ${loser}'s ${score} defeat has identified several persons of interest. Among them is ${poor.name}, whose ${pts(poor.points)}-point contribution fell below his established SFL form.`,
+      `The player averaged ${pts(poor.average ?? 0)} points across ${poor.starts} previous starts. This week's shortfall was ${pts(Math.abs(poor.difference ?? 0))} points. With the team losing by ${pts(result.margin)}, the arithmetic is uncomfortable, although it cannot tell us how an alternative performance would have unfolded.`,
+      `${loserManager} has declined to comment, possibly because nobody has actually asked him. Sloot News nevertheless expects a full explanation.`,
+    ];
+  } else if (angle === "surprise" && intel.surprise) {
+    const hero = intel.surprise;
 
-function analysisParagraph(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
-  const seed = seedFor(result);
-
-  if (result.margin <= 3) {
-    return pick(
+    title = pick(
       [
-        `For ${manager(result.loser)}, the next few days will involve an extensive investigation into every missed reception, every questionable lineup decision and every moment in which the universe could have intervened but instead decided to be a massive prick.`,
-        `A margin this small is a cruel reminder that the difference between tactical genius and public humiliation can be one meaningless reception from a bloke who wasn't even expected to play.`,
+        `${hero.name} Apparently Good at Football After All`,
+        `Unexpected Hero Rescues ${winner} from Potential Embarrassment`,
+        `${winnerManager} Insists ${hero.name}'s Explosion Was Always the Plan`,
       ],
-      seed + 2
+      seed
     );
-  }
 
-  if (result.margin >= 40) {
-    return pick(
+    paragraphs = [
+      `For reasons that remain unclear, ${hero.name} chose Week ${result.game.week} to become an extremely useful fantasy footballer. His ${pts(hero.points)} points helped ${winner} defeat ${loser} ${score}.`,
+      `Across ${hero.starts} previous SFL starts, ${hero.name} averaged ${pts(hero.average ?? 0)}. This performance exceeded that mark by ${pts(hero.difference ?? 0)} points, prompting ${winnerManager} to declare himself a visionary.`,
+      `The newsroom has requested evidence that this was planned rather than an extremely fortunate accident. None has yet been supplied.`,
+    ];
+  } else if (angle === "manager") {
+    title = pick(
       [
-        `The losing side offered about as much resistance as a wet paper bag in a hurricane. By the time the final scores were confirmed, ${manager(result.loser)} was left contemplating whether the franchise could legally be dissolved before next Sunday.`,
-        `The result was so one-sided that the SFL's imaginary governing body briefly considered introducing a mercy rule. The proposal was rejected because humiliating your mates is essentially the entire point of the competition.`,
+        `${winnerManager} Enjoys Peaceful Weekend at ${loserManager}'s Expense`,
+        `${loserManager} Left Searching for Answers After ${winner} Win`,
+        `${winner} Win; Two Managers Offer Very Different Interpretations`,
       ],
-      seed + 2
+      seed
     );
-  }
 
-  if (result.total >= 320) {
-    return pick(
+    paragraphs = [
+      `${winnerManager} and ${loserManager} spent the weekend watching essentially the same collection of NFL games. Remarkably, only one emerged with anything resembling happiness. ${winner} won ${score}.`,
+      `The difference of ${pts(result.margin)} points will be presented by the winner as evidence of excellent preparation. The loser will almost certainly regard it as proof that fantasy football is fundamentally dishonest.`,
+      `Both interpretations are convenient. Only one comes with a victory.`,
+    ];
+  } else if (angle === "investigation") {
+    title = pick(
       [
-        `The two sides combined for ${pts(result.total)} points, a scoring spectacle that would normally leave both managers delighted. Unfortunately, only one of them gets to enjoy it, while the other has to explain how scoring that many points still wasn't fucking enough.`,
-        `With ${pts(result.total)} points between them, this was hardly a quiet afternoon. ${manager(result.loser)} can at least take comfort in having contributed to a wonderful spectacle, which is precisely the sort of consolation nobody wants.`,
+        `Sloot News Opens Formal Inquiry into ${loser}'s Defeat`,
+        `What Exactly Happened to ${loser}?`,
+        `A ${pts(result.margin)}-Point Mystery and Two Questionable Franchises`,
       ],
-      seed + 2
+      seed
+    );
+
+    paragraphs = [
+      `Investigators have confirmed that ${winner} defeated ${loser} ${score}. The result is not in dispute. Everything else, including the competence of those involved, remains under examination.`,
+      `The winning margin of ${pts(result.margin)} points is now the central exhibit. ${winnerManager} maintains that victory was deserved. ${loserManager} is expected to pursue alternative theories.`,
+      `Sloot News will continue its investigation until a satisfactory explanation emerges or somebody offers the editorial staff a pint.`,
+    ];
+  } else {
+    title = pick(
+      [
+        `${winner} Claim the Points; ${loser} Claim Absolutely Fuck All`,
+        `${loser} Come Up Short in Latest SFL Misadventure`,
+        `${winner} Prevail as Another Manager Questions His Life Choices`,
+      ],
+      seed
+    );
+
+    paragraphs = [
+      `${winner} secured a ${score} victory over ${loser}, handing ${winnerManager} another result to celebrate and ${loserManager} another reason to avoid the league group chat.`,
+      `The final margin stood at ${pts(result.margin)} points. Not every contest becomes an instant classic, but the SFL has never required exceptional football to produce an exceptional amount of complaining.`,
+      `For the winners, the result provides useful momentum. For the losers, it provides several days in which to pretend the next fixture will be different.`,
+    ];
+  }
+
+  const player = playerParagraph(result, intel);
+
+  const playerAlreadyCentral =
+    angle === "star" ||
+    angle === "inquest" ||
+    angle === "surprise";
+
+  if (player && !playerAlreadyCentral) {
+    const position = Math.min(
+      1 + Math.abs(seed % 2),
+      paragraphs.length
+    );
+    paragraphs.splice(position, 0, player);
+  }
+
+  if (
+    featured &&
+    poor &&
+    poor.average !== null &&
+    result.margin <= 15 &&
+    Math.abs(poor.difference ?? 0) > result.margin &&
+    angle !== "inquest"
+  ) {
+    paragraphs.push(
+      `One particularly uncomfortable detail concerns ${poor.name}. His shortfall against his previous SFL starting average was ${pts(Math.abs(poor.difference ?? 0))} points, exceeding the ${pts(result.margin)}-point losing margin. That does not prove he cost ${loser} the match, but it certainly gives the post-match inquiry somewhere to begin.`
     );
   }
 
-  return pick(
-    [
-      `${manager(result.winner)} will understandably be delighted. ${manager(result.loser)}, meanwhile, must return to the drawing board, assuming it hasn't already been thrown through a window.`,
-      `It was the sort of result that looks perfectly straightforward on a spreadsheet and considerably less pleasant when you're the poor bastard on the wrong end of it.`,
-      `Both managers will take lessons from this encounter. One will learn how to win. The other will probably learn absolutely nothing and repeat the entire exercise next week.`,
-    ],
-    seed + 2
-  );
-}
+  if (featured) {
+    const loreTeam =
+      seed % 3 === 0
+        ? result.winner
+        : result.loser;
 
-function personalParagraph(result: Result) {
-  const seed = seedFor(result);
+    const lore = pick(
+      LORE[loreTeam],
+      seed + 9
+    );
 
-  const loserLore = pick(
-    LORE[result.loser],
-    seed + 5
-  );
+    const lorePosition =
+      1 + Math.abs((seed + 5) % (paragraphs.length + 1));
 
-  const winnerLore = pick(
-    LORE[result.winner],
-    seed + 8
-  );
-
-  const rivalry = rivalryFor(
-    result.winner,
-    result.loser
-  );
-
-  if (rivalry) {
-    return (
-      `${rivalry.description} ` +
-      `${loserLore}`
+    paragraphs.splice(
+      Math.min(lorePosition, paragraphs.length),
+      0,
+      lore
     );
   }
 
-  return pick(
-    [
-      loserLore,
-      winnerLore,
-      `${loserLore} ${winnerLore}`,
-    ],
-    seed + 11
-  );
-}
+  if (!featured) {
+    const selected = paragraphs.slice(0, 2);
 
-function closingParagraph(result: Result) {
-  const winner = teamName(
-    result.winner,
-    result.game.season
-  );
-  const loser = teamName(
-    result.loser,
-    result.game.season
-  );
+    if (
+      player &&
+      !playerAlreadyCentral &&
+      !selected.includes(player)
+    ) {
+      selected[1] = player;
+    }
 
-  return pick(
-    [
-      `So congratulations to ${winner}. Commiserations to ${loser}. And to everybody else in the SFL: remember that no matter how badly your weekend went, there is always someone in this league making an even bigger fucking mess of things.`,
-      `Where do the two franchises go from here? ${winner} will be looking upwards, ${loser} will be looking for excuses, and Sloot News will be watching both with the sort of morbid fascination normally reserved for motorway pile-ups.`,
-      `The result goes into the record books, the bragging rights go to ${winner}, and ${loser} get the privilege of reading about their own humiliation in a publication they never asked to subscribe to.`,
-    ],
-    seedFor(result) + 17
-  );
+    paragraphs = selected;
+  }
+
+  return { title, paragraphs };
 }
 
 function SectionHeading({
@@ -496,7 +807,12 @@ export default async function NewsEdition({
   const { season, week } = await params;
 
   const weekNumber = Number(week);
-  const seasons = await getHistoricalData();
+
+  const [seasons, playerDatabase] =
+    await Promise.all([
+      getHistoricalData(),
+      getPlayerDatabase(),
+    ]);
 
   const selectedSeason = seasons.find(
     (item) => item.league.season === season
@@ -534,14 +850,32 @@ export default async function NewsEdition({
         )
     : [];
 
-  const sorted = [...results].sort(
-    (a, b) =>
-      storyImportance(b) - storyImportance(a) ||
-      b.margin - a.margin
+  const history = seasons.flatMap(
+    (item) => item.matchups
   );
 
-  const lead = sorted[0];
-  const roundups = sorted.slice(1);
+  const enriched = results.map((result) => {
+    const intel = getIntelligence(
+      result,
+      history,
+      playerDatabase
+    );
+
+    return {
+      result,
+      intel,
+      importance: importance(result, intel),
+    };
+  });
+
+  enriched.sort(
+    (a, b) =>
+      b.importance - a.importance ||
+      b.result.margin - a.result.margin
+  );
+
+  const lead = enriched[0];
+  const roundups = enriched.slice(1);
 
   const fraud = [...results].sort(
     (a, b) => b.margin - a.margin
@@ -551,6 +885,14 @@ export default async function NewsEdition({
     SPONSORS,
     Number(season) + weekNumber
   );
+
+  const leadArticle = lead
+    ? buildArticle(
+        lead.result,
+        lead.intel,
+        true
+      )
+    : null;
 
   return (
     <main style={{ paddingBottom: "40px" }}>
@@ -625,7 +967,7 @@ export default async function NewsEdition({
         </p>
       </header>
 
-      {!lead ? (
+      {!lead || !leadArticle ? (
         <section style={panel}>
           <SectionHeading
             eyebrow="Newsroom Notice"
@@ -685,7 +1027,7 @@ export default async function NewsEdition({
                 margin: "0 0 18px",
               }}
             >
-              {headline(lead)}
+              {leadArticle.title}
             </h2>
 
             <p
@@ -696,33 +1038,30 @@ export default async function NewsEdition({
                 margin: "0 0 20px",
               }}
             >
-              {teamName(lead.winner, season)}
+              {teamName(lead.result.winner, season)}
               {" "}
-              {pts(lead.winnerScore)}
+              {pts(lead.result.winnerScore)}
               {" — "}
-              {pts(lead.loserScore)}
+              {pts(lead.result.loserScore)}
               {" "}
-              {teamName(lead.loser, season)}
+              {teamName(lead.result.loser, season)}
             </p>
 
-            {[
-              openingParagraph(lead),
-              analysisParagraph(lead),
-              personalParagraph(lead),
-              closingParagraph(lead),
-            ].map((paragraph, index) => (
-              <p
-                key={index}
-                style={{
-                  color: "#d2d8e0",
-                  lineHeight: 1.85,
-                  fontSize: "15px",
-                  margin: "0 0 18px",
-                }}
-              >
-                {paragraph}
-              </p>
-            ))}
+            {leadArticle.paragraphs.map(
+              (paragraph, index) => (
+                <p
+                  key={index}
+                  style={{
+                    color: "#d2d8e0",
+                    lineHeight: 1.85,
+                    fontSize: "15px",
+                    margin: "0 0 18px",
+                  }}
+                >
+                  {paragraph}
+                </p>
+              )
+            )}
           </article>
 
           <section style={{ marginBottom: "32px" }}>
@@ -731,77 +1070,81 @@ export default async function NewsEdition({
               title="Around the SFL"
             />
 
-            {roundups.map((result) => (
-              <article
-                key={
-                  `${result.game.season}-` +
-                  `${result.game.week}-` +
-                  `${result.game.rosterA}-` +
-                  `${result.game.rosterB}`
-                }
-                style={{
-                  ...panel,
-                  marginBottom: "12px",
-                }}
-              >
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    letterSpacing: "1.5px",
-                    margin: "0 0 10px",
-                  }}
-                >
-                  MATCH REPORT
-                </p>
+            {roundups.map(({ result, intel }) => {
+              const article = buildArticle(
+                result,
+                intel,
+                false
+              );
 
-                <h3
+              return (
+                <article
+                  key={
+                    `${result.game.season}-` +
+                    `${result.game.week}-` +
+                    `${result.game.rosterA}-` +
+                    `${result.game.rosterB}`
+                  }
                   style={{
-                    fontSize: "21px",
-                    lineHeight: 1.25,
-                    margin: "0 0 12px",
+                    ...panel,
+                    marginBottom: "12px",
                   }}
                 >
-                  {headline(result)}
-                </h3>
+                  <p
+                    style={{
+                      ...muted,
+                      fontSize: "10px",
+                      fontWeight: 800,
+                      letterSpacing: "1.5px",
+                      margin: "0 0 10px",
+                    }}
+                  >
+                    MATCH REPORT
+                  </p>
 
-                <p
-                  style={{
-                    fontWeight: 800,
-                    margin: "0 0 14px",
-                  }}
-                >
-                  {pts(result.winnerScore)}
-                  {" — "}
-                  {pts(result.loserScore)}
-                </p>
+                  <h3
+                    style={{
+                      fontSize: "21px",
+                      lineHeight: 1.25,
+                      margin: "0 0 12px",
+                    }}
+                  >
+                    {article.title}
+                  </h3>
 
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "14px",
-                    lineHeight: 1.75,
-                    margin: "0 0 12px",
-                  }}
-                >
-                  {openingParagraph(result)}
-                </p>
+                  <p
+                    style={{
+                      fontWeight: 800,
+                      margin: "0 0 14px",
+                    }}
+                  >
+                    {pts(result.winnerScore)}
+                    {" — "}
+                    {pts(result.loserScore)}
+                  </p>
 
-                <p
-                  style={{
-                    ...muted,
-                    fontSize: "14px",
-                    lineHeight: 1.75,
-                    margin: 0,
-                  }}
-                >
-                  {analysisParagraph(result)}
-                  {" "}
-                  {personalParagraph(result)}
-                </p>
-              </article>
-            ))}
+                  {article.paragraphs.map(
+                    (paragraph, index) => (
+                      <p
+                        key={index}
+                        style={{
+                          ...muted,
+                          fontSize: "14px",
+                          lineHeight: 1.75,
+                          margin:
+                            index ===
+                            article.paragraphs.length - 1
+                              ? 0
+                              : "0 0 12px",
+                        }}
+                      >
+                        {paragraph}
+                      </p>
+                    )
+                  )}
+                </article>
+              );
+            })}
           </section>
 
           {fraud && (
