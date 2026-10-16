@@ -445,6 +445,47 @@ export default async function FranchisePage({
           rosterId
         ) ?? false;
 
+      const conferenceChampionshipAppearance =
+        season.matchups.some(
+          (matchup) =>
+            isPlayed(matchup) &&
+            matchup.week === 16 &&
+            matchup.phase ===
+              "Main Playoffs" &&
+            (matchup.rosterA === rosterId ||
+              matchup.rosterB === rosterId)
+        );
+
+      const wildcardExit =
+        season.matchups.some(
+          (matchup) => {
+            if (
+              !isPlayed(matchup) ||
+              matchup.week !== 15 ||
+              matchup.phase !==
+                "Main Playoffs"
+            ) {
+              return false;
+            }
+
+            if (matchup.rosterA === rosterId) {
+              return (
+                matchup.scoreA <
+                matchup.scoreB
+              );
+            }
+
+            if (matchup.rosterB === rosterId) {
+              return (
+                matchup.scoreB <
+                matchup.scoreA
+              );
+            }
+
+            return false;
+          }
+        );
+
       return {
         year,
         ...record,
@@ -453,16 +494,8 @@ export default async function FranchisePage({
           CHAMPIONS[year] === rosterId,
         finalist,
         conferenceChampion: finalist,
-        conferenceChampionshipAppearance:
-          season.matchups.some(
-            (matchup) =>
-              isPlayed(matchup) &&
-              matchup.week === 16 &&
-              matchup.phase ===
-                "Main Playoffs" &&
-              (matchup.rosterA === rosterId ||
-                matchup.rosterB === rosterId)
-          ),
+        conferenceChampionshipAppearance,
+        wildcardExit,
       };
     })
     .sort(
@@ -720,98 +753,114 @@ export default async function FranchisePage({
           }}
         >
           {seasons.map(
-            (season) => (
-              <Link
-                key={season.year}
-                href={`/history/${season.year}`}
-                style={{
-                  ...cardStyle,
-                  display: "block",
-                  color: "#ffffff",
-                  textDecoration:
-                    "none",
-                }}
-              >
-                <div
+            (season) => {
+              const performance =
+                season.champion
+                  ? "🏆 Champion"
+                  : season.finalist
+                    ? "🥈 Finalist"
+                    : season.conferenceChampionshipAppearance
+                      ? "Conference Finalist"
+                      : season.wildcardExit
+                        ? "Wildcard Exit"
+                        : null;
+
+              return (
+                <Link
+                  key={season.year}
+                  href={`/history/${season.year}`}
                   style={{
-                    display: "flex",
-                    justifyContent:
-                      "space-between",
-                    alignItems:
-                      "center",
-                    gap: "12px",
+                    ...cardStyle,
+                    display: "block",
+                    color: "#ffffff",
+                    textDecoration:
+                      "none",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontSize:
-                          "18px",
-                        fontWeight:
-                          "800",
-                      }}
-                    >
-                      {season.year}
-                    </div>
-
-                    <div
-                      style={{
-                        color:
-                          "#9da7b3",
-                        fontSize:
-                          "12px",
-                        marginTop:
-                          "6px",
-                      }}
-                    >
-                      {season.wins}-
-                      {season.losses}-
-                      {season.ties}
-                      {" · "}
-                      {formatPoints(
-                        season.pointsFor
-                      )}{" "}
-                      PF
-                    </div>
-                  </div>
-
                   <div
                     style={{
-                      textAlign:
-                        "right",
-                      fontSize:
-                        "12px",
-                      fontWeight:
-                        "700",
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      alignItems:
+                        "center",
+                      gap: "12px",
                     }}
                   >
-                    {season.champion ? (
-                      <span>
-                        🏆 Champion
-                      </span>
-                    ) : season.finalist ? (
-                      <span>
-                        🥈 Finalist
-                      </span>
-                    ) : season.conferenceChampionshipAppearance ? (
-                      <span>
-                        Conference
-                        Finalist
-                      </span>
-                    ) : (
-                      <span
+                    <div>
+                      <div
+                        style={{
+                          fontSize:
+                            "18px",
+                          fontWeight:
+                            "800",
+                        }}
+                      >
+                        {season.year}
+                      </div>
+
+                      <div
+                        style={{
+                          color:
+                            "#9da7b3",
+                          fontSize:
+                            "12px",
+                          marginTop:
+                            "6px",
+                        }}
+                      >
+                        {season.wins}-
+                        {season.losses}-
+                        {season.ties}
+                        {" · "}
+                        {formatPoints(
+                          season.pointsFor
+                        )}{" "}
+                        PF
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        textAlign:
+                          "right",
+                        fontSize:
+                          "12px",
+                        fontWeight:
+                          "700",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {performance && (
+                        <div
+                          style={{
+                            color:
+                              "#f4f5f7",
+                            marginBottom:
+                              "7px",
+                          }}
+                        >
+                          {performance}
+                        </div>
+                      )}
+
+                      <div
                         style={{
                           color:
                             "#687384",
+                          fontSize:
+                            "11px",
+                          fontWeight:
+                            "600",
                         }}
                       >
                         View Season ›
-                      </span>
-                    )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            )
+                </Link>
+              );
+            }
           )}
         </div>
       </section>
@@ -896,7 +945,6 @@ export default async function FranchisePage({
         ← All Franchises
       </Link>
 
-      {/* Franchise identity panel */}
       <div
         style={{
           marginTop: "24px",
@@ -988,6 +1036,31 @@ export default async function FranchisePage({
             >
               Manager: {identity.manager}
             </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "5px",
+                marginTop: "12px",
+              }}
+            >
+              <span
+                style={{
+                  width: "28px",
+                  height: "4px",
+                  borderRadius: "4px",
+                  background: identity.primary,
+                }}
+              />
+              <span
+                style={{
+                  width: "28px",
+                  height: "4px",
+                  borderRadius: "4px",
+                  background: identity.secondary,
+                }}
+              />
+            </div>
           </div>
         </div>
 
