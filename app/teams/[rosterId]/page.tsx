@@ -68,10 +68,77 @@ const FINALISTS: Record<string, number[]> = {
   "2025": [10, 9],
 };
 
-/*
- * An official result requires a completed
- * NFL week and valid recorded scores.
- */
+const teamIdentity: Record<
+  number,
+  {
+    manager: string;
+    primary: string;
+    secondary: string;
+    logo: string;
+  }
+> = {
+  1: {
+    manager: "Ed Nelms",
+    primary: "#651326",
+    secondary: "#D4A04A",
+    logo: "/logos/mt-isa-ballbags.PNG",
+  },
+  2: {
+    manager: "Ben Smith",
+    primary: "#C8102E",
+    secondary: "#09244A",
+    logo: "/logos/cambridge-cum-sluts.PNG",
+  },
+  3: {
+    manager: "Jake Greenwood",
+    primary: "#9062B5",
+    secondary: "#2C194D",
+    logo: "/logos/grimsby-chode-chokers.PNG",
+  },
+  4: {
+    manager: "George Pendleton",
+    primary: "#E7B34D",
+    secondary: "#A85D28",
+    logo: "/logos/isle-of-wight-happy-endings.PNG",
+  },
+  5: {
+    manager: "Ryan Whiting",
+    primary: "#092B58",
+    secondary: "#F47721",
+    logo: "/logos/grays-town-fingerblasters.PNG",
+  },
+  6: {
+    manager: "Garrett Etheridge",
+    primary: "#581525",
+    secondary: "#E8E6E1",
+    logo: "/logos/lincoln-nonces.PNG",
+  },
+  7: {
+    manager: "Ollie Payne",
+    primary: "#D97920",
+    secondary: "#557B29",
+    logo: "/logos/kalamata-dirty-vegans.PNG",
+  },
+  8: {
+    manager: "Jack Brannigan",
+    primary: "#2788D2",
+    secondary: "#E88924",
+    logo: "/logos/weybiza-babs.PNG",
+  },
+  9: {
+    manager: "Tarl Brayer",
+    primary: "#955322",
+    secondary: "#103C58",
+    logo: "/logos/east-rutherford-shitlickers.PNG",
+  },
+  10: {
+    manager: "Josh Thomas",
+    primary: "#171717",
+    secondary: "#C7192D",
+    logo: "/logos/chad-moist-discharge.PNG",
+  },
+};
+
 function isPlayed(matchup: HistoricalMatchup) {
   return (
     matchup.isComplete === true &&
@@ -194,6 +261,10 @@ export default async function FranchisePage({
 
   if (!franchise) notFound();
 
+  const identity = teamIdentity[rosterId];
+
+  if (!identity) notFound();
+
   const conference = OBFC_IDS.includes(
     rosterId
   )
@@ -210,10 +281,6 @@ export default async function FranchisePage({
       ? "George Barnes Memorial Trophy"
       : "Ryan Birr Memorial Shield";
 
-  // =====================================
-  // HISTORICAL SFL DATA
-  // =====================================
-
   const [
     historicalData,
     franchiseCareers,
@@ -224,14 +291,6 @@ export default async function FranchisePage({
     getAllSlootPlayerDirectory(),
   ]);
 
-  /*
-   * Keep the original historical dataset
-   * for calculations that need season
-   * information.
-   *
-   * Historical result-based tabs receive
-   * only officially completed matchups.
-   */
   const allMatchups = historicalData
     .flatMap((season) => season.matchups)
     .filter(isPlayed);
@@ -243,18 +302,12 @@ export default async function FranchisePage({
         matchup.rosterB === rosterId
     );
 
-  // =====================================
-  // FRANCHISE LEGENDS SCORING
-  // =====================================
-
   const currentYear =
     new Date().getUTCFullYear();
 
   const completedThroughSeason =
     currentYear - 1;
 
-  // Seasonal grades are official only
-  // for completed SFL seasons.
   const seasonalGrades =
     calculateHistoricalSeasonGrades(
       historicalData,
@@ -262,8 +315,6 @@ export default async function FranchisePage({
       completedThroughSeason
     );
 
-  // Calculate All-Sloot honours using
-  // completed seasons only.
   const completedAllSlootSeasons =
     historicalData
       .filter(
@@ -283,17 +334,12 @@ export default async function FranchisePage({
       completedAllSlootSeasons
     );
 
-  // Award championships to every player
-  // on the winning championship-week
-  // roster, including bench players.
   const franchiseChampionships =
     await getFranchiseChampionships(
       historicalData,
       completedThroughSeason
     );
 
-  // Use exactly the same scoring engine
-  // as the Franchise Legends preview.
   const allFranchiseLegends =
     calculateFranchiseLegacyScores(
       franchiseCareers,
@@ -303,8 +349,6 @@ export default async function FranchisePage({
       franchiseChampionships
     );
 
-  // Only the current franchise's
-  // five highest-ranked legends.
   const franchiseLegends =
     allFranchiseLegends
       .filter(
@@ -313,14 +357,6 @@ export default async function FranchisePage({
       )
       .slice(0, 5);
 
-  // =====================================
-  // PLAYER NAMES
-  // =====================================
-
-  // Include existing starting players
-  // AND the top five Franchise Legends.
-  // This ensures bench-only legends
-  // also have their names displayed.
   const startingPlayerIds =
     franchiseMatchups.flatMap(
       (matchup) =>
@@ -344,10 +380,6 @@ export default async function FranchisePage({
   const playerNames =
     await getPlayerNames(playerIds);
 
-  // =====================================
-  // LOVE TRIANGLE HISTORY
-  // =====================================
-
   const loveTriangleHistory =
     getLoveTriangleHistory(
       allMatchups,
@@ -366,10 +398,6 @@ export default async function FranchisePage({
     ])
   );
 
-  // =====================================
-  // REGULAR-SEASON FRANCHISE HISTORY
-  // =====================================
-
   const seasons = historicalData
     .map((season) => {
       const year = season.league.season;
@@ -387,12 +415,6 @@ export default async function FranchisePage({
         rosterId
       );
 
-      /*
-       * A season is complete only when
-       * every regular-season week has
-       * five official matchups covering
-       * all ten franchises.
-       */
       const completed =
         Array.from(
           { length: 14 },
@@ -448,10 +470,6 @@ export default async function FranchisePage({
         Number(b.year) -
         Number(a.year)
     );
-
-  // =====================================
-  // SFL CAREER RECORD
-  // =====================================
 
   const career = seasons.reduce(
     (total, season) => ({
@@ -512,10 +530,6 @@ export default async function FranchisePage({
     borderRadius: "14px",
     padding: "18px",
   };
-
-  // =====================================
-  // OVERVIEW TAB
-  // =====================================
 
   const overview = (
     <>
@@ -804,10 +818,6 @@ export default async function FranchisePage({
     </>
   );
 
-  // =====================================
-  // TEAM RECORDS TAB
-  // =====================================
-
   const records = (
     <TeamRecords
       rosterId={rosterId}
@@ -831,10 +841,6 @@ export default async function FranchisePage({
     />
   );
 
-  // =====================================
-  // PLAYER LEGENDS TAB
-  // =====================================
-
   const legends = (
     <PlayerLegends
       rosterId={rosterId}
@@ -849,10 +855,6 @@ export default async function FranchisePage({
       }
     />
   );
-
-  // =====================================
-  // RIVALRIES TAB
-  // =====================================
 
   const rivalries = (
     <>
@@ -881,10 +883,6 @@ export default async function FranchisePage({
     </>
   );
 
-  // =====================================
-  // FRANCHISE PAGE
-  // =====================================
-
   return (
     <main>
       <Link
@@ -898,35 +896,136 @@ export default async function FranchisePage({
         ← All Franchises
       </Link>
 
+      {/* Franchise identity panel */}
       <div
         style={{
-          marginTop: "28px",
+          marginTop: "24px",
+          marginBottom: "22px",
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "16px",
+          overflow: "hidden",
         }}
       >
-        <p
+        <div
           style={{
-            fontSize: "12px",
-            fontWeight: "700",
-            letterSpacing:
-              "1.5px",
-            marginBottom: "8px",
+            height: "4px",
+            background: `linear-gradient(
+              90deg,
+              ${identity.primary} 0%,
+              ${identity.primary} 75%,
+              ${identity.secondary} 75%,
+              ${identity.secondary} 100%
+            )`,
+          }}
+        />
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            padding: "20px 16px",
           }}
         >
-          {conference} · EST. 2022
-        </p>
+          <div
+            style={{
+              width: "92px",
+              height: "92px",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src={identity.logo}
+              alt={`${franchise.name} logo`}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </div>
 
-        <h1>
-          {franchise.name}
-        </h1>
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <p
+              style={{
+                fontSize: "10px",
+                fontWeight: 800,
+                letterSpacing: "1.5px",
+                color: "#9da7b3",
+                margin: "0 0 8px",
+              }}
+            >
+              {conference} · EST. 2022
+            </p>
 
-        <p
+            <h1
+              style={{
+                fontSize: "clamp(19px, 5vw, 29px)",
+                lineHeight: 1.15,
+                margin: "0 0 10px",
+                overflowWrap: "break-word",
+              }}
+            >
+              {franchise.name}
+            </h1>
+
+            <p
+              style={{
+                margin: 0,
+                color: "#9da7b3",
+                fontSize: "12px",
+              }}
+            >
+              Manager: {identity.manager}
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "5px",
+                marginTop: "12px",
+              }}
+            >
+              <span
+                style={{
+                  width: "28px",
+                  height: "4px",
+                  borderRadius: "4px",
+                  background: identity.primary,
+                }}
+              />
+              <span
+                style={{
+                  width: "28px",
+                  height: "4px",
+                  borderRadius: "4px",
+                  background: identity.secondary,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
           style={{
-            marginTop: "8px",
-            fontSize: "13px",
+            borderTop: "1px solid #27303b",
+            padding: "10px 16px",
+            color: "#687384",
+            fontSize: "11px",
           }}
         >
           {conferenceName}
-        </p>
+        </div>
       </div>
 
       <FranchiseTabs
