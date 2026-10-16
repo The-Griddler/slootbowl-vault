@@ -1,198 +1,337 @@
 
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { getHistoricalData } from "../../lib/sleeper";
-import { getPlayerRecords } from "../../lib/playerRecords";
-import { getPlayers, getPlayerName } from "../../lib/players";
-import { getFranchiseName } from "../../lib/franchises";
 
-const SLOOTBOWLS = [
-  { season: "2025", champion: 10, runnerUp: 9 },
-  { season: "2024", champion: 10, runnerUp: 4 },
-  { season: "2023", champion: 4, runnerUp: 2 },
-  { season: "2022", champion: 2, runnerUp: 8 },
+type Champion = {
+  season: string;
+  champion: number;
+  runnerUp: number;
+};
+
+type ConferenceChampion = {
+  season: string;
+  obfc: number;
+  gpfc: number;
+};
+
+type MVPRecord = {
+  season: string;
+  playerName: string;
+  franchiseName: string;
+  points: number;
+};
+
+type HistoryTabsProps = {
+  seasons: string[];
+  champions: Champion[];
+  conferenceChampions: ConferenceChampion[];
+  mvpRecords: MVPRecord[];
+  franchiseNames: Record<number, string>;
+};
+
+const GM_AWARDS = [
+  {
+    id: "gm",
+    icon: "🏆",
+    title: "GM of the Year",
+    description: "Most regular-season points scored",
+  },
+  {
+    id: "improved",
+    icon: "📈",
+    title: "Most Improved GM of the Year",
+    description: "Largest increase in regular-season wins",
+  },
+  {
+    id: "lubed",
+    icon: "💀",
+    title: "The Lubed Up, Dicked Down Award",
+    description: "Most regular-season points conceded",
+  },
+  {
+    id: "wonder",
+    icon: "⚡",
+    title: "One Week Wonder of the Year",
+    description: "Highest single-week regular-season team score",
+  },
+  {
+    id: "shitcunt",
+    icon: "🚽",
+    title: "Shitcunt of the Year",
+    description: "Toilet Bowl loser",
+  },
 ];
 
-const CONFERENCE_CHAMPIONS = [
-  { season: "2025", obfc: 9, gpfc: 10 },
-  { season: "2024", obfc: 4, gpfc: 10 },
-  { season: "2023", obfc: 4, gpfc: 2 },
-  { season: "2022", obfc: 8, gpfc: 2 },
+const PLAYER_AWARDS = [
+  {
+    id: "mvp",
+    icon: "👑",
+    title: "SFL MVP",
+    description: "Most Valuable Player",
+  },
+  {
+    id: "opoy",
+    icon: "⭐",
+    title: "SFL OPOY",
+    description: "Offensive Player of the Year",
+  },
+  {
+    id: "roy",
+    icon: "🏅",
+    title: "SFL ROY",
+    description: "Rookie of the Year",
+  },
+  {
+    id: "sbmvp",
+    icon: "🏆",
+    title: "Slootbowl MVP",
+    description: "Championship game MVP",
+  },
 ];
 
-function cardStyle() {
+function cardStyle(): React.CSSProperties {
   return {
     background: "#151b23",
     border: "1px solid #27303b",
     borderRadius: "20px",
     padding: "18px",
-    marginBottom: "14px",
-  } as const;
+  };
 }
 
-function labelStyle() {
+function labelStyle(): React.CSSProperties {
   return {
     fontSize: "11px",
-    fontWeight: "700",
+    fontWeight: 700,
     letterSpacing: "1.5px",
     color: "#687384",
-  } as const;
+    margin: 0,
+  };
 }
 
-export default async function HistoryPage() {
-  const [historicalData, playerRecords, players] =
-    await Promise.all([
-      getHistoricalData(),
-      getPlayerRecords(),
-      getPlayers(),
-    ]);
+export default function HistoryTabs({
+  seasons,
+  champions,
+  conferenceChampions,
+  mvpRecords,
+  franchiseNames,
+}: HistoryTabsProps) {
+  const [activeTab, setActiveTab] = useState<
+    "champions" | "gm" | "players"
+  >("champions");
 
-  // A regular season is complete only when
-  // all 14 weeks have five completed matchups
-  // covering all ten SFL franchises.
-  //
-  // This prevents provisional MVP leaders
-  // from being announced prematurely.
+  const [expandedAward, setExpandedAward] =
+    useState<string | null>(null);
 
-  const completedRegularSeasons = new Set<string>();
+  const getFranchise = (rosterId: number) =>
+    franchiseNames[rosterId] ?? `Franchise ${rosterId}`;
 
-  for (const season of historicalData) {
-    const regularSeasonComplete = Array.from(
-      { length: 14 },
-      (_, index) => index + 1
-    ).every((week) => {
-      const weeklyMatchups = season.matchups.filter(
-        (matchup) =>
-          matchup.week === week &&
-          matchup.phase === "Regular Season" &&
-          matchup.isComplete === true &&
-          Number.isFinite(matchup.scoreA) &&
-          Number.isFinite(matchup.scoreB)
-      );
+  const toggleAward = (awardId: string) => {
+    setExpandedAward((previous) =>
+      previous === awardId ? null : awardId
+    );
+  };
 
-      if (weeklyMatchups.length !== 5) {
-        return false;
-      }
+  const awardRow = (
+    award: {
+      id: string;
+      icon: string;
+      title: string;
+      description: string;
+    },
+    type: "gm" | "players"
+  ) => {
+    const isExpanded = expandedAward === award.id;
 
-      const teams = new Set<number>();
+    return (
+      <div
+        key={award.id}
+        style={{
+          ...cardStyle(),
+          padding: 0,
+          marginBottom: "10px",
+          overflow: "hidden",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => toggleAward(award.id)}
+          aria-expanded={isExpanded}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            width: "100%",
+            padding: "16px",
+            background: "transparent",
+            color: "inherit",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: "23px" }}>
+            {award.icon}
+          </span>
 
-      for (const matchup of weeklyMatchups) {
-        teams.add(matchup.rosterA);
-        teams.add(matchup.rosterB);
-      }
+          <span style={{ flex: 1 }}>
+            <strong
+              style={{
+                display: "block",
+                fontSize: "14px",
+              }}
+            >
+              {award.title}
+            </strong>
 
-      return teams.size === 10;
-    });
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                fontSize: "12px",
+                color: "#687384",
+              }}
+            >
+              {award.description}
+            </span>
+          </span>
 
-    if (regularSeasonComplete) {
-      completedRegularSeasons.add(
-        season.league.season
-      );
-    }
-  }
+          <span style={{ color: "#9da7b3" }}>
+            {isExpanded ? "⌃" : "⌄"}
+          </span>
+        </button>
 
-  const mvpBySeason = new Map<
-    string,
-    {
-      playerId: string;
-      points: number;
-      rosterId: number;
-    }
-  >();
+        {isExpanded && (
+          <div
+            style={{
+              padding: "0 16px 16px",
+              borderTop: "1px solid #27303b",
+            }}
+          >
+            {seasons.map((season, index) => {
+              const mvp =
+                type === "players" &&
+                award.id === "mvp"
+                  ? mvpRecords.find(
+                      (item) => item.season === season
+                    )
+                  : undefined;
 
-  for (const season of historicalData) {
-    // Never declare an MVP before the
-    // 14-week regular season is complete.
-    if (
-      !completedRegularSeasons.has(
-        season.league.season
-      )
-    ) {
-      continue;
-    }
+              const honoraryImproved =
+                type === "gm" &&
+                award.id === "improved" &&
+                season === "2022";
 
-    const playoffTeams = new Set<number>();
+              return (
+                <div
+                  key={season}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "48px 1fr",
+                    gap: "12px",
+                    padding: "13px 0",
+                    borderBottom:
+                      index === seasons.length - 1
+                        ? "none"
+                        : "1px solid #27303b",
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: "#9da7b3",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {season}
+                  </strong>
 
-    for (const matchup of season.matchups) {
-      if (matchup.phase === "Main Playoffs") {
-        playoffTeams.add(matchup.rosterA);
-        playoffTeams.add(matchup.rosterB);
-      }
-    }
+                  {mvp ? (
+                    <div>
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {mvp.playerName}
+                      </strong>
 
-    const totals = new Map<
-      string,
-      {
-        playerId: string;
-        points: number;
-        rosterId: number;
-      }
-    >();
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#687384",
+                        }}
+                      >
+                        {mvp.franchiseName}
+                      </div>
 
-    for (const performance of playerRecords.weekly) {
-      if (
-        performance.season !== season.league.season ||
-        performance.phase !== "Regular Season"
-      ) {
-        continue;
-      }
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#9da7b3",
+                        }}
+                      >
+                        {mvp.points.toFixed(1)} pts
+                      </div>
+                    </div>
+                  ) : honoraryImproved ? (
+                    <div>
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "14px",
+                        }}
+                      >
+                        Ollie Payne
+                      </strong>
 
-      const existing = totals.get(
-        performance.playerId
-      );
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#687384",
+                        }}
+                      >
+                        Kalamata Dirty Vegans
+                      </div>
 
-      if (!existing) {
-        totals.set(performance.playerId, {
-          playerId: performance.playerId,
-          points: performance.points,
-          rosterId: performance.rosterId,
-        });
-      } else {
-        existing.points += performance.points;
-        existing.rosterId = performance.rosterId;
-      }
-    }
-
-    const eligible = Array.from(totals.values())
-      .filter((record) => {
-        const playerPerformances =
-          playerRecords.weekly.filter(
-            (performance) =>
-              performance.season ===
-                season.league.season &&
-              performance.playerId ===
-                record.playerId &&
-              performance.phase ===
-                "Regular Season"
-          );
-
-        return playerPerformances.some((performance) =>
-          playoffTeams.has(performance.rosterId)
-        );
-      })
-      .sort((a, b) => b.points - a.points);
-
-    if (eligible[0]) {
-      mvpBySeason.set(season.league.season, {
-        playerId: eligible[0].playerId,
-        points: eligible[0].points,
-        rosterId: eligible[0].rosterId,
-      });
-    }
-  }
-
-  const seasons = historicalData
-    .map((season) => season.league.season)
-    .sort((a, b) => Number(b) - Number(a));
-
-  const latestSeasons = seasons.slice(0, 5);
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#9da7b3",
+                        }}
+                      >
+                        Inaugural honorary winner
+                      </div>
+                    </div>
+                  ) : (
+                    <span
+                      style={{
+                        color: "#9da7b3",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {season === seasons[0]
+                        ? "TBD"
+                        : "Winner not yet connected"}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <main>
-      <header
-        style={{
-          marginBottom: "28px",
-        }}
-      >
+      <header style={{ marginBottom: "26px" }}>
         <p
           style={{
             ...labelStyle(),
@@ -211,57 +350,102 @@ export default async function HistoryPage() {
           History
         </h1>
 
-        <p
-          style={{
-            marginTop: "6px",
-          }}
-        >
+        <p style={{ marginTop: "6px" }}>
           The official history of the Sluts Football League.
         </p>
       </header>
 
-      <section>
-        <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>SLOOTBOWL</p>
-
-          <h2
+      <nav
+        aria-label="History categories"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: "6px",
+          padding: "5px",
+          background: "#151b23",
+          border: "1px solid #27303b",
+          borderRadius: "14px",
+          marginBottom: "24px",
+        }}
+      >
+        {[
+          { id: "champions", label: "Champions" },
+          { id: "gm", label: "GM Awards" },
+          { id: "players", label: "Player Awards" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => {
+              setActiveTab(
+                tab.id as "champions" | "gm" | "players"
+              );
+              setExpandedAward(null);
+            }}
             style={{
-              margin: "4px 0 0",
-              fontSize: "22px",
+              border: "none",
+              borderRadius: "10px",
+              padding: "12px 5px",
+              background:
+                activeTab === tab.id
+                  ? "#27303b"
+                  : "transparent",
+              color:
+                activeTab === tab.id
+                  ? "#f5f7fa"
+                  : "#9da7b3",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
             }}
           >
-            Championship history
-          </h2>
-        </div>
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-        <article style={cardStyle()}>
-          {latestSeasons.map((season) => {
-            const result = SLOOTBOWLS.find(
-              (item) => item.season === season
-            );
+      {activeTab === "champions" && (
+        <section>
+          <div style={{ marginBottom: "12px" }}>
+            <p style={labelStyle()}>SLOOTBOWL</p>
 
-            return (
-              <div
-                key={season}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "54px 1fr",
-                  gap: "14px",
-                  padding: "13px 0",
-                  borderBottom: "1px solid #27303b",
-                }}
-              >
-                <strong>{season}</strong>
+            <h2
+              style={{
+                margin: "4px 0 0",
+                fontSize: "22px",
+              }}
+            >
+              Championship history
+            </h2>
+          </div>
 
-                <div>
+          <article style={cardStyle()}>
+            {seasons.map((season, index) => {
+              const result = champions.find(
+                (item) => item.season === season
+              );
+
+              return (
+                <div
+                  key={season}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "54px 1fr",
+                    gap: "14px",
+                    padding: "13px 0",
+                    borderBottom:
+                      index === seasons.length - 1
+                        ? "none"
+                        : "1px solid #27303b",
+                  }}
+                >
+                  <strong>{season}</strong>
+
                   {result ? (
-                    <>
-                      <div
-                        style={{
-                          fontWeight: "700",
-                        }}
-                      >
-                        🏆 {getFranchiseName(result.champion)}
+                    <div>
+                      <div style={{ fontWeight: 700 }}>
+                        🏆{" "}
+                        {getFranchise(result.champion)}
                       </div>
 
                       <div
@@ -271,281 +455,203 @@ export default async function HistoryPage() {
                           marginTop: "3px",
                         }}
                       >
-                        vs {getFranchiseName(result.runnerUp)}
+                        vs{" "}
+                        {getFranchise(result.runnerUp)}
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <div
                       style={{
                         color: "#9da7b3",
+                        fontSize: "13px",
                       }}
                     >
                       Slootbowl not yet played
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })}
-        </article>
-      </section>
-
-      <section style={{ marginTop: "30px" }}>
-        <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>
-            CONFERENCE CHAMPIONS
-          </p>
-
-          <h2
-            style={{
-              margin: "4px 0 0",
-              fontSize: "22px",
-            }}
-          >
-            The road to the Slootbowl
-          </h2>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "10px",
-          }}
-        >
-          <article
-            style={{
-              ...cardStyle(),
-              marginBottom: 0,
-            }}
-          >
-            <p style={labelStyle()}>OBFC</p>
-
-            <h3
-              style={{
-                margin: "5px 0 4px",
-                fontSize: "16px",
-              }}
-            >
-              George Barnes Memorial Trophy
-            </h3>
-
-            {latestSeasons.map((season) => {
-              const result = CONFERENCE_CHAMPIONS.find(
-                (item) => item.season === season
-              );
-
-              return (
-                <div
-                  key={season}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                    padding: "10px 0",
-                    borderBottom: "1px solid #27303b",
-                    fontSize: "13px",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#687384",
-                    }}
-                  >
-                    {season}
-                  </span>
-
-                  <strong
-                    style={{
-                      textAlign: "right",
-                    }}
-                  >
-                    {result
-                      ? getFranchiseName(result.obfc)
-                      : "TBD"}
-                  </strong>
-                </div>
               );
             })}
           </article>
 
-          <article
+          <div
             style={{
-              ...cardStyle(),
-              marginBottom: 0,
+              marginTop: "30px",
+              marginBottom: "12px",
             }}
           >
-            <p style={labelStyle()}>GPFC</p>
+            <p style={labelStyle()}>
+              CONFERENCE CHAMPIONS
+            </p>
 
-            <h3
+            <h2
               style={{
-                margin: "5px 0 4px",
-                fontSize: "16px",
+                margin: "4px 0 0",
+                fontSize: "22px",
               }}
             >
-              Ryan Birr Memorial Shield
-            </h3>
+              The road to the Slootbowl
+            </h2>
+          </div>
 
-            {latestSeasons.map((season) => {
-              const result = CONFERENCE_CHAMPIONS.find(
-                (item) => item.season === season
-              );
-
-              return (
-                <div
-                  key={season}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                    padding: "10px 0",
-                    borderBottom: "1px solid #27303b",
-                    fontSize: "13px",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#687384",
-                    }}
-                  >
-                    {season}
-                  </span>
-
-                  <strong
-                    style={{
-                      textAlign: "right",
-                    }}
-                  >
-                    {result
-                      ? getFranchiseName(result.gpfc)
-                      : "TBD"}
-                  </strong>
-                </div>
-              );
-            })}
-          </article>
-        </div>
-      </section>
-
-      <section style={{ marginTop: "30px" }}>
-        <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>SFL MVP</p>
-
-          <h2
+          <div
             style={{
-              margin: "4px 0 0",
-              fontSize: "22px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "10px",
             }}
           >
-            Regular-season MVP
-          </h2>
-        </div>
-
-        <article style={cardStyle()}>
-          {latestSeasons.map((season) => {
-            const isComplete =
-              completedRegularSeasons.has(season);
-
-            const mvp = mvpBySeason.get(season);
-
-            // Unfinished regular seasons always
-            // display TBD, even if a provisional
-            // leader has already accumulated points.
-            if (!isComplete) {
-              return (
-                <div
-                  key={season}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "54px 1fr",
-                    gap: "12px",
-                    alignItems: "center",
-                    padding: "12px 0",
-                    borderBottom: "1px solid #27303b",
-                  }}
-                >
-                  <strong>{season}</strong>
-
-                  <div
-                    style={{
-                      color: "#9da7b3",
-                      fontSize: "13px",
-                    }}
-                  >
-                    TBD
-                  </div>
-                </div>
-              );
-            }
-
-            if (!mvp) {
-              return (
-                <div
-                  key={season}
-                  style={{
-                    padding: "12px 0",
-                    borderBottom: "1px solid #27303b",
-                  }}
-                >
-                  <strong>{season}</strong>
-
-                  <p style={{ marginTop: "4px" }}>
-                    MVP data unavailable
-                  </p>
-                </div>
-              );
-            }
-
-            const player = players[mvp.playerId];
-
-            return (
-              <div
-                key={season}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "54px 1fr auto",
-                  gap: "12px",
-                  alignItems: "center",
-                  padding: "12px 0",
-                  borderBottom: "1px solid #27303b",
-                }}
+            {[
+              {
+                conference: "OBFC",
+                trophy:
+                  "George Barnes Memorial Trophy",
+                key: "obfc" as const,
+              },
+              {
+                conference: "GPFC",
+                trophy:
+                  "Ryan Birr Memorial Shield",
+                key: "gpfc" as const,
+              },
+            ].map((item) => (
+              <article
+                key={item.conference}
+                style={cardStyle()}
               >
-                <strong>{season}</strong>
+                <p style={labelStyle()}>
+                  {item.conference}
+                </p>
 
-                <div>
-                  <div
-                    style={{
-                      fontWeight: "700",
-                    }}
-                  >
-                    👑 {getPlayerName(player)}
-                  </div>
-
-                  <div
-                    style={{
-                      color: "#687384",
-                      fontSize: "13px",
-                      marginTop: "3px",
-                    }}
-                  >
-                    {getFranchiseName(mvp.rosterId)}
-                  </div>
-                </div>
-
-                <strong
+                <h3
                   style={{
-                    whiteSpace: "nowrap",
+                    margin: "5px 0 4px",
+                    fontSize: "16px",
                   }}
                 >
-                  {mvp.points.toFixed(1)} pts
-                </strong>
-              </div>
-            );
-          })}
-        </article>
-      </section>
+                  {item.trophy}
+                </h3>
 
-      <section style={{ marginTop: "30px" }}>
+                {seasons.map((season, index) => {
+                  const result =
+                    conferenceChampions.find(
+                      (entry) =>
+                        entry.season === season
+                    );
+
+                  return (
+                    <div
+                      key={season}
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        gap: "8px",
+                        padding: "10px 0",
+                        borderBottom:
+                          index === seasons.length - 1
+                            ? "none"
+                            : "1px solid #27303b",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "#687384",
+                        }}
+                      >
+                        {season}
+                      </span>
+
+                      <strong
+                        style={{
+                          textAlign: "right",
+                        }}
+                      >
+                        {result
+                          ? getFranchise(
+                              result[item.key]
+                            )
+                          : "TBD"}
+                      </strong>
+                    </div>
+                  );
+                })}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeTab === "gm" && (
+        <section>
+          <div style={{ marginBottom: "16px" }}>
+            <p style={labelStyle()}>
+              GENERAL MANAGERS
+            </p>
+
+            <h2
+              style={{
+                margin: "4px 0 0",
+                fontSize: "22px",
+              }}
+            >
+              GM Awards
+            </h2>
+
+            <p
+              style={{
+                marginTop: "6px",
+                color: "#9da7b3",
+                fontSize: "13px",
+              }}
+            >
+              The best, the worst and the
+              downright unfortunate.
+            </p>
+          </div>
+
+          {GM_AWARDS.map((award) =>
+            awardRow(award, "gm")
+          )}
+        </section>
+      )}
+
+      {activeTab === "players" && (
+        <section>
+          <div style={{ marginBottom: "16px" }}>
+            <p style={labelStyle()}>
+              INDIVIDUAL HONOURS
+            </p>
+
+            <h2
+              style={{
+                margin: "4px 0 0",
+                fontSize: "22px",
+              }}
+            >
+              Player Awards
+            </h2>
+
+            <p
+              style={{
+                marginTop: "6px",
+                color: "#9da7b3",
+                fontSize: "13px",
+              }}
+            >
+              The finest individual performances
+              in SFL history.
+            </p>
+          </div>
+
+          {PLAYER_AWARDS.map((award) =>
+            awardRow(award, "players")
+          )}
+        </section>
+      )}
+
+      <section style={{ marginTop: "34px" }}>
         <div style={{ marginBottom: "12px" }}>
           <p style={labelStyle()}>SEASONS</p>
 
@@ -559,8 +665,8 @@ export default async function HistoryPage() {
           </h2>
         </div>
 
-        {latestSeasons.map((season) => {
-          const result = SLOOTBOWLS.find(
+        {seasons.map((season) => {
+          const result = champions.find(
             (item) => item.season === season
           );
 
@@ -572,6 +678,7 @@ export default async function HistoryPage() {
                 display: "block",
                 color: "inherit",
                 textDecoration: "none",
+                marginBottom: "14px",
               }}
             >
               <article
@@ -583,7 +690,8 @@ export default async function HistoryPage() {
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
+                    justifyContent:
+                      "space-between",
                     gap: "12px",
                     alignItems: "center",
                   }}
@@ -625,7 +733,9 @@ export default async function HistoryPage() {
                             marginTop: "3px",
                           }}
                         >
-                          {getFranchiseName(result.champion)}
+                          {getFranchise(
+                            result.champion
+                          )}
                         </strong>
                       </>
                     ) : (
