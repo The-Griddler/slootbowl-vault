@@ -32,6 +32,7 @@ type PlayerLegendsProps = {
   matchups: HistoricalMatchup[];
   playerNames: Record<string, string>;
   franchiseLegends?: FranchiseLegacyScore[];
+  currentRosterPlayerIds?: string[];
 };
 
 function formatPoints(value: number) {
@@ -42,6 +43,63 @@ function formatLegacyPoints(value: number) {
   return value.toLocaleString("en-AU", {
     maximumFractionDigits: 0,
   });
+}
+
+function formatFranchiseYears(
+  seasons: string[],
+  currentlyRostered: boolean
+) {
+  const years = [
+    ...new Set(
+      seasons
+        .map(Number)
+        .filter(Number.isInteger)
+    ),
+  ].sort((a, b) => a - b);
+
+  if (years.length === 0) {
+    return "Seasons unavailable";
+  }
+
+  const spells: Array<{
+    start: number;
+    end: number;
+  }> = [];
+
+  for (const year of years) {
+    const last = spells[spells.length - 1];
+
+    if (last && year === last.end + 1) {
+      last.end = year;
+    } else {
+      spells.push({
+        start: year,
+        end: year,
+      });
+    }
+  }
+
+  const latestYear = years[years.length - 1];
+
+  return spells
+    .map((spell, index) => {
+      const isLatestSpell =
+        index === spells.length - 1;
+
+      if (
+        isLatestSpell &&
+        currentlyRostered
+      ) {
+        return `${spell.start}–Present`;
+      }
+
+      if (spell.start === spell.end) {
+        return String(spell.start);
+      }
+
+      return `${spell.start}–${spell.end}`;
+    })
+    .join(", ");
 }
 
 type LeaderboardEntry = {
@@ -168,10 +226,16 @@ function Leaderboard({
 function FranchiseLegends({
   entries,
   playerNames,
+  currentRosterPlayerIds,
 }: {
   entries: FranchiseLegacyScore[];
   playerNames: Record<string, string>;
+  currentRosterPlayerIds: string[];
 }) {
+  const currentRoster = new Set(
+    currentRosterPlayerIds
+  );
+
   const topFive = [...entries]
     .sort(
       (a, b) =>
@@ -287,7 +351,10 @@ function FranchiseLegends({
                     lineHeight: 1.5,
                   }}
                 >
-                  {player.rosterWeeks} roster weeks
+                  {formatFranchiseYears(
+                    player.seasons,
+                    currentRoster.has(player.playerId)
+                  )}
                   {" · "}
                   {player.starts} starts
                 </div>
@@ -353,6 +420,7 @@ export default function PlayerLegends({
   matchups,
   playerNames,
   franchiseLegends = [],
+  currentRosterPlayerIds = [],
 }: PlayerLegendsProps) {
   const [phase, setPhase] =
     useState<Phase>("Regular Season");
@@ -375,7 +443,6 @@ export default function PlayerLegends({
         continue;
       }
 
-      // Exclude unplayed matchups.
       if (
         !Number.isFinite(matchup.scoreA) ||
         !Number.isFinite(matchup.scoreB) ||
@@ -420,14 +487,11 @@ export default function PlayerLegends({
       }
     }
 
-    // Career totals: one entry per player.
     const careerMap = new Map<
       string,
       CareerStats
     >();
 
-    // Season totals: one entry per player
-    // per season.
     const seasonMap = new Map<
       string,
       SeasonStats
@@ -472,7 +536,6 @@ export default function PlayerLegends({
     const careers = [...careerMap.values()];
     const seasons = [...seasonMap.values()];
 
-    // Career leaderboards: unique players.
     const careerPoints: LeaderboardEntry[] =
       [...careers]
         .sort(
@@ -505,8 +568,6 @@ export default function PlayerLegends({
             `${formatPoints(player.points)} career points`,
         }));
 
-    // Individual games: a player can
-    // appear multiple times.
     const bestGames: LeaderboardEntry[] =
       [...games]
         .sort(
@@ -525,8 +586,6 @@ export default function PlayerLegends({
             `${game.year} · Week ${game.week}`,
         }));
 
-    // Individual seasons: a player can
-    // appear once for each different season.
     const bestSeasons: LeaderboardEntry[] =
       [...seasons]
         .sort(
@@ -576,6 +635,9 @@ export default function PlayerLegends({
       <FranchiseLegends
         entries={franchiseLegends}
         playerNames={playerNames}
+        currentRosterPlayerIds={
+          currentRosterPlayerIds
+        }
       />
 
       <div
