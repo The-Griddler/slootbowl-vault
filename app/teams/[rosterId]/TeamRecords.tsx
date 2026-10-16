@@ -172,14 +172,6 @@ vs ${opponent} · ${points(game.scored)}–${points(game.conceded)}`;
     (a, b) => b.wins - a.wins
   )[0];
 
-  const bestWinPercentage = [...completedSeasons]
-    .filter((season) => season.games > 0)
-    .sort(
-      (a, b) =>
-        (b.wins + b.ties / 2) / b.games -
-        (a.wins + a.ties / 2) / a.games
-    )[0];
-
   const mostPoints = [...completedSeasons].sort(
     (a, b) => b.pointsFor - a.pointsFor
   )[0];
@@ -332,25 +324,6 @@ vs ${opponent} · ${points(game.scored)}–${points(game.conceded)}`;
           detail={
             mostWins
               ? `${mostWins.year} · ${mostWins.wins}-${mostWins.losses}-${mostWins.ties}`
-              : "No completed seasons"
-          }
-        />
-
-        <RecordCard
-          label="Best Win Percentage"
-          value={
-            bestWinPercentage
-              ? `${(
-                  ((bestWinPercentage.wins +
-                    bestWinPercentage.ties / 2) /
-                    bestWinPercentage.games) *
-                  100
-                ).toFixed(1)}%`
-              : "—"
-          }
-          detail={
-            bestWinPercentage
-              ? `${bestWinPercentage.year} · ${bestWinPercentage.wins}-${bestWinPercentage.losses}-${bestWinPercentage.ties}`
               : "No completed seasons"
           }
         />
