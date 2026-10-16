@@ -1037,30 +1037,6 @@ export default async function FranchisePage({
               Manager: {identity.manager}
             </p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "5px",
-                marginTop: "12px",
-              }}
-            >
-              <span
-                style={{
-                  width: "28px",
-                  height: "4px",
-                  borderRadius: "4px",
-                  background: identity.primary,
-                }}
-              />
-              <span
-                style={{
-                  width: "28px",
-                  height: "4px",
-                  borderRadius: "4px",
-                  background: identity.secondary,
-                }}
-              />
-            </div>
           </div>
         </div>
 
