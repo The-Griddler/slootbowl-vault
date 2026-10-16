@@ -165,7 +165,7 @@ export default function TeamsPage() {
                 gap: "10px",
               }}
             >
-              {conference.rosterIds.map((rosterId) => {
+              {conference.rosterIds.map((rosterId, index) => {
                 const franchise = FRANCHISES.find(
                   (team) => team.rosterId === rosterId
                 );
@@ -173,6 +173,11 @@ export default function TeamsPage() {
                 const identity = teamIdentity[rosterId];
 
                 if (!franchise || !identity) return null;
+
+                const accent =
+                  index % 2 === 0
+                    ? conference.primary
+                    : conference.secondary;
 
                 return (
                   <Link
@@ -193,7 +198,7 @@ export default function TeamsPage() {
                       overflow: "hidden",
                     }}
                   >
-                    {/* Conference-coloured left border */}
+                    {/* Alternating conference border */}
                     <div
                       style={{
                         position: "absolute",
@@ -201,7 +206,7 @@ export default function TeamsPage() {
                         top: 0,
                         bottom: 0,
                         width: "5px",
-                        background: conferenceAccent,
+                        background: accent,
                       }}
                     />
 
@@ -267,50 +272,18 @@ export default function TeamsPage() {
                       </div>
                     </div>
 
-                    {/* Conference colour markers and arrow */}
-                    <div
+                    {/* Slightly larger conference-coloured arrow */}
+                    <span
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
+                        color: accent,
+                        fontSize: "27px",
+                        lineHeight: 1,
                         flexShrink: 0,
+                        paddingRight: "4px",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "3px",
-                          marginRight: "4px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: "5px",
-                            height: "18px",
-                            borderRadius: "3px",
-                            background: conference.primary,
-                          }}
-                        />
-
-                        <span
-                          style={{
-                            width: "5px",
-                            height: "18px",
-                            borderRadius: "3px",
-                            background: conference.secondary,
-                          }}
-                        />
-                      </div>
-
-                      <span
-                        style={{
-                          color: conference.primary,
-                          fontSize: "24px",
-                        }}
-                      >
-                        ›
-                      </span>
-                    </div>
+                      ›
+                    </span>
                   </Link>
                 );
               })}
