@@ -6,6 +6,7 @@ import { FRANCHISES } from "../../../lib/franchises";
 
 import {
   getHistoricalData,
+  getRosters,
   type HistoricalMatchup,
 } from "../../../lib/sleeper";
 
@@ -285,11 +286,22 @@ export default async function FranchisePage({
     historicalData,
     franchiseCareers,
     playerDirectory,
+    currentRosters,
   ] = await Promise.all([
     getHistoricalData(),
     getFranchisePlayerCareers(),
     getAllSlootPlayerDirectory(),
+    getRosters(),
   ]);
+
+  // Current Sleeper roster membership is used
+  // only to determine the "Present" label.
+  // It does not affect historical statistics
+  // or franchise legacy points.
+  const currentRosterPlayerIds =
+    currentRosters.find(
+      (roster) => roster.roster_id === rosterId
+    )?.players ?? [];
 
   const allMatchups = historicalData
     .flatMap((season) => season.matchups)
@@ -902,6 +914,9 @@ export default async function FranchisePage({
       franchiseLegends={
         franchiseLegends
       }
+      currentRosterPlayerIds={
+        currentRosterPlayerIds
+      }
     />
   );
 
@@ -1036,7 +1051,6 @@ export default async function FranchisePage({
             >
               Manager: {identity.manager}
             </p>
-
           </div>
         </div>
 
