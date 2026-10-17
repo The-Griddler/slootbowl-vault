@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import Image from "next/image";
 
 import type {
   AllTimeRecords,
@@ -26,6 +27,7 @@ import type {
 } from "../../lib/playerRecords";
 
 import {
+  FRANCHISES,
   getFranchiseName,
   getHistoricalFranchiseName,
 } from "../../lib/franchises";
@@ -144,6 +146,95 @@ function category<T>(
   };
 }
 
+// --------------------------------------------------
+// FRANCHISE LOGOS
+// --------------------------------------------------
+
+function uniqueRosterIds(ids: number[]) {
+  return Array.from(
+    new Set(
+      ids.filter(id =>
+        FRANCHISES.some(
+          franchise => franchise.rosterId === id
+        )
+      )
+    )
+  );
+}
+
+function franchiseLogo(id: number) {
+  return FRANCHISES.find(
+    franchise => franchise.rosterId === id
+  );
+}
+
+function FranchiseLogos({
+  rosterIds,
+  size,
+}: {
+  rosterIds: number[];
+  size: "large" | "small";
+}) {
+  const franchises = uniqueRosterIds(
+    rosterIds
+  )
+    .map(franchiseLogo)
+    .filter(
+      (
+        franchise
+      ): franchise is (typeof FRANCHISES)[number] =>
+        franchise !== undefined
+    );
+
+  if (!franchises.length) {
+    return null;
+  }
+
+  const large = size === "large";
+  const dimension = large ? 76 : 24;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: large ? 10 : 4,
+        flexShrink: 0,
+      }}
+    >
+      {franchises.map(franchise => (
+        <div
+          key={franchise.rosterId}
+          title={franchise.name}
+          style={{
+            width: dimension,
+            height: dimension,
+            position: "relative",
+            flexShrink: 0,
+          }}
+        >
+          <Image
+            src={franchise.logo}
+            alt={`${franchise.name} logo`}
+            fill
+            sizes={
+              large ? "76px" : "24px"
+            }
+            style={{
+              objectFit: "contain",
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --------------------------------------------------
+// FRANCHISE GAME RECORDS
+// --------------------------------------------------
+
 function gameCategories(
   records: RecordSet,
   leaders: RecordLeaderboardSet
@@ -158,63 +249,74 @@ function gameCategories(
     {
       key: "highestTeamScore",
       title: "Highest Team Score",
-      description: "The greatest single-game team performances.",
+      description:
+        "The greatest single-game team performances.",
       metric: r => r.score,
       direction: "high",
     },
     {
       key: "lowestTeamScore",
       title: "Lowest Team Score",
-      description: "The lowest single-game team totals.",
+      description:
+        "The lowest single-game team totals.",
       metric: r => r.score,
       direction: "low",
     },
     {
       key: "biggestWinningMargin",
       title: "Biggest Winning Margin",
-      description: "The most comprehensive victories.",
+      description:
+        "The most comprehensive victories.",
       metric: r => r.margin,
       direction: "high",
     },
     {
       key: "closestGame",
       title: "Closest Game",
-      description: "The narrowest margins in SFL history.",
+      description:
+        "The narrowest margins in SFL history.",
       metric: r => r.margin,
       direction: "low",
     },
     {
       key: "highestCombinedScore",
       title: "Highest Combined Score",
-      description: "The biggest scoring shootouts.",
-      metric: r => r.score + r.opponentScore,
+      description:
+        "The biggest scoring shootouts.",
+      metric: r =>
+        r.score + r.opponentScore,
       direction: "high",
     },
     {
       key: "lowestCombinedScore",
       title: "Lowest Combined Score",
-      description: "The lowest-scoring encounters.",
-      metric: r => r.score + r.opponentScore,
+      description:
+        "The lowest-scoring encounters.",
+      metric: r =>
+        r.score + r.opponentScore,
       direction: "low",
     },
     {
       key: "highestLosingScore",
       title: "Highest Losing Score",
-      description: "Great performances rewarded with defeat.",
+      description:
+        "Great performances rewarded with defeat.",
       metric: r => r.score,
       direction: "high",
     },
     {
       key: "lowestWinningScore",
       title: "Lowest Winning Score",
-      description: "Victories achieved with the fewest points.",
+      description:
+        "Victories achieved with the fewest points.",
       metric: r => r.score,
       direction: "low",
     },
     {
       key: "mostPointsConcededInVictory",
       title: "Most Points Conceded in Victory",
-      description: "The highest opposition totals overcome.",
+      description:
+        "The highest opposition totals overcome.",
       metric: r => r.opponentScore,
       direction: "high",
     },
@@ -231,7 +333,8 @@ function gameCategories(
           a.week,
           b.season,
           b.week
-        ) || a.rosterId - b.rosterId
+        ) ||
+        a.rosterId - b.rosterId
     );
 
     return category(
@@ -241,7 +344,11 @@ function gameCategories(
       entries.length
         ? entries
         : records[def.key]
-        ? [records[def.key] as LeagueRecord]
+        ? [
+            records[
+              def.key
+            ] as LeagueRecord,
+          ]
         : [],
       def.metric,
       r => pts(def.metric(r)),
@@ -249,6 +356,10 @@ function gameCategories(
     );
   });
 }
+
+// --------------------------------------------------
+// FRANCHISE SEASON RECORDS
+// --------------------------------------------------
 
 function seasonCategories(
   records: SeasonRecordSet,
@@ -267,7 +378,8 @@ function seasonCategories(
     {
       key: "mostWins",
       title: "Most Wins",
-      description: "The most successful regular seasons.",
+      description:
+        "The most successful regular seasons.",
       metric: r => r.wins,
       direction: "high",
       suffix: "wins",
@@ -276,7 +388,8 @@ function seasonCategories(
     {
       key: "fewestWins",
       title: "Fewest Wins",
-      description: "The least successful regular seasons.",
+      description:
+        "The least successful regular seasons.",
       metric: r => r.wins,
       direction: "low",
       suffix: "wins",
@@ -285,7 +398,8 @@ function seasonCategories(
     {
       key: "mostPointsFor",
       title: "Most Points Scored",
-      description: "The highest season scoring totals.",
+      description:
+        "The highest season scoring totals.",
       metric: r => r.pointsFor,
       direction: "high",
       suffix: "pts",
@@ -293,7 +407,8 @@ function seasonCategories(
     {
       key: "fewestPointsFor",
       title: "Fewest Points Scored",
-      description: "The lowest season scoring totals.",
+      description:
+        "The lowest season scoring totals.",
       metric: r => r.pointsFor,
       direction: "low",
       suffix: "pts",
@@ -301,7 +416,8 @@ function seasonCategories(
     {
       key: "mostPointsAgainst",
       title: "Most Points Conceded",
-      description: "The highest points-against totals.",
+      description:
+        "The highest points-against totals.",
       metric: r => r.pointsAgainst,
       direction: "high",
       suffix: "pts",
@@ -309,7 +425,8 @@ function seasonCategories(
     {
       key: "fewestPointsAgainst",
       title: "Fewest Points Conceded",
-      description: "The lowest points-against totals.",
+      description:
+        "The lowest points-against totals.",
       metric: r => r.pointsAgainst,
       direction: "low",
       suffix: "pts",
@@ -317,38 +434,48 @@ function seasonCategories(
     {
       key: "bestPointDifferential",
       title: "Best Point Differential",
-      description: "The greatest scoring advantages.",
+      description:
+        "The greatest scoring advantages.",
       metric: r => r.pointDifferential,
       direction: "high",
       suffix: "pts",
-      format: r => signed(r.pointDifferential),
+      format: r =>
+        signed(r.pointDifferential),
     },
     {
       key: "worstPointDifferential",
       title: "Worst Point Differential",
-      description: "The greatest scoring deficits.",
+      description:
+        "The greatest scoring deficits.",
       metric: r => r.pointDifferential,
       direction: "low",
       suffix: "pts",
-      format: r => signed(r.pointDifferential),
+      format: r =>
+        signed(r.pointDifferential),
     },
     {
       key: "mostGamesOver150",
       title: "Most 150+ Point Games",
-      description: "The most 150+ point team performances in one season.",
+      description:
+        "The most 150+ point team performances in one season.",
       metric: r => r.gamesOver150,
       direction: "high",
       suffix: "games",
-      format: r => String(r.gamesOver150),
+      format: r =>
+        String(r.gamesOver150),
     },
     {
       key: "mostGames100OrFewer",
-      title: "Most Games Scoring 100 or Fewer",
-      description: "The most games at or below 100 points.",
-      metric: r => r.games100OrFewer,
+      title:
+        "Most Games Scoring 100 or Fewer",
+      description:
+        "The most games at or below 100 points.",
+      metric: r =>
+        r.games100OrFewer,
       direction: "high",
       suffix: "games",
-      format: r => String(r.games100OrFewer),
+      format: r =>
+        String(r.games100OrFewer),
     },
   ];
 
@@ -377,7 +504,11 @@ function seasonCategories(
         entries.length
           ? entries
           : records[def.key]
-          ? [records[def.key] as SeasonRecord]
+          ? [
+              records[
+                def.key
+              ] as SeasonRecord,
+            ]
           : [],
         def.metric,
         def.format ??
@@ -387,6 +518,10 @@ function seasonCategories(
     });
 }
 
+// --------------------------------------------------
+// FRANCHISE CAREER RECORDS
+// --------------------------------------------------
+
 function franchiseCareerCategories(
   records: AllTimeRecordSet,
   leaders: AllTimeLeaderboardSet
@@ -395,14 +530,19 @@ function franchiseCareerCategories(
     key: keyof AllTimeRecordSet;
     title: string;
     description: string;
-    metric: (r: AllTimeFranchiseRecord) => number;
+    metric: (
+      r: AllTimeFranchiseRecord
+    ) => number;
     suffix: string;
-    format: (r: AllTimeFranchiseRecord) => string;
+    format: (
+      r: AllTimeFranchiseRecord
+    ) => string;
   }[] = [
     {
       key: "mostWins",
       title: "Most Career Wins",
-      description: "The winningest franchises in SFL history.",
+      description:
+        "The winningest franchises in SFL history.",
       metric: r => r.wins,
       suffix: "wins",
       format: r => String(r.wins),
@@ -410,26 +550,35 @@ function franchiseCareerCategories(
     {
       key: "mostPointsFor",
       title: "Most Career Points",
-      description: "The greatest cumulative scoring totals.",
+      description:
+        "The greatest cumulative scoring totals.",
       metric: r => r.pointsFor,
       suffix: "pts",
-      format: r => pts(r.pointsFor),
+      format: r =>
+        pts(r.pointsFor),
     },
     {
       key: "mostPointsAgainst",
-      title: "Most Career Points Conceded",
-      description: "The most points conceded across SFL history.",
+      title:
+        "Most Career Points Conceded",
+      description:
+        "The most points conceded across SFL history.",
       metric: r => r.pointsAgainst,
       suffix: "pts",
-      format: r => pts(r.pointsAgainst),
+      format: r =>
+        pts(r.pointsAgainst),
     },
     {
       key: "bestPointDifferential",
-      title: "Best Career Point Differential",
-      description: "The greatest cumulative scoring advantages.",
-      metric: r => r.pointDifferential,
+      title:
+        "Best Career Point Differential",
+      description:
+        "The greatest cumulative scoring advantages.",
+      metric: r =>
+        r.pointDifferential,
       suffix: "pts",
-      format: r => signed(r.pointDifferential),
+      format: r =>
+        signed(r.pointDifferential),
     },
   ];
 
@@ -438,7 +587,8 @@ function franchiseCareerCategories(
       leaders[def.key],
       def.metric,
       "high",
-      (a, b) => a.rosterId - b.rosterId
+      (a, b) =>
+        a.rosterId - b.rosterId
     );
 
     return category(
@@ -448,7 +598,11 @@ function franchiseCareerCategories(
       entries.length
         ? entries
         : records[def.key]
-        ? [records[def.key] as AllTimeFranchiseRecord]
+        ? [
+            records[
+              def.key
+            ] as AllTimeFranchiseRecord,
+          ]
         : [],
       def.metric,
       def.format,
@@ -457,56 +611,89 @@ function franchiseCareerCategories(
   });
 }
 
+// --------------------------------------------------
+// HONOURS
+// --------------------------------------------------
+
 function achievementCategories(
   records: AllTimeRecords
 ): Category<FranchiseAchievement>[] {
   const leaders =
-    records.historicalAchievements.leaderboards;
+    records.historicalAchievements
+      .leaderboards;
 
   const definitions: {
     key: keyof typeof leaders;
     title: string;
     description: string;
-    metric: (r: FranchiseAchievement) => number;
-    detail: (r: FranchiseAchievement) => string;
+    metric: (
+      r: FranchiseAchievement
+    ) => number;
+    detail: (
+      r: FranchiseAchievement
+    ) => string;
     suffix: string;
   }[] = [
     {
       key: "championships",
-      title: "Slootbowl Championships",
-      description: "The franchises that have won the Slootbowl.",
+      title:
+        "Slootbowl Championships",
+      description:
+        "The franchises that have won the Slootbowl.",
       metric: r => r.championships,
-      detail: r => r.championshipSeasons.join(" · "),
+      detail: r =>
+        r.championshipSeasons.join(
+          " · "
+        ),
       suffix: "titles",
     },
     {
       key: "slootbowlAppearances",
-      title: "Slootbowl Appearances",
-      description: "Appearances in the championship game.",
-      metric: r => r.slootbowlAppearances,
-      detail: r => r.slootbowlSeasons.join(" · "),
+      title:
+        "Slootbowl Appearances",
+      description:
+        "Appearances in the championship game.",
+      metric: r =>
+        r.slootbowlAppearances,
+      detail: r =>
+        r.slootbowlSeasons.join(
+          " · "
+        ),
       suffix: "appearances",
     },
     {
       key: "runnerUpFinishes",
-      title: "Slootbowl Runner-Up Finishes",
-      description: "Finishing second in the Slootbowl.",
-      metric: r => r.runnerUpFinishes,
-      detail: r => r.runnerUpSeasons.join(" · "),
+      title:
+        "Slootbowl Runner-Up Finishes",
+      description:
+        "Finishing second in the Slootbowl.",
+      metric: r =>
+        r.runnerUpFinishes,
+      detail: r =>
+        r.runnerUpSeasons.join(
+          " · "
+        ),
       suffix: "finishes",
     },
     {
       key: "playoffAppearances",
-      title: "Most Playoff Appearances",
-      description: "Seasons reaching the main winners bracket.",
-      metric: r => r.playoffAppearances,
-      detail: r => r.playoffSeasons.join(" · "),
+      title:
+        "Most Playoff Appearances",
+      description:
+        "Seasons reaching the main winners bracket.",
+      metric: r =>
+        r.playoffAppearances,
+      detail: r =>
+        r.playoffSeasons.join(
+          " · "
+        ),
       suffix: "seasons",
     },
     {
       key: "playoffWins",
       title: "Most Playoff Wins",
-      description: "Victories in the main winners bracket.",
+      description:
+        "Victories in the main winners bracket.",
       metric: r => r.playoffWins,
       detail: r =>
         `${r.playoffWins}W · ${r.playoffLosses}L`,
@@ -514,8 +701,10 @@ function achievementCategories(
     },
     {
       key: "playoffLosses",
-      title: "Most Playoff Losses",
-      description: "Defeats in the main winners bracket.",
+      title:
+        "Most Playoff Losses",
+      description:
+        "Defeats in the main winners bracket.",
       metric: r => r.playoffLosses,
       detail: r =>
         `${r.playoffWins}W · ${r.playoffLosses}L`,
@@ -536,42 +725,56 @@ function achievementCategories(
           const yearsA =
             def.key === "championships"
               ? a.championshipSeasons
-              : def.key === "slootbowlAppearances"
+              : def.key ===
+                "slootbowlAppearances"
               ? a.slootbowlSeasons
-              : def.key === "runnerUpFinishes"
+              : def.key ===
+                "runnerUpFinishes"
               ? a.runnerUpSeasons
               : a.playoffSeasons;
 
           const yearsB =
             def.key === "championships"
               ? b.championshipSeasons
-              : def.key === "slootbowlAppearances"
+              : def.key ===
+                "slootbowlAppearances"
               ? b.slootbowlSeasons
-              : def.key === "runnerUpFinishes"
+              : def.key ===
+                "runnerUpFinishes"
               ? b.runnerUpSeasons
               : b.playoffSeasons;
 
           return (
-            Number(yearsA[0] ?? 9999) -
-              Number(yearsB[0] ?? 9999) ||
+            Number(
+              yearsA[0] ?? 9999
+            ) -
+              Number(
+                yearsB[0] ?? 9999
+              ) ||
             a.rosterId - b.rosterId
           );
         }
       ),
       def.metric,
-      r => String(def.metric(r)),
+      r =>
+        String(def.metric(r)),
       def.suffix,
       def.detail
     )
   );
 }
 
+// --------------------------------------------------
+// STREAKS
+// --------------------------------------------------
+
 function streakCategories(
   records: AllTimeRecords,
   competition: Competition
 ): Category<StreakRecord>[] {
   const streaks =
-    records.historicalAchievements.streaks;
+    records.historicalAchievements
+      .streaks;
 
   const winning =
     competition === "regularSeason"
@@ -586,15 +789,19 @@ function streakCategories(
   return [
     {
       key: "winningStreak",
-      title: "Longest Winning Streak",
-      description: "Consecutive victories in the selected competition.",
+      title:
+        "Longest Winning Streak",
+      description:
+        "Consecutive victories in the selected competition.",
       entries: winning,
       suffix: "wins",
     },
     {
       key: "losingStreak",
-      title: "Longest Losing Streak",
-      description: "Consecutive defeats in the selected competition.",
+      title:
+        "Longest Losing Streak",
+      description:
+        "Consecutive defeats in the selected competition.",
       entries: losing,
       suffix: "losses",
     },
@@ -613,7 +820,8 @@ function streakCategories(
             a.startWeek,
             b.startSeason,
             b.startWeek
-          ) || a.rosterId - b.rosterId
+          ) ||
+          a.rosterId - b.rosterId
       ),
       r => r.length,
       r => String(r.length),
@@ -625,10 +833,17 @@ function streakCategories(
   );
 }
 
+// --------------------------------------------------
+// PLAYER RECORD DATA
+// --------------------------------------------------
+
 function makePlayerEntry(
   playerId: string,
   weeks: PlayerWeeklyPerformance[],
-  directory: Record<string, PlayerRecordIdentity>,
+  directory: Record<
+    string,
+    PlayerRecordIdentity
+  >,
   season = ""
 ): PlayerEntry {
   const sorted = [...weeks].sort(
@@ -638,11 +853,13 @@ function makePlayerEntry(
         a.week,
         b.season,
         b.week
-      ) || a.rosterId - b.rosterId
+      ) ||
+      a.rosterId - b.rosterId
   );
 
   const total = sorted.reduce(
-    (sum, week) => sum + week.points,
+    (sum, week) =>
+      sum + week.points,
     0
   );
 
@@ -655,17 +872,32 @@ function makePlayerEntry(
       directory[playerId]?.name ??
       `Player ${playerId}`,
     position:
-      directory[playerId]?.position ??
-      "UNKNOWN",
-    rosterId: first?.rosterId ?? 0,
-    season: season || first?.season || "",
+      directory[playerId]
+        ?.position ?? "UNKNOWN",
+    rosterId:
+      first?.rosterId ?? 0,
+    season:
+      season ||
+      first?.season ||
+      "",
     week: first?.week ?? 0,
-    points: Math.round(total * 100) / 100,
+    points:
+      Math.round(total * 100) /
+      100,
     starts,
-    average: starts ? total / starts : 0,
-    over20: sorted.filter(w => w.points >= 20).length,
-    over30: sorted.filter(w => w.points >= 30).length,
-    over40: sorted.filter(w => w.points >= 40).length,
+    average:
+      starts
+        ? total / starts
+        : 0,
+    over20: sorted.filter(
+      w => w.points >= 20
+    ).length,
+    over30: sorted.filter(
+      w => w.points >= 30
+    ).length,
+    over40: sorted.filter(
+      w => w.points >= 40
+    ).length,
     weeks: sorted,
   };
 }
@@ -673,7 +905,10 @@ function makePlayerEntry(
 function playerEntries(
   weekly: PlayerWeeklyPerformance[],
   period: Period,
-  directory: Record<string, PlayerRecordIdentity>
+  directory: Record<
+    string,
+    PlayerRecordIdentity
+  >
 ): PlayerEntry[] {
   if (period === "games") {
     return weekly.map(week =>
@@ -697,23 +932,30 @@ function playerEntries(
         ? `${week.season}|${week.playerId}`
         : week.playerId;
 
-    const existing = grouped.get(key) ?? [];
+    const existing =
+      grouped.get(key) ?? [];
+
     existing.push(week);
     grouped.set(key, existing);
   }
 
-  return Array.from(grouped.values()).map(
-    weeks =>
-      makePlayerEntry(
-        weeks[0].playerId,
-        weeks,
-        directory,
-        period === "season"
-          ? weeks[0].season
-          : ""
-      )
+  return Array.from(
+    grouped.values()
+  ).map(weeks =>
+    makePlayerEntry(
+      weeks[0].playerId,
+      weeks,
+      directory,
+      period === "season"
+        ? weeks[0].season
+        : ""
+    )
   );
 }
+
+// --------------------------------------------------
+// PLAYER RECORD CATEGORIES
+// --------------------------------------------------
 
 function playerCategories(
   entries: PlayerEntry[],
@@ -729,22 +971,33 @@ function playerCategories(
       b.season,
       b.week
     ) ||
-    a.playerId.localeCompare(b.playerId);
+    a.playerId.localeCompare(
+      b.playerId
+    );
 
   function build(
     key: string,
     title: string,
     description: string,
-    metric: (entry: PlayerEntry) => number,
-    direction: "high" | "low" = "high",
+    metric: (
+      entry: PlayerEntry
+    ) => number,
+    direction:
+      | "high"
+      | "low" = "high",
     suffix = "pts",
     minimumStarts = 0,
     positiveOnly = false,
-    format?: (entry: PlayerEntry) => string
+    format?: (
+      entry: PlayerEntry
+    ) => string
   ) {
-    const eligible = entries.filter(
-      entry => entry.starts >= minimumStarts
-    );
+    const eligible =
+      entries.filter(
+        entry =>
+          entry.starts >=
+          minimumStarts
+      );
 
     return category(
       key,
@@ -759,7 +1012,8 @@ function playerCategories(
       ),
       metric,
       format ??
-        (entry => pts(metric(entry))),
+        (entry =>
+          pts(metric(entry))),
       suffix
     );
   }
@@ -898,6 +1152,25 @@ function playerCategories(
   ];
 }
 
+// --------------------------------------------------
+// PLAYER FRANCHISE HISTORY
+// --------------------------------------------------
+
+function playerRosterIds(
+  entry: PlayerEntry,
+  period: Period
+) {
+  if (period === "games") {
+    return [entry.rosterId];
+  }
+
+  return uniqueRosterIds(
+    entry.weeks.map(
+      week => week.rosterId
+    )
+  );
+}
+
 function playerTeams(
   entry: PlayerEntry,
   period: Period
@@ -919,19 +1192,29 @@ function playerTeams(
       )
     );
 
-    return Array.from(names).join(", ");
+    return Array.from(
+      names
+    ).join(", ");
   }
 
-  // Career records use current franchise names.
-  // Perth and Mt Isa count as one franchise.
+  // Career: current names only.
+  // Perth and Mt Isa share roster ID 1.
   const names = new Set(
     entry.weeks.map(week =>
-      currentName(week.rosterId)
+      currentName(
+        week.rosterId
+      )
     )
   );
 
-  return Array.from(names).join(", ");
+  return Array.from(
+    names
+  ).join(", ");
 }
+
+// --------------------------------------------------
+// MAIN RECORDS PAGE
+// --------------------------------------------------
 
 export default function RecordsTabs({
   records,
@@ -941,162 +1224,274 @@ export default function RecordsTabs({
   playerRecords: PlayerRecords;
 }) {
   const [scope, setScope] =
-    useState<Scope>("franchises");
+    useState<Scope>(
+      "franchises"
+    );
 
-  const [competition, setCompetition] =
-    useState<Competition>("regularSeason");
+  const [
+    competition,
+    setCompetition,
+  ] = useState<Competition>(
+    "regularSeason"
+  );
 
   const [period, setPeriod] =
-    useState<Period>("games");
+    useState<Period>(
+      "games"
+    );
 
-  const [selectedSeason, setSelectedSeason] =
-    useState("all");
+  const [
+    selectedSeason,
+    setSelectedSeason,
+  ] = useState("all");
 
-  const [positions, setPositions] =
-    useState<string[]>([...POSITIONS]);
+  const [
+    positions,
+    setPositions,
+  ] = useState<string[]>(
+    [...POSITIONS]
+  );
 
   const filteredFranchise =
     selectedSeason === "all"
       ? records
-      : records.bySeason[selectedSeason] ??
-        records;
+      : records.bySeason[
+          selectedSeason
+        ] ?? records;
 
   const selectedCompetition =
-    playerRecords.competitions[competition];
+    playerRecords.competitions[
+      competition
+    ];
 
-  const allowed = new Set(positions);
+  const allowed =
+    new Set(positions);
 
   const completed = new Set(
-    playerRecords.completedSeasons[competition]
+    playerRecords.completedSeasons[
+      competition
+    ]
   );
 
   const filteredWeeks =
-    selectedCompetition.weekly.filter(week => {
-      const position =
-        playerRecords.players[week.playerId]
-          ?.position ?? "UNKNOWN";
+    selectedCompetition.weekly.filter(
+      week => {
+        const position =
+          playerRecords.players[
+            week.playerId
+          ]?.position ??
+          "UNKNOWN";
 
-      if (!allowed.has(position)) {
-        return false;
-      }
+        if (
+          !allowed.has(position)
+        ) {
+          return false;
+        }
 
-      if (period === "career") {
+        if (
+          period === "career"
+        ) {
+          return true;
+        }
+
+        if (
+          selectedSeason !== "all" &&
+          week.season !==
+            selectedSeason
+        ) {
+          return false;
+        }
+
+        if (
+          period === "season" &&
+          selectedSeason === "all" &&
+          !completed.has(
+            week.season
+          )
+        ) {
+          return false;
+        }
+
         return true;
       }
+    );
 
-      if (
-        selectedSeason !== "all" &&
-        week.season !== selectedSeason
-      ) {
-        return false;
-      }
+  const entries =
+    playerEntries(
+      filteredWeeks,
+      period,
+      playerRecords.players
+    );
 
-      if (
-        period === "season" &&
-        selectedSeason === "all" &&
-        !completed.has(week.season)
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-  const entries = playerEntries(
-    filteredWeeks,
-    period,
-    playerRecords.players
-  );
-
-  const togglePosition = (position: string) =>
+  const togglePosition = (
+    position: string
+  ) =>
     setPositions(current =>
       current.includes(position)
-        ? current.filter(p => p !== position)
-        : [...current, position]
+        ? current.filter(
+            p => p !== position
+          )
+        : [
+            ...current,
+            position,
+          ]
     );
 
   const seasonComplete =
     selectedSeason === "all" ||
-    (scope === "players"
-      ? playerRecords.completedSeasons[
-          competition
-        ]
-      : records.completedSeasons[
-          competition
-        ]
-    ).includes(selectedSeason);
+    (
+      scope === "players"
+        ? playerRecords
+            .completedSeasons[
+              competition
+            ]
+        : records
+            .completedSeasons[
+              competition
+            ]
+    ).includes(
+      selectedSeason
+    );
 
-  const honours = achievementCategories(records);
+  const honours =
+    achievementCategories(
+      records
+    );
 
   return (
     <div>
-      <FilterHeading>RECORD TYPE</FilterHeading>
+      <FilterHeading>
+        RECORD TYPE
+      </FilterHeading>
+
       <div style={tabsStyle}>
         <TabButton
           label="Franchises"
-          active={scope === "franchises"}
-          onClick={() => setScope("franchises")}
+          active={
+            scope === "franchises"
+          }
+          onClick={() =>
+            setScope(
+              "franchises"
+            )
+          }
         />
+
         <TabButton
           label="Players"
-          active={scope === "players"}
-          onClick={() => setScope("players")}
+          active={
+            scope === "players"
+          }
+          onClick={() =>
+            setScope(
+              "players"
+            )
+          }
         />
       </div>
 
-      <FilterHeading>COMPETITION</FilterHeading>
+      <FilterHeading>
+        COMPETITION
+      </FilterHeading>
+
       <div style={tabsStyle}>
         <TabButton
           label="Regular Season"
-          active={competition === "regularSeason"}
+          active={
+            competition ===
+            "regularSeason"
+          }
           onClick={() =>
-            setCompetition("regularSeason")
+            setCompetition(
+              "regularSeason"
+            )
           }
         />
+
         <TabButton
           label="Main Playoffs"
-          active={competition === "mainPlayoffs"}
+          active={
+            competition ===
+            "mainPlayoffs"
+          }
           onClick={() =>
-            setCompetition("mainPlayoffs")
+            setCompetition(
+              "mainPlayoffs"
+            )
           }
         />
       </div>
 
-      <FilterHeading>RECORD PERIOD</FilterHeading>
+      <FilterHeading>
+        RECORD PERIOD
+      </FilterHeading>
+
       <div style={tabsStyle}>
         <TabButton
           label="Game"
-          active={period === "games"}
-          onClick={() => setPeriod("games")}
+          active={
+            period === "games"
+          }
+          onClick={() =>
+            setPeriod(
+              "games"
+            )
+          }
         />
+
         <TabButton
           label="Season"
-          active={period === "season"}
-          onClick={() => setPeriod("season")}
+          active={
+            period === "season"
+          }
+          onClick={() =>
+            setPeriod(
+              "season"
+            )
+          }
         />
+
         <TabButton
           label="Career"
-          active={period === "career"}
-          onClick={() => setPeriod("career")}
+          active={
+            period === "career"
+          }
+          onClick={() =>
+            setPeriod(
+              "career"
+            )
+          }
         />
       </div>
 
       {scope === "players" && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={filterHeadingRow}>
+        <div
+          style={{
+            marginBottom: 24,
+          }}
+        >
+          <div
+            style={
+              filterHeadingRow
+            }
+          >
             <FilterHeading>
               PLAYER POSITIONS
             </FilterHeading>
 
             <button
               type="button"
-              style={clearButtonStyle}
+              style={
+                clearButtonStyle
+              }
               onClick={() =>
                 setPositions(
                   positions.length ===
                     POSITIONS.length
                     ? []
-                    : [...POSITIONS]
+                    : [
+                        ...POSITIONS,
+                      ]
                 )
               }
             >
@@ -1107,98 +1502,158 @@ export default function RecordsTabs({
             </button>
           </div>
 
-          <div style={positionRowStyle}>
-            {POSITIONS.map(position => {
-              const active =
-                positions.includes(position);
+          <div
+            style={
+              positionRowStyle
+            }
+          >
+            {POSITIONS.map(
+              position => {
+                const active =
+                  positions.includes(
+                    position
+                  );
 
-              return (
-                <button
-                  key={position}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() =>
-                    togglePosition(position)
-                  }
-                  style={{
-                    ...positionButtonStyle,
-                    background: active
-                      ? "#ffffff"
-                      : "#151b23",
-                    color: active
-                      ? "#0b0f14"
-                      : "#aeb8c5",
-                    borderColor: active
-                      ? "#ffffff"
-                      : "#27303b",
-                  }}
-                >
-                  {position}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={
+                      position
+                    }
+                    type="button"
+                    aria-pressed={
+                      active
+                    }
+                    onClick={() =>
+                      togglePosition(
+                        position
+                      )
+                    }
+                    style={{
+                      ...positionButtonStyle,
+                      background:
+                        active
+                          ? "#ffffff"
+                          : "#151b23",
+                      color:
+                        active
+                          ? "#0b0f14"
+                          : "#aeb8c5",
+                      borderColor:
+                        active
+                          ? "#ffffff"
+                          : "#27303b",
+                    }}
+                  >
+                    {position}
+                  </button>
+                );
+              }
+            )}
           </div>
 
-          <p style={filterNoteStyle}>
+          <p
+            style={
+              filterNoteStyle
+            }
+          >
             {positions.length
               ? `Showing ${POSITIONS.filter(
-                  p => positions.includes(p)
-                ).join(" + ")} records`
+                  p =>
+                    positions.includes(
+                      p
+                    )
+                ).join(
+                  " + "
+                )} records`
               : "Select at least one position."}
           </p>
         </div>
       )}
 
       {period !== "career" && (
-        <div style={{ marginBottom: 24 }}>
-          <FilterHeading>SEASON</FilterHeading>
+        <div
+          style={{
+            marginBottom: 24,
+          }}
+        >
+          <FilterHeading>
+            SEASON
+          </FilterHeading>
 
           <select
-            value={selectedSeason}
-            onChange={event =>
-              setSelectedSeason(event.target.value)
+            value={
+              selectedSeason
             }
-            style={selectStyle}
+            onChange={
+              event =>
+                setSelectedSeason(
+                  event.target.value
+                )
+            }
+            style={
+              selectStyle
+            }
           >
             <option value="all">
               All Seasons
             </option>
 
-            {(scope === "players"
-              ? playerRecords.availableSeasons
-              : records.availableSeasons
+            {(
+              scope === "players"
+                ? playerRecords
+                    .availableSeasons
+                : records
+                    .availableSeasons
             ).map(year => (
-              <option key={year} value={year}>
+              <option
+                key={year}
+                value={year}
+              >
                 {year}
               </option>
             ))}
           </select>
 
-          {period === "season" &&
+          {period ===
+            "season" &&
             !seasonComplete && (
-              <p style={noticeStyle}>
-                Season in Progress — these
-                totals are provisional and
-                excluded from all-season
-                records until the competition
+              <p
+                style={
+                  noticeStyle
+                }
+              >
+                Season in
+                Progress — these
+                totals are
+                provisional and
+                excluded from
+                all-season
+                records until
+                the competition
                 is complete.
               </p>
             )}
         </div>
       )}
 
-      {scope === "franchises" &&
-        period === "games" && (
+      {scope ===
+        "franchises" &&
+        period ===
+          "games" && (
           <RecordSection
             key={`fg-${competition}-${selectedSeason}`}
             title="Individual Game"
             subtitle="The greatest performances, closest finishes and most spectacular disasters."
             categories={gameCategories(
-              filteredFranchise.individualGame[
-                competition
-              ],
-              filteredFranchise.leaderboards
-                .individualGame[competition]
+              filteredFranchise
+                .individualGame[
+                  competition
+                ],
+              filteredFranchise
+                .leaderboards
+                .individualGame[
+                  competition
+                ]
             )}
             primaryLabel={r =>
               historicalName(
@@ -1210,30 +1665,43 @@ export default function RecordsTabs({
               `${historicalName(
                 r.rosterId,
                 r.season
-              )} ${pts(r.score)} vs ` +
+              )} ${pts(
+                r.score
+              )} vs ` +
               `${historicalName(
                 r.opponentRosterId,
                 r.season
-              )} ${pts(r.opponentScore)}`
+              )} ${pts(
+                r.opponentScore
+              )}`
             }
             metaLabel={r =>
               `${r.season} · Week ${r.week} · ${r.phase}`
             }
+            logoIds={r => [
+              r.rosterId,
+            ]}
           />
         )}
 
-      {scope === "franchises" &&
-        period === "season" && (
+      {scope ===
+        "franchises" &&
+        period ===
+          "season" && (
           <RecordSection
             key={`fs-${competition}-${selectedSeason}`}
             title="Season Long"
             subtitle="The best and worst campaigns across SFL history."
             categories={seasonCategories(
-              filteredFranchise.season[
-                competition
-              ],
-              filteredFranchise.leaderboards
-                .season[competition],
+              filteredFranchise
+                .season[
+                  competition
+                ],
+              filteredFranchise
+                .leaderboards
+                .season[
+                  competition
+                ],
               competition
             )}
             primaryLabel={r =>
@@ -1244,33 +1712,58 @@ export default function RecordsTabs({
             }
             detailLabel={r =>
               `${r.wins}W-${r.losses}L` +
-              (r.ties ? `-${r.ties}T` : "")
+              (r.ties
+                ? `-${r.ties}T`
+                : "")
             }
-            metaLabel={r => r.season}
+            metaLabel={r =>
+              r.season
+            }
+            logoIds={r => [
+              r.rosterId,
+            ]}
           />
         )}
 
-      {scope === "franchises" &&
-        period === "career" && (
+      {scope ===
+        "franchises" &&
+        period ===
+          "career" && (
           <>
-            {competition === "mainPlayoffs" && (
+            {competition ===
+              "mainPlayoffs" && (
               <>
                 <RecordSection
                   title="Slootbowl Honours"
                   subtitle="Championship glory and runner-up finishes."
-                  categories={honours.slice(0, 3)}
+                  categories={honours.slice(
+                    0,
+                    3
+                  )}
                   primaryLabel={r =>
-                    currentName(r.rosterId)
+                    currentName(
+                      r.rosterId
+                    )
                   }
+                  logoIds={r => [
+                    r.rosterId,
+                  ]}
                 />
 
                 <RecordSection
                   title="Playoff History"
                   subtitle="Main winners-bracket records only."
-                  categories={honours.slice(3)}
+                  categories={honours.slice(
+                    3
+                  )}
                   primaryLabel={r =>
-                    currentName(r.rosterId)
+                    currentName(
+                      r.rosterId
+                    )
                   }
+                  logoIds={r => [
+                    r.rosterId,
+                  ]}
                 />
               </>
             )}
@@ -1283,11 +1776,17 @@ export default function RecordsTabs({
                 competition
               )}
               primaryLabel={r =>
-                currentName(r.rosterId)
+                currentName(
+                  r.rosterId
+                )
               }
+              logoIds={r => [
+                r.rosterId,
+              ]}
             />
 
-            {competition === "regularSeason" && (
+            {competition ===
+              "regularSeason" && (
               <RecordSection
                 title="Career Totals"
                 subtitle="All-time franchise totals across regular-season and main-playoff games."
@@ -1296,31 +1795,43 @@ export default function RecordsTabs({
                   records.allTimeLeaderboards
                 )}
                 primaryLabel={r =>
-                  currentName(r.rosterId)
+                  currentName(
+                    r.rosterId
+                  )
                 }
                 detailLabel={r =>
                   `${r.wins}W-${r.losses}L` +
-                  (r.ties ? `-${r.ties}T` : "")
+                  (r.ties
+                    ? `-${r.ties}T`
+                    : "")
                 }
+                logoIds={r => [
+                  r.rosterId,
+                ]}
               />
             )}
           </>
         )}
 
-      {scope === "players" &&
-        positions.length > 0 && (
+      {scope ===
+        "players" &&
+        positions.length >
+          0 && (
           <RecordSection
             key={`p-${period}-${competition}-${selectedSeason}-${positions.join("-")}`}
             title={
-              period === "games"
+              period ===
+              "games"
                 ? "Player Game Records"
-                : period === "season"
+                : period ===
+                  "season"
                 ? "Player Season Records"
                 : "Player Career Records"
             }
             subtitle={
               "Started players only. " +
-              (competition === "regularSeason"
+              (competition ===
+              "regularSeason"
                 ? "Regular-season performances."
                 : "Main winners-bracket performances only.")
             }
@@ -1328,7 +1839,9 @@ export default function RecordsTabs({
               entries,
               period
             )}
-            primaryLabel={r => r.name}
+            primaryLabel={r =>
+              r.name
+            }
             detailLabel={r =>
               `${r.position} · ${playerTeams(
                 r,
@@ -1336,25 +1849,45 @@ export default function RecordsTabs({
               )}`
             }
             metaLabel={r =>
-              period === "games"
+              period ===
+              "games"
                 ? `${r.season} · Week ${r.week}`
-                : period === "season"
+                : period ===
+                  "season"
                 ? `${r.season} · ${r.starts} starts`
                 : `${r.starts} career starts`
+            }
+            logoIds={r =>
+              playerRosterIds(
+                r,
+                period
+              )
             }
           />
         )}
 
-      {scope === "players" &&
-        positions.length === 0 && (
-          <p style={noticeStyle}>
-            Select at least one position
-            to view player records.
+      {scope ===
+        "players" &&
+        positions.length ===
+          0 && (
+          <p
+            style={
+              noticeStyle
+            }
+          >
+            Select at least
+            one position to
+            view player
+            records.
           </p>
         )}
     </div>
   );
 }
+
+// --------------------------------------------------
+// SHARED UI COMPONENTS
+// --------------------------------------------------
 
 function FilterHeading({
   children,
@@ -1362,7 +1895,11 @@ function FilterHeading({
   children: ReactNode;
 }) {
   return (
-    <p style={filterHeadingStyle}>
+    <p
+      style={
+        filterHeadingStyle
+      }
+    >
       {children}
     </p>
   );
@@ -1381,19 +1918,23 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
+      aria-pressed={
+        active
+      }
       style={{
         flex: 1,
         minWidth: 0,
         border: "none",
         borderRadius: 10,
         padding: "11px 5px",
-        background: active
-          ? "#ffffff"
-          : "transparent",
-        color: active
-          ? "#0b0f14"
-          : "#aeb8c5",
+        background:
+          active
+            ? "#ffffff"
+            : "transparent",
+        color:
+          active
+            ? "#0b0f14"
+            : "#aeb8c5",
         fontSize: 13,
         fontWeight: 700,
         cursor: "pointer",
@@ -1405,7 +1946,9 @@ function TabButton({
 }
 
 function RecordSection<
-  T extends { rosterId: number }
+  T extends {
+    rosterId: number;
+  }
 >({
   title,
   subtitle,
@@ -1413,216 +1956,458 @@ function RecordSection<
   primaryLabel,
   detailLabel,
   metaLabel,
+  logoIds,
 }: {
   title: string;
   subtitle: string;
   categories: Category<T>[];
-  primaryLabel: (entry: T) => string;
-  detailLabel?: (entry: T) => string;
-  metaLabel?: (entry: T) => string;
+  primaryLabel: (
+    entry: T
+  ) => string;
+  detailLabel?: (
+    entry: T
+  ) => string;
+  metaLabel?: (
+    entry: T
+  ) => string;
+  logoIds: (
+    entry: T
+  ) => number[];
 }) {
   return (
-    <section style={{ marginBottom: 32 }}>
-      <div style={sectionHeadingRow}>
-        <div style={headingAccent} />
-        <h2 style={sectionHeading}>
+    <section
+      style={{
+        marginBottom: 32,
+      }}
+    >
+      <div
+        style={
+          sectionHeadingRow
+        }
+      >
+        <div
+          style={
+            headingAccent
+          }
+        />
+
+        <h2
+          style={
+            sectionHeading
+          }
+        >
           {title}
         </h2>
       </div>
 
-      <p style={sectionSubtitle}>
+      <p
+        style={
+          sectionSubtitle
+        }
+      >
         {subtitle}
       </p>
 
-      {categories.map(item => (
-        <RecordCard
-          key={item.key}
-          item={item}
-          primaryLabel={primaryLabel}
-          detailLabel={
-            item.detail ?? detailLabel
-          }
-          metaLabel={metaLabel}
-        />
-      ))}
+      {categories.map(
+        item => (
+          <RecordCard
+            key={
+              item.key
+            }
+            item={item}
+            primaryLabel={
+              primaryLabel
+            }
+            detailLabel={
+              item.detail ??
+              detailLabel
+            }
+            metaLabel={
+              metaLabel
+            }
+            logoIds={
+              logoIds
+            }
+          />
+        )
+      )}
     </section>
   );
 }
 
 function RecordCard<
-  T extends { rosterId: number }
+  T extends {
+    rosterId: number;
+  }
 >({
   item,
   primaryLabel,
   detailLabel,
   metaLabel,
+  logoIds,
 }: {
   item: Category<T>;
-  primaryLabel: (entry: T) => string;
-  detailLabel?: (entry: T) => string;
-  metaLabel?: (entry: T) => string;
+  primaryLabel: (
+    entry: T
+  ) => string;
+  detailLabel?: (
+    entry: T
+  ) => string;
+  metaLabel?: (
+    entry: T
+  ) => string;
+  logoIds: (
+    entry: T
+  ) => number[];
 }) {
-  const [expanded, setExpanded] =
-    useState(false);
+  const [
+    expanded,
+    setExpanded,
+  ] = useState(false);
 
-  const entries = item.leaderboard.slice(
-    0,
-    LIMIT
-  );
+  const entries =
+    item.leaderboard.slice(
+      0,
+      LIMIT
+    );
 
-  const leader = entries[0];
+  const leader =
+    entries[0];
 
   if (!leader) {
     return null;
   }
 
-  const jointCount = entries.filter(
-    entry =>
-      rounded(item.metric(entry)) ===
-      rounded(item.metric(leader))
-  ).length;
+  const jointCount =
+    entries.filter(
+      entry =>
+        rounded(
+          item.metric(entry)
+        ) ===
+        rounded(
+          item.metric(leader)
+        )
+    ).length;
 
-  let previousValue: number | null = null;
+  let previousValue:
+    | number
+    | null = null;
+
   let previousRank = 0;
 
   return (
-    <article style={cardStyle}>
-      <div style={cardHeaderStyle}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={cardLabel}>
+    <article
+      style={
+        cardStyle
+      }
+    >
+      <div
+        style={
+          cardHeaderStyle
+        }
+      >
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <p
+            style={
+              cardLabel
+            }
+          >
             {item.title.toUpperCase()}
           </p>
-          <p style={cardDescription}>
+
+          <p
+            style={
+              cardDescription
+            }
+          >
             {item.description}
           </p>
         </div>
 
-        {jointCount > 1 && (
-          <span style={jointBadge}>
+        {jointCount >
+          1 && (
+          <span
+            style={
+              jointBadge
+            }
+          >
             JOINT
           </span>
         )}
       </div>
 
-      <div style={valueRow}>
-        <h3 style={valueText}>
-          {item.format(leader)}
-        </h3>
-        {item.suffix && (
-          <span style={suffixText}>
-            {item.suffix}
-          </span>
-        )}
+      {/* LARGE RECORD HOLDER LOGO */}
+
+      <div
+        style={
+          holderLayout
+        }
+      >
+        <FranchiseLogos
+          rosterIds={logoIds(
+            leader
+          )}
+          size="large"
+        />
+
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={
+              valueRow
+            }
+          >
+            <h3
+              style={
+                valueText
+              }
+            >
+              {item.format(
+                leader
+              )}
+            </h3>
+
+            {item.suffix && (
+              <span
+                style={
+                  suffixText
+                }
+              >
+                {item.suffix}
+              </span>
+            )}
+          </div>
+
+          <p
+            style={
+              primaryText
+            }
+          >
+            {primaryLabel(
+              leader
+            )}
+          </p>
+
+          {detailLabel && (
+            <p
+              style={
+                detailText
+              }
+            >
+              {detailLabel(
+                leader
+              )}
+            </p>
+          )}
+
+          {metaLabel && (
+            <p
+              style={
+                metaText
+              }
+            >
+              {metaLabel(
+                leader
+              )}
+            </p>
+          )}
+        </div>
       </div>
 
-      <p style={primaryText}>
-        {primaryLabel(leader)}
-      </p>
-
-      {detailLabel && (
-        <p style={detailText}>
-          {detailLabel(leader)}
+      {jointCount >
+        1 && (
+        <p
+          style={
+            jointNotice
+          }
+        >
+          {jointCount} entries
+          share this record
+          within the top ten.
+          Earliest achievement
+          is listed first.
         </p>
       )}
 
-      {metaLabel && (
-        <p style={metaText}>
-          {metaLabel(leader)}
-        </p>
-      )}
-
-      {jointCount > 1 && (
-        <p style={jointNotice}>
-          {jointCount} entries share
-          this record within the top ten.
-          Earliest achievement is listed first.
-        </p>
-      )}
-
-      {entries.length > 1 && (
+      {entries.length >
+        1 && (
         <>
           <button
             type="button"
-            aria-expanded={expanded}
-            onClick={() =>
-              setExpanded(value => !value)
+            aria-expanded={
+              expanded
             }
-            style={expandButton}
+            onClick={() =>
+              setExpanded(
+                value =>
+                  !value
+              )
+            }
+            style={
+              expandButton
+            }
           >
             <span>
               {expanded
                 ? "Hide leaderboard"
                 : `View leaderboard (${entries.length})`}
             </span>
-            <span aria-hidden="true">
-              {expanded ? "▲" : "▼"}
+
+            <span
+              aria-hidden="true"
+            >
+              {expanded
+                ? "▲"
+                : "▼"}
             </span>
           </button>
 
           {expanded && (
-            <div style={leaderboardContainer}>
-              <p style={leaderboardHeading}>
-                HISTORICAL LEADERBOARD
+            <div
+              style={
+                leaderboardContainer
+              }
+            >
+              <p
+                style={
+                  leaderboardHeading
+                }
+              >
+                HISTORICAL
+                LEADERBOARD
               </p>
 
-              {entries.map((entry, index) => {
-                const value = rounded(
-                  item.metric(entry)
-                );
+              {entries.map(
+                (
+                  entry,
+                  index
+                ) => {
+                  const value =
+                    rounded(
+                      item.metric(
+                        entry
+                      )
+                    );
 
-                const rank =
-                  previousValue === value
-                    ? previousRank
-                    : index + 1;
+                  const rank =
+                    previousValue ===
+                    value
+                      ? previousRank
+                      : index +
+                        1;
 
-                previousValue = value;
-                previousRank = rank;
+                  previousValue =
+                    value;
 
-                return (
-                  <div
-                    key={`${item.key}-${index}`}
-                    style={{
-                      ...leaderboardRow,
-                      borderBottom:
-                        index === entries.length - 1
-                          ? "none"
-                          : "1px solid #27303b",
-                    }}
-                  >
-                    <div style={rankText}>
-                      {rank}
-                    </div>
+                  previousRank =
+                    rank;
 
-                    <div style={leaderboardInfo}>
-                      <p style={leaderboardName}>
-                        {primaryLabel(entry)}
-                      </p>
+                  return (
+                    <div
+                      key={`${item.key}-${index}`}
+                      style={{
+                        ...leaderboardRow,
+                        borderBottom:
+                          index ===
+                          entries.length -
+                            1
+                            ? "none"
+                            : "1px solid #27303b",
+                      }}
+                    >
+                      <div
+                        style={
+                          rankText
+                        }
+                      >
+                        {rank}
+                      </div>
 
-                      {detailLabel && (
-                        <p style={leaderboardDetail}>
-                          {detailLabel(entry)}
+                      {/* SUBTLE TOP TEN LOGO */}
+
+                      <FranchiseLogos
+                        rosterIds={logoIds(
+                          entry
+                        )}
+                        size="small"
+                      />
+
+                      <div
+                        style={
+                          leaderboardInfo
+                        }
+                      >
+                        <p
+                          style={
+                            leaderboardName
+                          }
+                        >
+                          {primaryLabel(
+                            entry
+                          )}
                         </p>
-                      )}
 
-                      {metaLabel && (
-                        <p style={leaderboardMeta}>
-                          {metaLabel(entry)}
-                        </p>
-                      )}
+                        {detailLabel && (
+                          <p
+                            style={
+                              leaderboardDetail
+                            }
+                          >
+                            {detailLabel(
+                              entry
+                            )}
+                          </p>
+                        )}
+
+                        {metaLabel && (
+                          <p
+                            style={
+                              leaderboardMeta
+                            }
+                          >
+                            {metaLabel(
+                              entry
+                            )}
+                          </p>
+                        )}
+                      </div>
+
+                      <div
+                        style={
+                          leaderboardValue
+                        }
+                      >
+                        {item.format(
+                          entry
+                        )}
+                      </div>
                     </div>
+                  );
+                }
+              )}
 
-                    <div style={leaderboardValue}>
-                      {item.format(entry)}
-                    </div>
-                  </div>
-                );
-              })}
-
-              <p style={leaderboardFootnote}>
-                Maximum ten entries.
-                Ties are ordered by earliest
-                achievement where historical
-                dates are available.
+              <p
+                style={
+                  leaderboardFootnote
+                }
+              >
+                Maximum ten
+                entries. Ties
+                are ordered by
+                earliest
+                achievement
+                where historical
+                dates are
+                available.
               </p>
             </div>
           )}
@@ -1631,6 +2416,10 @@ function RecordCard<
     </article>
   );
 }
+
+// --------------------------------------------------
+// STYLES
+// --------------------------------------------------
 
 const tabsStyle: CSSProperties = {
   display: "flex",
@@ -1766,11 +2555,18 @@ const cardDescription: CSSProperties = {
   color: "#687384",
 };
 
+const holderLayout: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  marginTop: 20,
+  minWidth: 0,
+};
+
 const valueRow: CSSProperties = {
   display: "flex",
   alignItems: "baseline",
   gap: 7,
-  marginTop: 14,
   flexWrap: "wrap",
 };
 
@@ -1780,6 +2576,7 @@ const valueText: CSSProperties = {
   fontWeight: 800,
   letterSpacing: -1,
   fontVariantNumeric: "tabular-nums",
+  overflowWrap: "anywhere",
 };
 
 const suffixText: CSSProperties = {
@@ -1823,7 +2620,7 @@ const jointBadge: CSSProperties = {
 };
 
 const jointNotice: CSSProperties = {
-  marginTop: 10,
+  marginTop: 16,
   marginBottom: 0,
   color: "#aeb8c5",
   fontSize: 12,
@@ -1864,13 +2661,13 @@ const leaderboardHeading: CSSProperties = {
 
 const leaderboardRow: CSSProperties = {
   display: "flex",
-  alignItems: "flex-start",
-  gap: 10,
+  alignItems: "center",
+  gap: 9,
   padding: "13px 0",
 };
 
 const rankText: CSSProperties = {
-  width: 24,
+  width: 20,
   flexShrink: 0,
   fontSize: 13,
   fontWeight: 800,
