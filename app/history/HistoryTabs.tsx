@@ -23,12 +23,21 @@ type MVPRecord = {
   points: number;
 };
 
+export type GMAwardRecord = {
+  season: string;
+  awardId: string;
+  winnerName: string;
+  franchiseName: string;
+  detail?: string;
+};
+
 type HistoryTabsProps = {
   seasons: string[];
   champions: Champion[];
   conferenceChampions: ConferenceChampion[];
   mvpRecords: MVPRecord[];
   franchiseNames: Record<number, string>;
+  gmAwards?: GMAwardRecord[];
 };
 
 const GM_AWARDS = [
@@ -107,6 +116,7 @@ export default function HistoryTabs({
   conferenceChampions,
   mvpRecords,
   franchiseNames,
+  gmAwards = [],
 }: HistoryTabsProps) {
   const [activeTab, setActiveTab] = useState<
     "champions" | "gm" | "players"
@@ -132,7 +142,8 @@ export default function HistoryTabs({
     },
     type: "gm" | "players"
   ) => {
-    const isExpanded = expandedAward === award.id;
+    const awardKey = `${type}-${award.id}`;
+    const isExpanded = expandedAward === awardKey;
 
     return (
       <div
@@ -146,7 +157,7 @@ export default function HistoryTabs({
       >
         <button
           type="button"
-          onClick={() => toggleAward(award.id)}
+          onClick={() => toggleAward(awardKey)}
           aria-expanded={isExpanded}
           style={{
             display: "flex",
@@ -197,6 +208,15 @@ export default function HistoryTabs({
                     )
                   : undefined;
 
+              const gmWinner =
+                type === "gm"
+                  ? gmAwards.find(
+                      (item) =>
+                        item.season === season &&
+                        item.awardId === award.id
+                    )
+                  : undefined;
+
               const honoraryImproved =
                 type === "gm" &&
                 award.id === "improved" &&
@@ -225,7 +245,7 @@ export default function HistoryTabs({
                     {season}
                   </strong>
 
-                  {mvp ? (
+                  {gmWinner ? (
                     <div>
                       <strong
                         style={{
@@ -233,7 +253,7 @@ export default function HistoryTabs({
                           fontSize: "14px",
                         }}
                       >
-                        {mvp.playerName}
+                        {gmWinner.winnerName}
                       </strong>
 
                       <div
@@ -243,18 +263,20 @@ export default function HistoryTabs({
                           color: "#687384",
                         }}
                       >
-                        {mvp.franchiseName}
+                        {gmWinner.franchiseName}
                       </div>
 
-                      <div
-                        style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#9da7b3",
-                        }}
-                      >
-                        {mvp.points.toFixed(1)} pts
-                      </div>
+                      {gmWinner.detail && (
+                        <div
+                          style={{
+                            marginTop: "4px",
+                            fontSize: "12px",
+                            color: "#9da7b3",
+                          }}
+                        >
+                          {gmWinner.detail}
+                        </div>
+                      )}
                     </div>
                   ) : honoraryImproved ? (
                     <div>
@@ -285,6 +307,37 @@ export default function HistoryTabs({
                         }}
                       >
                         Inaugural honorary winner
+                      </div>
+                    </div>
+                  ) : mvp ? (
+                    <div>
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {mvp.playerName}
+                      </strong>
+
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#687384",
+                        }}
+                      >
+                        {mvp.franchiseName}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "12px",
+                          color: "#9da7b3",
+                        }}
+                      >
+                        {mvp.points.toFixed(1)} pts
                       </div>
                     </div>
                   ) : (
