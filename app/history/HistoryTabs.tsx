@@ -50,10 +50,6 @@ type HistoryTabsProps = {
   playerAwards?: PlayerAwardRecord[];
 };
 
-// ============================================
-// FRANCHISE LOGOS
-// ============================================
-
 const FRANCHISE_LOGOS: Record<number, string> = {
   1: "/logos/mt-isa-ballbags.PNG",
   2: "/logos/cambridge-cum-sluts.PNG",
@@ -137,10 +133,6 @@ function labelStyle(): React.CSSProperties {
   };
 }
 
-// ============================================
-// LOGO COMPONENT
-// ============================================
-
 function FranchiseLogo({
   rosterId,
   size = 38,
@@ -181,10 +173,6 @@ function FranchiseLogo({
   );
 }
 
-// ============================================
-// HISTORY TABS
-// ============================================
-
 export default function HistoryTabs({
   seasons,
   champions,
@@ -209,8 +197,7 @@ export default function HistoryTabs({
     const entry = Object.entries(
       franchiseNames
     ).find(
-      ([, name]) =>
-        name === franchiseName
+      ([, name]) => name === franchiseName
     );
 
     return entry
@@ -928,11 +915,12 @@ export default function HistoryTabs({
               >
                 <div
                   style={{
-                    display: "flex",
-                    justifyContent:
-                      "space-between",
-                    gap: "12px",
+                    display: "grid",
+                    gridTemplateColumns:
+                      "minmax(65px, 1fr) 52px minmax(0, 1fr)",
+                    gap: "10px",
                     alignItems: "center",
+                    minHeight: "72px",
                   }}
                 >
                   <div>
@@ -954,8 +942,9 @@ export default function HistoryTabs({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "10px",
-                      minWidth: 0,
+                      justifyContent: "center",
+                      width: "52px",
+                      height: "52px",
                     }}
                   >
                     {result && (
@@ -964,46 +953,48 @@ export default function HistoryTabs({
                         size={44}
                       />
                     )}
+                  </div>
 
-                    <div
-                      style={{
-                        textAlign: "right",
-                        minWidth: 0,
-                      }}
-                    >
-                      {result ? (
-                        <>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#687384",
-                            }}
-                          >
-                            SLOOTBOWL CHAMPION
-                          </div>
-
-                          <strong
-                            style={{
-                              display: "block",
-                              marginTop: "3px",
-                              fontSize: "13px",
-                            }}
-                          >
-                            {getFranchise(
-                              result.champion
-                            )}
-                          </strong>
-                        </>
-                      ) : (
-                        <span
+                  <div
+                    style={{
+                      textAlign: "right",
+                      minWidth: 0,
+                    }}
+                  >
+                    {result ? (
+                      <>
+                        <div
                           style={{
+                            fontSize: "11px",
                             color: "#687384",
                           }}
                         >
-                          Current season
-                        </span>
-                      )}
-                    </div>
+                          SLOOTBOWL CHAMPION
+                        </div>
+
+                        <strong
+                          style={{
+                            display: "block",
+                            marginTop: "3px",
+                            fontSize: "13px",
+                            overflowWrap: "break-word",
+                          }}
+                        >
+                          {getFranchise(
+                            result.champion
+                          )}
+                        </strong>
+                      </>
+                    ) : (
+                      <span
+                        style={{
+                          color: "#687384",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Current season
+                      </span>
+                    )}
                   </div>
                 </div>
               </article>
