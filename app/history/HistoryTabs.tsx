@@ -36,31 +36,26 @@ const GM_AWARDS = [
     id: "gm",
     icon: "🏆",
     title: "GM of the Year",
-    description: "Most regular-season points scored",
   },
   {
     id: "improved",
     icon: "📈",
-    title: "Most Improved GM of the Year",
-    description: "Largest increase in regular-season wins",
+    title: "Most Improved GM",
   },
   {
     id: "lubed",
     icon: "💀",
     title: "The Lubed Up, Dicked Down Award",
-    description: "Most regular-season points conceded",
   },
   {
     id: "wonder",
     icon: "⚡",
     title: "One Week Wonder of the Year",
-    description: "Highest single-week regular-season team score",
   },
   {
     id: "shitcunt",
     icon: "🚽",
     title: "Shitcunt of the Year",
-    description: "Toilet Bowl loser",
   },
 ];
 
@@ -69,25 +64,21 @@ const PLAYER_AWARDS = [
     id: "mvp",
     icon: "👑",
     title: "SFL MVP",
-    description: "Most Valuable Player",
   },
   {
     id: "opoy",
     icon: "⭐",
     title: "SFL OPOY",
-    description: "Offensive Player of the Year",
   },
   {
     id: "roy",
     icon: "🏅",
     title: "SFL ROY",
-    description: "Rookie of the Year",
   },
   {
     id: "sbmvp",
     icon: "🏆",
     title: "Slootbowl MVP",
-    description: "Championship game MVP",
   },
 ];
 
@@ -138,7 +129,6 @@ export default function HistoryTabs({
       id: string;
       icon: string;
       title: string;
-      description: string;
     },
     type: "gm" | "players"
   ) => {
@@ -184,17 +174,6 @@ export default function HistoryTabs({
             >
               {award.title}
             </strong>
-
-            <span
-              style={{
-                display: "block",
-                marginTop: "4px",
-                fontSize: "12px",
-                color: "#687384",
-              }}
-            >
-              {award.description}
-            </span>
           </span>
 
           <span style={{ color: "#9da7b3" }}>
