@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 type Champion = {
   season: string;
@@ -47,6 +48,23 @@ type HistoryTabsProps = {
   franchiseNames: Record<number, string>;
   gmAwards?: GMAwardRecord[];
   playerAwards?: PlayerAwardRecord[];
+};
+
+// ============================================
+// FRANCHISE LOGOS
+// ============================================
+
+const FRANCHISE_LOGOS: Record<number, string> = {
+  1: "/logos/mt-isa-ballbags.PNG",
+  2: "/logos/cambridge-cum-sluts.PNG",
+  3: "/logos/grimsby-chode-chokers.PNG",
+  4: "/logos/isle-of-wight-happy-endings.PNG",
+  5: "/logos/grays-town-fingerblasters.PNG",
+  6: "/logos/lincoln-nonces.PNG",
+  7: "/logos/kalamata-dirty-vegans.PNG",
+  8: "/logos/weybiza-babs.PNG",
+  9: "/logos/east-rutherford-shitlickers.PNG",
+  10: "/logos/chad-moist-discharge.PNG",
 };
 
 const GM_AWARDS = [
@@ -119,6 +137,54 @@ function labelStyle(): React.CSSProperties {
   };
 }
 
+// ============================================
+// LOGO COMPONENT
+// ============================================
+
+function FranchiseLogo({
+  rosterId,
+  size = 38,
+}: {
+  rosterId: number | undefined;
+  size?: number;
+}) {
+  if (
+    rosterId === undefined ||
+    !FRANCHISE_LOGOS[rosterId]
+  ) {
+    return null;
+  }
+
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Image
+        src={FRANCHISE_LOGOS[rosterId]}
+        alt=""
+        width={size}
+        height={size}
+        style={{
+          width: size,
+          height: size,
+          objectFit: "contain",
+        }}
+      />
+    </span>
+  );
+}
+
+// ============================================
+// HISTORY TABS
+// ============================================
+
 export default function HistoryTabs({
   seasons,
   champions,
@@ -138,6 +204,19 @@ export default function HistoryTabs({
   const getFranchise = (rosterId: number) =>
     franchiseNames[rosterId] ??
     `Franchise ${rosterId}`;
+
+  const getRosterId = (franchiseName: string) => {
+    const entry = Object.entries(
+      franchiseNames
+    ).find(
+      ([, name]) =>
+        name === franchiseName
+    );
+
+    return entry
+      ? Number(entry[0])
+      : undefined;
+  };
 
   const toggleAward = (awardId: string) => {
     setExpandedAward((previous) =>
@@ -229,9 +308,6 @@ export default function HistoryTabs({
                     )
                   : undefined;
 
-              // Keep the existing MVP working
-              // until page.tsx supplies all
-              // four shared player awards.
               const legacyMvp =
                 type === "players" &&
                 award.id === "mvp" &&
@@ -250,13 +326,25 @@ export default function HistoryTabs({
               const displayedPlayer =
                 playerWinner ?? legacyMvp;
 
+              const winnerFranchise =
+                gmWinner?.franchiseName ??
+                displayedPlayer?.franchiseName ??
+                (honoraryImproved
+                  ? getFranchise(7)
+                  : undefined);
+
+              const winnerRosterId =
+                winnerFranchise
+                  ? getRosterId(winnerFranchise)
+                  : undefined;
+
               return (
                 <div
                   key={season}
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "48px 1fr",
+                      "48px minmax(0, 1fr)",
                     gap: "12px",
                     padding: "13px 0",
                     borderBottom:
@@ -274,99 +362,89 @@ export default function HistoryTabs({
                     {season}
                   </strong>
 
-                  {gmWinner ? (
-                    <div>
-                      <strong
-                        style={{
-                          display: "block",
-                          fontSize: "14px",
-                        }}
-                      >
-                        {gmWinner.winnerName}
-                      </strong>
+                  {gmWinner ||
+                  honoraryImproved ||
+                  displayedPlayer ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        minWidth: 0,
+                      }}
+                    >
+                      <FranchiseLogo
+                        rosterId={winnerRosterId}
+                        size={40}
+                      />
 
                       <div
                         style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#687384",
+                          minWidth: 0,
+                          flex: 1,
                         }}
                       >
-                        {gmWinner.franchiseName}
-                      </div>
+                        <strong
+                          style={{
+                            display: "block",
+                            fontSize: "14px",
+                          }}
+                        >
+                          {gmWinner
+                            ? gmWinner.winnerName
+                            : honoraryImproved &&
+                              !displayedPlayer
+                            ? "Ollie Payne"
+                            : displayedPlayer?.playerName}
+                        </strong>
 
-                      {gmWinner.detail && (
                         <div
                           style={{
                             marginTop: "4px",
                             fontSize: "12px",
-                            color: "#9da7b3",
+                            color: "#687384",
                           }}
                         >
-                          {gmWinner.detail}
+                          {winnerFranchise}
                         </div>
-                      )}
-                    </div>
-                  ) : honoraryImproved ? (
-                    <div>
-                      <strong
-                        style={{
-                          display: "block",
-                          fontSize: "14px",
-                        }}
-                      >
-                        Ollie Payne
-                      </strong>
 
-                      <div
-                        style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#687384",
-                        }}
-                      >
-                        Kalamata Dirty Vegans
-                      </div>
+                        {gmWinner?.detail && (
+                          <div
+                            style={{
+                              marginTop: "4px",
+                              fontSize: "12px",
+                              color: "#9da7b3",
+                            }}
+                          >
+                            {gmWinner.detail}
+                          </div>
+                        )}
 
-                      <div
-                        style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#9da7b3",
-                        }}
-                      >
-                        Inaugural honorary winner
-                      </div>
-                    </div>
-                  ) : displayedPlayer ? (
-                    <div>
-                      <strong
-                        style={{
-                          display: "block",
-                          fontSize: "14px",
-                        }}
-                      >
-                        {displayedPlayer.playerName}
-                      </strong>
+                        {honoraryImproved &&
+                          !gmWinner && (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: "#9da7b3",
+                              }}
+                            >
+                              Inaugural honorary winner
+                            </div>
+                          )}
 
-                      <div
-                        style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#687384",
-                        }}
-                      >
-                        {displayedPlayer.franchiseName}
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: "4px",
-                          fontSize: "12px",
-                          color: "#9da7b3",
-                        }}
-                      >
-                        {displayedPlayer.points.toFixed(1)} pts
+                        {displayedPlayer &&
+                          !gmWinner && (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "12px",
+                                color: "#9da7b3",
+                              }}
+                            >
+                              {displayedPlayer.points.toFixed(1)} pts
+                            </div>
+                          )}
                       </div>
                     </div>
                   ) : (
@@ -508,7 +586,7 @@ export default function HistoryTabs({
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "54px 1fr",
+                      "54px minmax(0, 1fr)",
                     gap: "14px",
                     padding: "13px 0",
                     borderBottom:
@@ -523,26 +601,57 @@ export default function HistoryTabs({
                     <div>
                       <div
                         style={{
-                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
                         }}
                       >
-                        🏆{" "}
-                        {getFranchise(
-                          result.champion
-                        )}
-                      </div>
+                        <FranchiseLogo
+                          rosterId={result.champion}
+                          size={48}
+                        />
 
-                      <div
-                        style={{
-                          color: "#687384",
-                          fontSize: "13px",
-                          marginTop: "3px",
-                        }}
-                      >
-                        vs{" "}
-                        {getFranchise(
-                          result.runnerUp
-                        )}
+                        <div
+                          style={{
+                            minWidth: 0,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display: "block",
+                              fontSize: "14px",
+                            }}
+                          >
+                            🏆{" "}
+                            {getFranchise(
+                              result.champion
+                            )}
+                          </strong>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "7px",
+                              marginTop: "6px",
+                              color: "#687384",
+                              fontSize: "12px",
+                            }}
+                          >
+                            <span>vs</span>
+
+                            <FranchiseLogo
+                              rosterId={result.runnerUp}
+                              size={22}
+                            />
+
+                            <span>
+                              {getFranchise(
+                                result.runnerUp
+                              )}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -604,7 +713,11 @@ export default function HistoryTabs({
             ].map((item) => (
               <article
                 key={item.conference}
-                style={cardStyle()}
+                style={{
+                  ...cardStyle(),
+                  padding: "14px",
+                  minWidth: 0,
+                }}
               >
                 <p style={labelStyle()}>
                   {item.conference}
@@ -628,45 +741,58 @@ export default function HistoryTabs({
                           season
                       );
 
+                    const rosterId = result
+                      ? result[item.key]
+                      : undefined;
+
                     return (
                       <div
                         key={season}
                         style={{
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          gap: "8px",
                           padding: "10px 0",
                           borderBottom:
                             index ===
                             seasons.length - 1
                               ? "none"
                               : "1px solid #27303b",
-                          fontSize: "13px",
                         }}
                       >
-                        <span
+                        <div
                           style={{
                             color: "#687384",
+                            fontSize: "12px",
+                            marginBottom: "5px",
                           }}
                         >
                           {season}
-                        </span>
+                        </div>
 
-                        <strong
+                        <div
                           style={{
-                            textAlign:
-                              "right",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "7px",
+                            minWidth: 0,
                           }}
                         >
-                          {result
-                            ? getFranchise(
-                                result[
-                                  item.key
-                                ]
-                              )
-                            : "TBD"}
-                        </strong>
+                          <FranchiseLogo
+                            rosterId={rosterId}
+                            size={30}
+                          />
+
+                          <strong
+                            style={{
+                              fontSize: "12px",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {rosterId
+                              ? getFranchise(
+                                  rosterId
+                                )
+                              : "TBD"}
+                          </strong>
+                        </div>
                       </div>
                     );
                   }
@@ -826,40 +952,58 @@ export default function HistoryTabs({
 
                   <div
                     style={{
-                      textAlign: "right",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      minWidth: 0,
                     }}
                   >
-                    {result ? (
-                      <>
-                        <div
+                    {result && (
+                      <FranchiseLogo
+                        rosterId={result.champion}
+                        size={44}
+                      />
+                    )}
+
+                    <div
+                      style={{
+                        textAlign: "right",
+                        minWidth: 0,
+                      }}
+                    >
+                      {result ? (
+                        <>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#687384",
+                            }}
+                          >
+                            SLOOTBOWL CHAMPION
+                          </div>
+
+                          <strong
+                            style={{
+                              display: "block",
+                              marginTop: "3px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            {getFranchise(
+                              result.champion
+                            )}
+                          </strong>
+                        </>
+                      ) : (
+                        <span
                           style={{
-                            fontSize: "12px",
                             color: "#687384",
                           }}
                         >
-                          SLOOTBOWL CHAMPION
-                        </div>
-
-                        <strong
-                          style={{
-                            display: "block",
-                            marginTop: "3px",
-                          }}
-                        >
-                          {getFranchise(
-                            result.champion
-                          )}
-                        </strong>
-                      </>
-                    ) : (
-                      <span
-                        style={{
-                          color: "#687384",
-                        }}
-                      >
-                        Current season
-                      </span>
-                    )}
+                          Current season
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </article>
