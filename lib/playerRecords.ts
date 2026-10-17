@@ -1,19 +1,28 @@
+
 import {
   getHistoricalData,
-  HistoricalSeason,
+  type HistoricalSeason,
 } from "./sleeper";
 
 import {
   getPlayers,
-  SleeperPlayer,
+  getPlayerName,
+  getPlayerPosition,
+  type SleeperPlayer,
 } from "./players";
+
+export type PlayerCompetition =
+  | "regularSeason"
+  | "mainPlayoffs";
+
+export type PlayerRecordPhase =
+  | "Regular Season"
+  | "Main Playoffs";
 
 export type PlayerWeeklyPerformance = {
   season: string;
   week: number;
-  phase:
-    | "Regular Season"
-    | "Main Playoffs";
+  phase: PlayerRecordPhase;
   rosterId: number;
   playerId: string;
   points: number;
@@ -46,21 +55,113 @@ export type FranchisePlayerRecord = {
 export type PlayerGameRecord = {
   season: string;
   week: number;
-  phase:
-    | "Regular Season"
-    | "Main Playoffs";
+  phase: PlayerRecordPhase;
   playerId: string;
   rosterId: number;
   points: number;
 };
 
-export type PlayerRecords = {
+export type PlayerRecordGroup = {
   weekly: PlayerWeeklyPerformance[];
   games: PlayerGameRecord[];
   seasons: PlayerSeasonRecord[];
   careers: PlayerCareerRecord[];
   franchises: FranchisePlayerRecord[];
 };
+
+export type PlayerRecordIdentity = {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
+};
+
+export type PlayerRecords =
+  PlayerRecordGroup & {
+    competitions: {
+      regularSeason: PlayerRecordGroup;
+      mainPlayoffs: PlayerRecordGroup;
+    };
+    players: Record<
+      string,
+      PlayerRecordIdentity
+    >;
+    availableSeasons: string[];
+    completedSeasons: {
+      regularSeason: string[];
+      mainPlayoffs: string[];
+    };
+  };
+
+const REGULAR_SEASON_WEEKS = 14;
+const MATCHUPS_PER_WEEK = 5;
+
+function roundPoints(value: number): number {
+  return Math.round(
+    (value + Number.EPSILON) * 100
+  ) / 100;
+}
+
+function validMatchup(
+  matchup: HistoricalSeason["matchups"][number]
+): boolean {
+  return (
+    matchup.isComplete === true &&
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
+    (matchup.scoreA > 0 ||
+      matchup.scoreB > 0)
+  );
+}
+
+function validPhase(
+  phase: string
+): phase is PlayerRecordPhase {
+  return (
+    phase === "Regular Season" ||
+    phase === "Main Playoffs"
+  );
+}
+
+function competitionPhase(
+  competition: PlayerCompetition
+): PlayerRecordPhase {
+  return competition === "regularSeason"
+    ? "Regular Season"
+    : "Main Playoffs";
+}
+
+function addStarters(
+  performances: PlayerWeeklyPerformance[],
+  matchup: HistoricalSeason["matchups"][number],
+  rosterId: number,
+  starters: string[],
+  starterPoints: number[]
+) {
+  for (let index = 0; index < starters.length; index++) {
+    const playerId = starters[index];
+    const points = starterPoints[index];
+
+    if (
+      !playerId ||
+      playerId === "0" ||
+      !Number.isFinite(points)
+    ) {
+      continue;
+    }
+
+    performances.push({
+      season: matchup.season,
+      week: matchup.week,
+      phase: matchup.phase as PlayerRecordPhase,
+      rosterId,
+      playerId,
+      points: roundPoints(points),
+    });
+  }
+}
 
 function buildWeeklyPerformances(
   historicalData: HistoricalSeason[]
@@ -69,110 +170,51 @@ function buildWeeklyPerformances(
 
   for (const season of historicalData) {
     for (const matchup of season.matchups) {
-      /*
-       * Official player records only use:
-       *
-       * - Regular Season
-       * - Main Playoffs
-       *
-       * Toilet Bowl and ignored games
-       * are deliberately excluded.
-       */
       if (
-        matchup.phase !==
-          "Regular Season" &&
-        matchup.phase !==
-          "Main Playoffs"
+        !validPhase(matchup.phase) ||
+        !validMatchup(matchup)
       ) {
         continue;
       }
 
-      /*
-       * Team A starters
-       */
-      for (
-        let index = 0;
-        index <
-        matchup.startersA.length;
-        index++
-      ) {
-        const playerId =
-          matchup.startersA[index];
+      addStarters(
+        performances,
+        matchup,
+        matchup.rosterA,
+        matchup.startersA,
+        matchup.startersPointsA
+      );
 
-        const points =
-          matchup.startersPointsA[
-            index
-          ] ?? 0;
-
-        performances.push({
-          season:
-            matchup.season,
-          week:
-            matchup.week,
-          phase:
-            matchup.phase,
-          rosterId:
-            matchup.rosterA,
-          playerId,
-          points,
-        });
-      }
-
-      /*
-       * Team B starters
-       */
-      for (
-        let index = 0;
-        index <
-        matchup.startersB.length;
-        index++
-      ) {
-        const playerId =
-          matchup.startersB[index];
-
-        const points =
-          matchup.startersPointsB[
-            index
-          ] ?? 0;
-
-        performances.push({
-          season:
-            matchup.season,
-          week:
-            matchup.week,
-          phase:
-            matchup.phase,
-          rosterId:
-            matchup.rosterB,
-          playerId,
-          points,
-        });
-      }
+      addStarters(
+        performances,
+        matchup,
+        matchup.rosterB,
+        matchup.startersB,
+        matchup.startersPointsB
+      );
     }
   }
 
-  return performances;
+  return performances.sort(
+    (a, b) =>
+      Number(a.season) - Number(b.season) ||
+      a.week - b.week ||
+      a.rosterId - b.rosterId ||
+      a.playerId.localeCompare(b.playerId)
+  );
 }
 
 function buildGameRecords(
   weekly: PlayerWeeklyPerformance[]
 ): PlayerGameRecord[] {
-  return weekly.map(
-    (performance) => ({
-      season:
-        performance.season,
-      week:
-        performance.week,
-      phase:
-        performance.phase,
-      playerId:
-        performance.playerId,
-      rosterId:
-        performance.rosterId,
-      points:
-        performance.points,
-    })
-  );
+  return weekly.map(performance => ({
+    season: performance.season,
+    week: performance.week,
+    phase: performance.phase,
+    playerId: performance.playerId,
+    rosterId: performance.rosterId,
+    points: performance.points,
+  }));
 }
 
 function buildSeasonRecords(
@@ -184,42 +226,33 @@ function buildSeasonRecords(
   >();
 
   for (const performance of weekly) {
-    const key =
-      `${performance.season}-${performance.playerId}`;
+    const key = [
+      performance.season,
+      performance.playerId,
+    ].join("|");
 
-    const existing =
-      records.get(key);
+    let record = records.get(key);
 
-    if (!existing) {
-      records.set(key, {
-        season:
-          performance.season,
-        playerId:
-          performance.playerId,
-        points:
-          performance.points,
-        starts: 1,
-        weeks: [
-          performance,
-        ],
-      });
+    if (!record) {
+      record = {
+        season: performance.season,
+        playerId: performance.playerId,
+        points: 0,
+        starts: 0,
+        weeks: [],
+      };
 
-      continue;
+      records.set(key, record);
     }
 
-    existing.points +=
-      performance.points;
-
-    existing.starts += 1;
-
-    existing.weeks.push(
-      performance
+    record.points = roundPoints(
+      record.points + performance.points
     );
+    record.starts++;
+    record.weeks.push(performance);
   }
 
-  return Array.from(
-    records.values()
-  );
+  return Array.from(records.values());
 }
 
 function buildCareerRecords(
@@ -231,55 +264,43 @@ function buildCareerRecords(
   >();
 
   for (const performance of weekly) {
-    const existing =
-      records.get(
-        performance.playerId
-      );
-
-    if (!existing) {
-      records.set(
-        performance.playerId,
-        {
-          playerId:
-            performance.playerId,
-          points:
-            performance.points,
-          starts: 1,
-          seasons: [
-            performance.season,
-          ],
-          weeks: [
-            performance,
-          ],
-        }
-      );
-
-      continue;
-    }
-
-    existing.points +=
-      performance.points;
-
-    existing.starts += 1;
-
-    existing.weeks.push(
-      performance
+    let record = records.get(
+      performance.playerId
     );
 
+    if (!record) {
+      record = {
+        playerId: performance.playerId,
+        points: 0,
+        starts: 0,
+        seasons: [],
+        weeks: [],
+      };
+
+      records.set(
+        performance.playerId,
+        record
+      );
+    }
+
+    record.points = roundPoints(
+      record.points + performance.points
+    );
+    record.starts++;
+    record.weeks.push(performance);
+
     if (
-      !existing.seasons.includes(
+      !record.seasons.includes(
         performance.season
       )
     ) {
-      existing.seasons.push(
+      record.seasons.push(
         performance.season
       );
     }
   }
 
-  return Array.from(
-    records.values()
-  );
+  return Array.from(records.values());
 }
 
 function buildFranchiseRecords(
@@ -291,88 +312,259 @@ function buildFranchiseRecords(
   >();
 
   for (const performance of weekly) {
-    const key =
-      `${performance.rosterId}-${performance.playerId}`;
+    const key = [
+      performance.rosterId,
+      performance.playerId,
+    ].join("|");
 
-    const existing =
-      records.get(key);
+    let record = records.get(key);
 
-    if (!existing) {
-      records.set(key, {
-        rosterId:
-          performance.rosterId,
-        playerId:
-          performance.playerId,
-        points:
-          performance.points,
-        starts: 1,
-        weeks: [
-          performance,
-        ],
-      });
+    if (!record) {
+      record = {
+        rosterId: performance.rosterId,
+        playerId: performance.playerId,
+        points: 0,
+        starts: 0,
+        weeks: [],
+      };
 
-      continue;
+      records.set(key, record);
     }
 
-    existing.points +=
-      performance.points;
-
-    existing.starts += 1;
-
-    existing.weeks.push(
-      performance
+    record.points = roundPoints(
+      record.points + performance.points
     );
+    record.starts++;
+    record.weeks.push(performance);
   }
 
-  return Array.from(
-    records.values()
+  return Array.from(records.values());
+}
+
+function buildRecordGroup(
+  weekly: PlayerWeeklyPerformance[]
+): PlayerRecordGroup {
+  return {
+    weekly,
+    games: buildGameRecords(weekly),
+    seasons: buildSeasonRecords(weekly),
+    careers: buildCareerRecords(weekly),
+    franchises: buildFranchiseRecords(weekly),
+  };
+}
+
+function isRegularSeasonComplete(
+  season: HistoricalSeason
+): boolean {
+  for (
+    let week = 1;
+    week <= REGULAR_SEASON_WEEKS;
+    week++
+  ) {
+    const matchups = season.matchups.filter(
+      matchup =>
+        matchup.week === week &&
+        matchup.phase === "Regular Season" &&
+        validMatchup(matchup)
+    );
+
+    if (
+      matchups.length !== MATCHUPS_PER_WEEK
+    ) {
+      return false;
+    }
+
+    const rosterIds = new Set<number>();
+
+    for (const matchup of matchups) {
+      rosterIds.add(matchup.rosterA);
+      rosterIds.add(matchup.rosterB);
+    }
+
+    if (rosterIds.size !== 10) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function arePlayoffsComplete(
+  season: HistoricalSeason
+): boolean {
+  return season.matchups.some(
+    matchup =>
+      matchup.week === 17 &&
+      matchup.phase === "Main Playoffs" &&
+      validMatchup(matchup)
   );
 }
 
-export async function getPlayerRecords(): Promise<PlayerRecords> {
-  /*
-   * Load both historical fantasy data
-   * and the Sleeper player database.
-   *
-   * The player database is loaded here so
-   * future record calculations can safely
-   * use names, positions and other metadata.
-   */
-  await getPlayers();
+function buildPlayerDirectory(
+  weekly: PlayerWeeklyPerformance[],
+  sleeperPlayers: Record<string, SleeperPlayer>
+): Record<string, PlayerRecordIdentity> {
+  const directory: Record<
+    string,
+    PlayerRecordIdentity
+  > = {};
 
-  const historicalData =
-    await getHistoricalData();
+  const ids = new Set(
+    weekly.map(record => record.playerId)
+  );
 
-  const weekly =
-    buildWeeklyPerformances(
-      historicalData
-    );
+  for (const playerId of ids) {
+    const player =
+      sleeperPlayers[playerId] ?? null;
 
-  const games =
-    buildGameRecords(
-      weekly
-    );
+    directory[playerId] = {
+      playerId,
+      name: player
+        ? getPlayerName(player)
+        : `Player ${playerId}`,
+      position: getPlayerPosition(player)
+        .toUpperCase(),
+      team: player?.team ?? null,
+    };
+  }
 
-  const seasons =
-    buildSeasonRecords(
-      weekly
-    );
+  return directory;
+}
 
-  const careers =
-    buildCareerRecords(
-      weekly
-    );
+export function filterPlayerRecordsByPositions(
+  records: PlayerRecordGroup,
+  selectedPositions: string[],
+  directory: Record<
+    string,
+    PlayerRecordIdentity
+  >
+): PlayerRecordGroup {
+  const allowed = new Set(
+    selectedPositions.map(position =>
+      position.toUpperCase()
+    )
+  );
 
-  const franchises =
-    buildFranchiseRecords(
-      weekly
-    );
+  const weekly = records.weekly.filter(
+    performance => {
+      const position =
+        directory[performance.playerId]
+          ?.position ?? "UNKNOWN";
+
+      return allowed.has(position);
+    }
+  );
+
+  return buildRecordGroup(weekly);
+}
+
+export function filterPlayerRecordsBySeason(
+  records: PlayerRecordGroup,
+  season: string
+): PlayerRecordGroup {
+  if (season === "all") {
+    return records;
+  }
+
+  return buildRecordGroup(
+    records.weekly.filter(
+      performance =>
+        performance.season === season
+    )
+  );
+}
+
+export function getCompletedPlayerSeasons(
+  records: PlayerRecordGroup,
+  completedSeasons: string[]
+): PlayerSeasonRecord[] {
+  const completed = new Set(
+    completedSeasons
+  );
+
+  return records.seasons.filter(
+    record => completed.has(record.season)
+  );
+}
+
+export async function getPlayerRecords():
+  Promise<PlayerRecords> {
+  const [historicalData, sleeperPlayers] =
+    await Promise.all([
+      getHistoricalData(),
+      getPlayers(),
+    ]);
+
+  const weekly = buildWeeklyPerformances(
+    historicalData
+  );
+
+  const regularWeekly = weekly.filter(
+    performance =>
+      performance.phase ===
+      competitionPhase("regularSeason")
+  );
+
+  const playoffWeekly = weekly.filter(
+    performance =>
+      performance.phase ===
+      competitionPhase("mainPlayoffs")
+  );
+
+  const combined = buildRecordGroup(weekly);
+
+  const regularSeason = buildRecordGroup(
+    regularWeekly
+  );
+
+  const mainPlayoffs = buildRecordGroup(
+    playoffWeekly
+  );
+
+  const availableSeasons = Array.from(
+    new Set(
+      historicalData.map(
+        season => season.league.season
+      )
+    )
+  ).sort(
+    (a, b) => Number(b) - Number(a)
+  );
+
+  const completedRegularSeasons =
+    historicalData
+      .filter(isRegularSeasonComplete)
+      .map(
+        season => season.league.season
+      );
+
+  const completedPlayoffSeasons =
+    historicalData
+      .filter(arePlayoffsComplete)
+      .map(
+        season => season.league.season
+      );
 
   return {
-    weekly,
-    games,
-    seasons,
-    careers,
-    franchises,
+    ...combined,
+
+    competitions: {
+      regularSeason,
+      mainPlayoffs,
+    },
+
+    players: buildPlayerDirectory(
+      weekly,
+      sleeperPlayers
+    ),
+
+    availableSeasons,
+
+    completedSeasons: {
+      regularSeason:
+        completedRegularSeasons,
+      mainPlayoffs:
+        completedPlayoffSeasons,
+    },
   };
 }
