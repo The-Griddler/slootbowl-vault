@@ -39,6 +39,7 @@ function roundTo(value: number, places: number) {
 
 function validGame(game: HistoricalMatchup) {
   return (
+    game.isComplete === true &&
     (game.phase === "Regular Season" ||
       game.phase === "Main Playoffs") &&
     Number.isFinite(game.scoreA) &&
@@ -62,9 +63,7 @@ function winRate(record: TeamRecord) {
 }
 
 function gamesPlayed(record: TeamRecord) {
-  return (
-    record.wins + record.losses + record.ties
-  );
+  return record.wins + record.losses + record.ties;
 }
 
 function getRecord(
@@ -92,13 +91,10 @@ function getImportancePoints(
     return 5;
   }
 
-  // The current SFL playoff structure:
   // Week 15: opening round
   // Week 16: semifinals
   // Week 17: championship
-  //
-  // Main Playoffs is already classified
-  // using Sleeper's winners bracket.
+
   if (game.week === 17) {
     return 25;
   }
@@ -131,12 +127,12 @@ export function calculateGreatestGames(
   );
 
   const records = new Map<string, TeamRecord>();
-
   const results: GreatestGame[] = [];
 
   // Group games by season and week.
-  // Every game in a given week must use
-  // the same pre-week standings.
+  // Every game in a week uses the same
+  // pre-week standings.
+
   const weeklyGroups = new Map<
     string,
     HistoricalMatchup[]
@@ -154,8 +150,8 @@ export function calculateGreatestGames(
 
   for (const weeklyGames of weeklyGroups.values()) {
     // FIRST PASS:
-    // Calculate greatness using records
-    // as they stood before this week.
+    // Score games using pre-week records.
+
     for (const game of weeklyGames) {
       const recordA = getRecord(
         records,
@@ -169,11 +165,8 @@ export function calculateGreatestGames(
         game.rosterB
       );
 
-      const pregameRecordA =
-        recordString(recordA);
-
-      const pregameRecordB =
-        recordString(recordB);
+      const pregameRecordA = recordString(recordA);
+      const pregameRecordB = recordString(recordB);
 
       const scoreA = roundTo(game.scoreA, 2);
       const scoreB = roundTo(game.scoreB, 2);
@@ -196,10 +189,9 @@ export function calculateGreatestGames(
             : null;
 
       // CLOSENESS: 40 POINTS
-      //
       // A tie scores 40.
-      // Increasing margins score less.
       // A margin of 50+ scores zero.
+
       const closenessPoints =
         40 *
         Math.pow(
@@ -208,23 +200,21 @@ export function calculateGreatestGames(
         );
 
       // SCORING QUALITY: 25 POINTS
-      //
-      // Compare total points against the
-      // highest-scoring eligible matchup.
+      // Compare against the highest-scoring
+      // eligible matchup.
+
       const scoringPoints =
         25 * (combinedScore / maxCombined);
 
       // MATCH IMPORTANCE: 25 POINTS
+
       const importancePoints =
         getImportancePoints(game);
 
       // UNDERDOG DRAMA: 10 POINTS
-      //
-      // Compare regular-season win rates
-      // entering the game.
-      //
       // Require at least three previous
-      // regular-season games for each side.
+      // regular-season games for each team.
+
       const enoughHistory =
         gamesPlayed(recordA) >= 3 &&
         gamesPlayed(recordB) >= 3;
@@ -242,8 +232,7 @@ export function calculateGreatestGames(
           ? rateB
           : rateA;
 
-      const recordGap =
-        loserRate - winnerRate;
+      const recordGap = loserRate - winnerRate;
 
       const isUpset =
         winnerId !== null &&
@@ -294,11 +283,10 @@ export function calculateGreatestGames(
     }
 
     // SECOND PASS:
-    // Only after all games have been
-    // scored do we update standings.
-    //
-    // Playoff results do not alter
-    // regular-season win-loss records.
+    // Update standings only after every
+    // matchup in the week is scored.
+    // Playoffs don't alter regular-season records.
+
     for (const game of weeklyGames) {
       if (game.phase !== "Regular Season") {
         continue;
