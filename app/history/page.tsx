@@ -2,6 +2,7 @@
 import { getHistoricalData } from "../../lib/sleeper";
 import { getPlayers, getPlayerName } from "../../lib/players";
 import { getFranchiseName } from "../../lib/franchises";
+import { calculateSeasonPlayerAwards } from "../../lib/playerAwards";
 import HistoryTabs from "./HistoryTabs";
 
 import type {
@@ -12,6 +13,7 @@ import type {
 
 import type {
   GMAwardRecord,
+  PlayerAwardRecord,
 } from "./HistoryTabs";
 
 // ============================================
@@ -257,11 +259,7 @@ function calculateGMAwards(
       continue;
     }
 
-    // ----------------------------------------
     // GM OF THE YEAR
-    // Most regular season points scored
-    // ----------------------------------------
-
     const pointsForRanking = [
       ...seasonStats.teams,
     ].sort(
@@ -283,11 +281,7 @@ function calculateGMAwards(
       );
     }
 
-    // ----------------------------------------
     // LUBED UP, DICKED DOWN
-    // Most regular season points conceded
-    // ----------------------------------------
-
     const pointsAgainstRanking = [
       ...seasonStats.teams,
     ].sort(
@@ -310,11 +304,7 @@ function calculateGMAwards(
       );
     }
 
-    // ----------------------------------------
     // ONE WEEK WONDER
-    // Highest single-week regular season score
-    // ----------------------------------------
-
     const highestWeeklyScore = [
       ...seasonStats.weeklyScores,
     ].sort(
@@ -335,12 +325,7 @@ function calculateGMAwards(
       );
     }
 
-    // ----------------------------------------
     // MOST IMPROVED GM
-    // Largest increase in regular season wins
-    // Excludes GM of the Year
-    // ----------------------------------------
-
     if (season !== "2022") {
       const previousSeason = String(
         Number(season) - 1
@@ -403,7 +388,7 @@ function calculateGMAwards(
     }
   }
 
-  // 2022 inaugural honorary winner
+  // INAUGURAL HONORARY WINNER
   if (statsBySeason.has("2022")) {
     awards.push({
       season: "2022",
@@ -468,8 +453,6 @@ async function calculateShitcuntAwards(
     historicalData.map(async (seasonData) => {
       const season = seasonData.league.season;
 
-      // Only award the title once Week 16
-      // has been completed.
       const week16Complete =
         seasonData.matchups.some(
           (matchup) =>
@@ -485,8 +468,6 @@ async function calculateShitcuntAwards(
         seasonData.league.league_id
       );
 
-      // p === 1 identifies the Toilet Bowl.
-      // p === 3 is a separate placement game.
       const final = bracket.find(
         (match) =>
           match.p === 1 &&
@@ -506,7 +487,6 @@ async function calculateShitcuntAwards(
         return null;
       }
 
-      // Check the bracket result is valid.
       const finalists = [
         final.t1,
         final.t2,
@@ -520,8 +500,6 @@ async function calculateShitcuntAwards(
         return null;
       }
 
-      // The WINNER of the Toilet Bowl
-      // receives Shitcunt of the Year.
       return makeGMAward(
         season,
         "shitcunt",
@@ -535,6 +513,76 @@ async function calculateShitcuntAwards(
     (award): award is GMAwardRecord =>
       award !== null
   );
+}
+
+// ============================================
+// PLAYER AWARDS
+// ============================================
+//
+// All four awards use the same shared
+// calculation as the Season Archives.
+//
+// No duplicate player award logic here.
+// ============================================
+
+function calculateHistoricalPlayerAwards(
+  historicalData: HistoricalSeason[],
+  players: Awaited<ReturnType<typeof getPlayers>>
+): PlayerAwardRecord[] {
+  const records: PlayerAwardRecord[] = [];
+
+  for (const seasonData of historicalData) {
+    const awards = calculateSeasonPlayerAwards(
+      seasonData,
+      historicalData,
+      players
+    );
+
+    const awardEntries = [
+      {
+        awardId: "mvp",
+        result: awards.mvp,
+      },
+      {
+        awardId: "opoy",
+        result: awards.opoy,
+      },
+      {
+        awardId: "roy",
+        result: awards.roy,
+      },
+      {
+        awardId: "sbmvp",
+        result: awards.sbMvp,
+      },
+    ];
+
+    for (const entry of awardEntries) {
+      const result = entry.result;
+
+      if (!result) {
+        continue;
+      }
+
+      const player = players[result.playerId];
+
+      if (!player) {
+        continue;
+      }
+
+      records.push({
+        season: seasonData.league.season,
+        awardId: entry.awardId,
+        playerName: getPlayerName(player),
+        franchiseName: getFranchiseName(
+          result.rosterId
+        ),
+        points: result.points,
+      });
+    }
+  }
+
+  return records;
 }
 
 // ============================================
@@ -566,153 +614,33 @@ export default async function HistoryPage() {
       getFranchiseName(rosterId);
   }
 
-  // ==========================================
-  // SFL MVP
-  // ==========================================
+  // ========================================
+  // ALL FOUR PLAYER AWARDS
+  // ========================================
 
-  const mvpRecords: Array<{
-    season: string;
-    playerName: string;
-    franchiseName: string;
-    points: number;
-  }> = [];
+  const playerAwards =
+    calculateHistoricalPlayerAwards(
+      historicalData,
+      players
+    );
 
-  for (const seasonData of historicalData) {
-    const season = seasonData.league.season;
-
-    const completedRegularMatchups =
-      seasonData.matchups.filter(
-        (matchup) =>
-          matchup.phase === "Regular Season" &&
-          isCompletedMatchup(matchup)
-      );
-
-    if (
-      !isRegularSeasonComplete(
-        seasonData.matchups
-      )
-    ) {
-      continue;
-    }
-
-    const playoffTeams = new Set<number>();
-
-    for (const matchup of seasonData.matchups) {
-      if (
-        matchup.phase === "Main Playoffs" &&
-        isCompletedMatchup(matchup)
-      ) {
-        playoffTeams.add(matchup.rosterA);
-        playoffTeams.add(matchup.rosterB);
-      }
-    }
-
-    const playerTotals = new Map<
-      string,
-      {
-        playerId: string;
-        points: number;
-        rosters: Set<number>;
-      }
-    >();
-
-    for (const matchup of completedRegularMatchups) {
-      const performances = [
-        ...matchup.startersA.map(
-          (playerId, index) => ({
-            playerId,
-            rosterId: matchup.rosterA,
-            points:
-              matchup.startersPointsA[index] ?? 0,
-          })
-        ),
-        ...matchup.startersB.map(
-          (playerId, index) => ({
-            playerId,
-            rosterId: matchup.rosterB,
-            points:
-              matchup.startersPointsB[index] ?? 0,
-          })
-        ),
-      ];
-
-      for (const performance of performances) {
-        if (
-          !performance.playerId ||
-          performance.playerId === "0" ||
-          !Number.isFinite(performance.points)
-        ) {
-          continue;
-        }
-
-        const existing = playerTotals.get(
-          performance.playerId
-        );
-
-        if (existing) {
-          existing.points += performance.points;
-          existing.rosters.add(
-            performance.rosterId
-          );
-        } else {
-          playerTotals.set(
-            performance.playerId,
-            {
-              playerId: performance.playerId,
-              points: performance.points,
-              rosters: new Set([
-                performance.rosterId,
-              ]),
-            }
-          );
-        }
-      }
-    }
-
-    const mvp = Array.from(
-      playerTotals.values()
+  // Backwards compatibility with the
+  // existing HistoryTabs MVP prop.
+  const mvpRecords = playerAwards
+    .filter(
+      (award) =>
+        award.awardId === "mvp"
     )
-      .filter((player) =>
-        Array.from(player.rosters).some(
-          (rosterId) =>
-            playoffTeams.has(rosterId)
-        )
-      )
-      .sort(
-        (a, b) =>
-          b.points - a.points
-      )[0];
+    .map((award) => ({
+      season: award.season,
+      playerName: award.playerName,
+      franchiseName: award.franchiseName,
+      points: award.points,
+    }));
 
-    if (!mvp) {
-      continue;
-    }
-
-    const player = players[mvp.playerId];
-
-    if (!player) {
-      continue;
-    }
-
-    const franchiseRosterId =
-      Array.from(mvp.rosters).find(
-        (rosterId) =>
-          playoffTeams.has(rosterId)
-      ) ??
-      Array.from(mvp.rosters)[0];
-
-    mvpRecords.push({
-      season,
-      playerName: getPlayerName(player),
-      franchiseName: getFranchiseName(
-        franchiseRosterId
-      ),
-      points: mvp.points,
-    });
-  }
-
-  // ==========================================
-  // COMBINE GM AWARDS
-  // ==========================================
+  // ========================================
+  // ALL FIVE GM AWARDS
+  // ========================================
 
   const [
     regularSeasonGMAwards,
@@ -731,9 +659,9 @@ export default async function HistoryPage() {
     ...shitcuntAwards,
   ];
 
-  // ==========================================
-  // RENDER EXISTING HISTORY TABS
-  // ==========================================
+  // ========================================
+  // RENDER HISTORY
+  // ========================================
 
   return (
     <HistoryTabs
@@ -745,6 +673,7 @@ export default async function HistoryPage() {
       mvpRecords={mvpRecords}
       franchiseNames={franchiseNames}
       gmAwards={gmAwards}
+      playerAwards={playerAwards}
     />
   );
 }
