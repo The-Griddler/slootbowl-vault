@@ -917,10 +917,10 @@ export default function HistoryTabs({
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "66px 48px minmax(0, 1fr)",
+                      "66px 68px minmax(0, 1fr)",
                     gap: "12px",
                     alignItems: "center",
-                    minHeight: "72px",
+                    minHeight: "84px",
                   }}
                 >
                   <div>
@@ -943,14 +943,14 @@ export default function HistoryTabs({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      width: "48px",
-                      height: "52px",
+                      width: "68px",
+                      height: "72px",
                     }}
                   >
                     {result && (
                       <FranchiseLogo
                         rosterId={result.champion}
-                        size={44}
+                        size={64}
                       />
                     )}
                   </div>
