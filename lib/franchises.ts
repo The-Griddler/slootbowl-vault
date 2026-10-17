@@ -17,7 +17,7 @@ export const FRANCHISES: Franchise[] = [
     primaryColour: "#43080B",
     secondaryColour: "#B84B1B",
     supportingColour: "#D5A052",
-    logo: "/logos/mt-isa-ballbags.png",
+    logo: "/logos/mt-isa-ballbags.PNG",
   },
   {
     rosterId: 2,
@@ -26,7 +26,7 @@ export const FRANCHISES: Franchise[] = [
     primaryColour: "#BD1425",
     secondaryColour: "#F8F7EE",
     supportingColour: "#081D3D",
-    logo: "/logos/cambridge-cum-sluts.png",
+    logo: "/logos/cambridge-cum-sluts.PNG",
   },
   {
     rosterId: 3,
@@ -34,7 +34,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Jake Greenwood",
     primaryColour: "#8051A5",
     secondaryColour: "#241440",
-    logo: "/logos/grimsby-chode-chokers.png",
+    logo: "/logos/grimsby-chode-chokers.PNG",
   },
   {
     rosterId: 4,
@@ -42,7 +42,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "George Pendleton",
     primaryColour: "#F4BB49",
     secondaryColour: "#B66A2B",
-    logo: "/logos/isle-of-wight-happy-endings.png",
+    logo: "/logos/isle-of-wight-happy-endings.PNG",
   },
   {
     rosterId: 5,
@@ -50,7 +50,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Ryan Whiting",
     primaryColour: "#06234B",
     secondaryColour: "#F47512",
-    logo: "/logos/grays-town-fingerblasters.png",
+    logo: "/logos/grays-town-fingerblasters.PNG",
   },
   {
     rosterId: 6,
@@ -58,7 +58,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Garrett Etheridge",
     primaryColour: "#570B20",
     secondaryColour: "#F4F0E7",
-    logo: "/logos/lincoln-nonces.png",
+    logo: "/logos/lincoln-nonces.PNG",
   },
   {
     rosterId: 7,
@@ -66,7 +66,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Ollie Payne",
     primaryColour: "#F87F0A",
     secondaryColour: "#455318",
-    logo: "/logos/kalamata-dirty-vegans.png",
+    logo: "/logos/kalamata-dirty-vegans.PNG",
   },
   {
     rosterId: 8,
@@ -75,7 +75,7 @@ export const FRANCHISES: Franchise[] = [
     primaryColour: "#2789D3",
     secondaryColour: "#743715",
     supportingColour: "#F28C16",
-    logo: "/logos/weybiza-babs.png",
+    logo: "/logos/weybiza-babs.PNG",
   },
   {
     rosterId: 9,
@@ -83,7 +83,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Tarl Brayer",
     primaryColour: "#97521F",
     secondaryColour: "#103D59",
-    logo: "/logos/east-rutherford-shitlickers.png",
+    logo: "/logos/east-rutherford-shitlickers.PNG",
   },
   {
     rosterId: 10,
@@ -91,7 +91,7 @@ export const FRANCHISES: Franchise[] = [
     manager: "Josh Thomas",
     primaryColour: "#071011",
     secondaryColour: "#B50D1B",
-    logo: "/logos/chad-moist-discharge.png",
+    logo: "/logos/chad-moist-discharge.PNG",
   },
 ];
 
@@ -100,7 +100,7 @@ export function getFranchiseName(
 ): string {
   return (
     FRANCHISES.find(
-      (franchise) =>
+      franchise =>
         franchise.rosterId === rosterId
     )?.name ??
     `Roster ${rosterId}`
@@ -113,9 +113,6 @@ export function getFranchiseName(
  *
  * Historical name changes belong here.
  * The roster ID never changes.
- *
- * Other pages can continue using
- * getFranchiseName() for current names.
  */
 export function getHistoricalFranchiseName(
   rosterId: number,
