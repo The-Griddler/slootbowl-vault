@@ -23,6 +23,14 @@ type MVPRecord = {
   points: number;
 };
 
+export type PlayerAwardRecord = {
+  season: string;
+  awardId: string;
+  playerName: string;
+  franchiseName: string;
+  points: number;
+};
+
 export type GMAwardRecord = {
   season: string;
   awardId: string;
@@ -38,6 +46,7 @@ type HistoryTabsProps = {
   mvpRecords: MVPRecord[];
   franchiseNames: Record<number, string>;
   gmAwards?: GMAwardRecord[];
+  playerAwards?: PlayerAwardRecord[];
 };
 
 const GM_AWARDS = [
@@ -117,6 +126,7 @@ export default function HistoryTabs({
   mvpRecords,
   franchiseNames,
   gmAwards = [],
+  playerAwards = [],
 }: HistoryTabsProps) {
   const [activeTab, setActiveTab] = useState<
     "champions" | "gm" | "players"
@@ -126,7 +136,8 @@ export default function HistoryTabs({
     useState<string | null>(null);
 
   const getFranchise = (rosterId: number) =>
-    franchiseNames[rosterId] ?? `Franchise ${rosterId}`;
+    franchiseNames[rosterId] ??
+    `Franchise ${rosterId}`;
 
   const toggleAward = (awardId: string) => {
     setExpandedAward((previous) =>
@@ -200,14 +211,6 @@ export default function HistoryTabs({
             }}
           >
             {seasons.map((season, index) => {
-              const mvp =
-                type === "players" &&
-                award.id === "mvp"
-                  ? mvpRecords.find(
-                      (item) => item.season === season
-                    )
-                  : undefined;
-
               const gmWinner =
                 type === "gm"
                   ? gmAwards.find(
@@ -217,17 +220,43 @@ export default function HistoryTabs({
                     )
                   : undefined;
 
+              const playerWinner =
+                type === "players"
+                  ? playerAwards.find(
+                      (item) =>
+                        item.season === season &&
+                        item.awardId === award.id
+                    )
+                  : undefined;
+
+              // Keep the existing MVP working
+              // until page.tsx supplies all
+              // four shared player awards.
+              const legacyMvp =
+                type === "players" &&
+                award.id === "mvp" &&
+                !playerWinner
+                  ? mvpRecords.find(
+                      (item) =>
+                        item.season === season
+                    )
+                  : undefined;
+
               const honoraryImproved =
                 type === "gm" &&
                 award.id === "improved" &&
                 season === "2022";
+
+              const displayedPlayer =
+                playerWinner ?? legacyMvp;
 
               return (
                 <div
                   key={season}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "48px 1fr",
+                    gridTemplateColumns:
+                      "48px 1fr",
                     gap: "12px",
                     padding: "13px 0",
                     borderBottom:
@@ -309,7 +338,7 @@ export default function HistoryTabs({
                         Inaugural honorary winner
                       </div>
                     </div>
-                  ) : mvp ? (
+                  ) : displayedPlayer ? (
                     <div>
                       <strong
                         style={{
@@ -317,7 +346,7 @@ export default function HistoryTabs({
                           fontSize: "14px",
                         }}
                       >
-                        {mvp.playerName}
+                        {displayedPlayer.playerName}
                       </strong>
 
                       <div
@@ -327,7 +356,7 @@ export default function HistoryTabs({
                           color: "#687384",
                         }}
                       >
-                        {mvp.franchiseName}
+                        {displayedPlayer.franchiseName}
                       </div>
 
                       <div
@@ -337,7 +366,7 @@ export default function HistoryTabs({
                           color: "#9da7b3",
                         }}
                       >
-                        {mvp.points.toFixed(1)} pts
+                        {displayedPlayer.points.toFixed(1)} pts
                       </div>
                     </div>
                   ) : (
@@ -391,7 +420,8 @@ export default function HistoryTabs({
         aria-label="History categories"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns:
+            "repeat(3, minmax(0, 1fr))",
           gap: "6px",
           padding: "5px",
           background: "#151b23",
@@ -401,16 +431,28 @@ export default function HistoryTabs({
         }}
       >
         {[
-          { id: "champions", label: "Champions" },
-          { id: "gm", label: "GM Awards" },
-          { id: "players", label: "Player Awards" },
+          {
+            id: "champions",
+            label: "Champions",
+          },
+          {
+            id: "gm",
+            label: "GM Awards",
+          },
+          {
+            id: "players",
+            label: "Player Awards",
+          },
         ].map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => {
               setActiveTab(
-                tab.id as "champions" | "gm" | "players"
+                tab.id as
+                  | "champions"
+                  | "gm"
+                  | "players"
               );
               setExpandedAward(null);
             }}
@@ -439,7 +481,9 @@ export default function HistoryTabs({
       {activeTab === "champions" && (
         <section>
           <div style={{ marginBottom: "12px" }}>
-            <p style={labelStyle()}>SLOOTBOWL</p>
+            <p style={labelStyle()}>
+              SLOOTBOWL
+            </p>
 
             <h2
               style={{
@@ -454,7 +498,8 @@ export default function HistoryTabs({
           <article style={cardStyle()}>
             {seasons.map((season, index) => {
               const result = champions.find(
-                (item) => item.season === season
+                (item) =>
+                  item.season === season
               );
 
               return (
@@ -462,7 +507,8 @@ export default function HistoryTabs({
                   key={season}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "54px 1fr",
+                    gridTemplateColumns:
+                      "54px 1fr",
                     gap: "14px",
                     padding: "13px 0",
                     borderBottom:
@@ -475,9 +521,15 @@ export default function HistoryTabs({
 
                   {result ? (
                     <div>
-                      <div style={{ fontWeight: 700 }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                        }}
+                      >
                         🏆{" "}
-                        {getFranchise(result.champion)}
+                        {getFranchise(
+                          result.champion
+                        )}
                       </div>
 
                       <div
@@ -488,7 +540,9 @@ export default function HistoryTabs({
                         }}
                       >
                         vs{" "}
-                        {getFranchise(result.runnerUp)}
+                        {getFranchise(
+                          result.runnerUp
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -529,7 +583,8 @@ export default function HistoryTabs({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns:
+                "1fr 1fr",
               gap: "10px",
             }}
           >
@@ -564,51 +619,58 @@ export default function HistoryTabs({
                   {item.trophy}
                 </h3>
 
-                {seasons.map((season, index) => {
-                  const result =
-                    conferenceChampions.find(
-                      (entry) =>
-                        entry.season === season
+                {seasons.map(
+                  (season, index) => {
+                    const result =
+                      conferenceChampions.find(
+                        (entry) =>
+                          entry.season ===
+                          season
+                      );
+
+                    return (
+                      <div
+                        key={season}
+                        style={{
+                          display: "flex",
+                          justifyContent:
+                            "space-between",
+                          gap: "8px",
+                          padding: "10px 0",
+                          borderBottom:
+                            index ===
+                            seasons.length - 1
+                              ? "none"
+                              : "1px solid #27303b",
+                          fontSize: "13px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#687384",
+                          }}
+                        >
+                          {season}
+                        </span>
+
+                        <strong
+                          style={{
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          {result
+                            ? getFranchise(
+                                result[
+                                  item.key
+                                ]
+                              )
+                            : "TBD"}
+                        </strong>
+                      </div>
                     );
-
-                  return (
-                    <div
-                      key={season}
-                      style={{
-                        display: "flex",
-                        justifyContent:
-                          "space-between",
-                        gap: "8px",
-                        padding: "10px 0",
-                        borderBottom:
-                          index === seasons.length - 1
-                            ? "none"
-                            : "1px solid #27303b",
-                        fontSize: "13px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "#687384",
-                        }}
-                      >
-                        {season}
-                      </span>
-
-                      <strong
-                        style={{
-                          textAlign: "right",
-                        }}
-                      >
-                        {result
-                          ? getFranchise(
-                              result[item.key]
-                            )
-                          : "TBD"}
-                      </strong>
-                    </div>
-                  );
-                })}
+                  }
+                )}
               </article>
             ))}
           </div>
@@ -617,7 +679,11 @@ export default function HistoryTabs({
 
       {activeTab === "gm" && (
         <section>
-          <div style={{ marginBottom: "16px" }}>
+          <div
+            style={{
+              marginBottom: "16px",
+            }}
+          >
             <p style={labelStyle()}>
               GENERAL MANAGERS
             </p>
@@ -651,7 +717,11 @@ export default function HistoryTabs({
 
       {activeTab === "players" && (
         <section>
-          <div style={{ marginBottom: "16px" }}>
+          <div
+            style={{
+              marginBottom: "16px",
+            }}
+          >
             <p style={labelStyle()}>
               INDIVIDUAL HONOURS
             </p>
@@ -683,9 +753,19 @@ export default function HistoryTabs({
         </section>
       )}
 
-      <section style={{ marginTop: "34px" }}>
-        <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>SEASONS</p>
+      <section
+        style={{
+          marginTop: "34px",
+        }}
+      >
+        <div
+          style={{
+            marginBottom: "12px",
+          }}
+        >
+          <p style={labelStyle()}>
+            SEASONS
+          </p>
 
           <h2
             style={{
@@ -699,7 +779,8 @@ export default function HistoryTabs({
 
         {seasons.map((season) => {
           const result = champions.find(
-            (item) => item.season === season
+            (item) =>
+              item.season === season
           );
 
           return (
