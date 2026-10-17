@@ -1,6 +1,7 @@
 
 import { getHistoricalData } from "../../lib/sleeper";
 import { getAllSlootPlayerDirectory } from "../../lib/players";
+import { FRANCHISES } from "../../lib/franchises";
 import {
   calculateAllSloot,
   type AllSlootSelection,
@@ -22,21 +23,20 @@ const TEAM_OPTIONS = [
   { id: "rookie", label: "Rookie Team" },
 ];
 
-const FRANCHISE_NAMES: Record<number, string> = {
-  1: "Mt Isa Ballbags",
-  2: "Cambridge Cum Sluts",
-  3: "Grimsby Chode Chokers",
-  4: "Isle of Wight Happy Endings",
-  5: "Grays Town Fingerblasters",
-  6: "Lincoln Nonces",
-  7: "Kalamata Dirty Vegans",
-  8: "Weybiza BAB's",
-  9: "East Rutherford Shitlickers",
-  10: "Chad Moist Discharge",
-};
+const FRANCHISE_MAP = new Map(
+  FRANCHISES.map((team) => [team.rosterId, team])
+);
 
 const BORDER = "1px solid #263244";
 const MUTED = "#9da7b3";
+
+function franchiseName(id: number) {
+  return FRANCHISE_MAP.get(id)?.name ?? `Roster ${id}`;
+}
+
+function franchiseLogo(id: number) {
+  return FRANCHISE_MAP.get(id)?.logo ?? null;
+}
 
 function formatPoints(points: number): string {
   return points.toFixed(2);
@@ -171,13 +171,17 @@ function TeamTable({
                   paddingTop: "12px",
                   borderTop: BORDER,
                   display: "grid",
-                  gap: "8px",
+                  gap: "10px",
                 }}
               >
                 {player.franchises.map((franchise) => {
                   const isPrimary =
                     franchise.rosterId ===
                     player.primaryRosterId;
+
+                  const logo = franchiseLogo(
+                    franchise.rosterId
+                  );
 
                   return (
                     <div
@@ -190,32 +194,82 @@ function TeamTable({
                         fontSize: "12px",
                       }}
                     >
-                      <div>
-                        <span
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "9px",
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                      >
+                        <div
                           style={{
-                            fontWeight: isPrimary
-                              ? "700"
-                              : "400",
+                            width: "30px",
+                            height: "30px",
+                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
-                          {FRANCHISE_NAMES[
-                            franchise.rosterId
-                          ] ??
-                            `Roster ${franchise.rosterId}`}
-                        </span>
-
-                        {isPrimary &&
-                          player.franchises.length > 1 && (
+                          {logo ? (
+                            <img
+                              src={logo}
+                              alt=""
+                              width={30}
+                              height={30}
+                              style={{
+                                width: "30px",
+                                height: "30px",
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
                             <span
                               style={{
-                                color: MUTED,
-                                marginLeft: "6px",
-                                fontSize: "10px",
+                                fontSize: "18px",
+                                opacity: 0.5,
                               }}
                             >
-                              PRIMARY
+                              🏈
                             </span>
                           )}
+                        </div>
+
+                        <div
+                          style={{
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontWeight: isPrimary
+                                ? "700"
+                                : "400",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {franchiseName(
+                              franchise.rosterId
+                            )}
+                          </div>
+
+                          {isPrimary &&
+                            player.franchises.length > 1 && (
+                              <div
+                                style={{
+                                  color: MUTED,
+                                  marginTop: "3px",
+                                  fontSize: "10px",
+                                  fontWeight: "700",
+                                  letterSpacing: "0.5px",
+                                }}
+                              >
+                                PRIMARY
+                              </div>
+                            )}
+                        </div>
                       </div>
 
                       <div
@@ -224,22 +278,23 @@ function TeamTable({
                           flexShrink: 0,
                         }}
                       >
-                        <span
+                        <div
                           style={{
                             fontWeight: "700",
                           }}
                         >
                           {formatPoints(franchise.points)}
-                        </span>
+                        </div>
 
-                        <span
+                        <div
                           style={{
                             color: MUTED,
-                            marginLeft: "6px",
+                            marginTop: "3px",
+                            fontSize: "11px",
                           }}
                         >
-                          ({franchise.gamesStarted} starts)
-                        </span>
+                          {franchise.gamesStarted} starts
+                        </div>
                       </div>
                     </div>
                   );
