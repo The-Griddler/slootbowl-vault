@@ -430,102 +430,62 @@ async function getLosersBracket(
  * Toilet Bowl results are kept separate
  * from official main-playoff records.
  */
+
 async function calculateShitcuntAwards(
   historicalData: HistoricalSeason[]
 ): Promise<GMAwardRecord[]> {
-  const awards = await Promise.all(
+  const results = await Promise.all(
     historicalData.map(async (seasonData) => {
-      const season =
-        seasonData.league.season;
+      const season = seasonData.league.season;
 
-      const week16ToiletBowl =
-        seasonData.matchups.filter(
+      // Do not award an unfinished season's
+      // Toilet Bowl before Week 16 is complete.
+      const week16Complete =
+        seasonData.matchups.some(
           (matchup) =>
             matchup.week === 16 &&
-            matchup.phase === "Toilet Bowl" &&
-            isCompletedMatchup(matchup)
+            matchup.isComplete === true
         );
 
-      // No completed Week 16 consolation
-      // games means no award yet.
-      if (
-        week16ToiletBowl.length === 0
-      ) {
+      if (!week16Complete) {
         return null;
       }
 
-      const bracket =
-        await getLosersBracket(
-          seasonData.league.league_id
-        );
+      const bracket = await getLosersBracket(
+        seasonData.league.league_id
+      );
 
-      // p: 1 identifies the Toilet Bowl
-      // final; p: 3 is a placement game.
+      // p === 1 is the final of the
+      // consolation bracket.
+      // Other p values are placement games.
       const final = bracket.find(
         (match) =>
-          match.r === 2 &&
           match.p === 1 &&
-          match.t1 !== null &&
-          match.t2 !== null &&
+          match.w !== null &&
           match.l !== null &&
-          match.w !== null
+          match.t1 !== null &&
+          match.t2 !== null
       );
 
       if (
         !final ||
-        final.t1 === null ||
-        final.t2 === null ||
         final.l === null ||
         final.w === null
       ) {
         return null;
       }
 
-      // Verify that the bracket final
-      // corresponds to a completed Week 16
-      // matchup, not another consolation game.
-      const actualMatchup =
-        week16ToiletBowl.find(
-          (matchup) =>
-            (
-              matchup.rosterA === final.t1 &&
-              matchup.rosterB === final.t2
-            ) ||
-            (
-              matchup.rosterA === final.t2 &&
-              matchup.rosterB === final.t1
-            )
-        );
-
-      if (!actualMatchup) {
-        return null;
-      }
-
-      // Don't award a tied or inconsistent
-      // result. Sleeper's bracket loser
-      // must agree with the matchup score.
-      if (
-        actualMatchup.scoreA ===
-        actualMatchup.scoreB
-      ) {
-        return null;
-      }
-
-      const scoreLoser =
-        actualMatchup.scoreA <
-        actualMatchup.scoreB
-          ? actualMatchup.rosterA
-          : actualMatchup.rosterB;
-
-      const scoreWinner =
-        actualMatchup.scoreA >
-        actualMatchup.scoreB
-          ? actualMatchup.rosterA
-          : actualMatchup.rosterB;
+      // Ensure the winner and loser are
+      // the two teams in the final.
+      const finalists = [
+        final.t1,
+        final.t2,
+      ];
 
       if (
-        scoreLoser !== final.l ||
-        scoreWinner !== final.w
+        !finalists.includes(final.w) ||
+        !finalists.includes(final.l) ||
+        final.w === final.l
       ) {
         return null;
       }
@@ -539,7 +499,7 @@ async function calculateShitcuntAwards(
     })
   );
 
-  return awards.filter(
+  return results.filter(
     (award): award is GMAwardRecord =>
       award !== null
   );
