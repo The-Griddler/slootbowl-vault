@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type {
   AllTimeRecords,
@@ -21,7 +21,6 @@ import type {
 
 import type {
   PlayerRecords,
-  PlayerGameRecord,
   PlayerWeeklyPerformance,
   PlayerRecordIdentity,
 } from "../../lib/playerRecords";
@@ -434,31 +433,28 @@ function franchiseCareerCategories(
     },
   ];
 
-  return definitions.map(def =>
-    category(
+  return definitions.map(def => {
+    const entries = topTen(
+      leaders[def.key],
+      def.metric,
+      "high",
+      (a, b) => a.rosterId - b.rosterId
+    );
+
+    return category(
       def.key,
       def.title,
       def.description,
-      topTen(
-        leaders[def.key],
-        def.metric,
-        "high",
-        (a, b) => a.rosterId - b.rosterId
-      ).length
-        ? topTen(
-            leaders[def.key],
-            def.metric,
-            "high",
-            (a, b) => a.rosterId - b.rosterId
-          )
+      entries.length
+        ? entries
         : records[def.key]
         ? [records[def.key] as AllTimeFranchiseRecord]
         : [],
       def.metric,
       def.format,
       def.suffix
-    )
-  );
+    );
+  });
 }
 
 function achievementCategories(
@@ -795,17 +791,6 @@ function playerCategories(
         r => r.points
       ),
       build(
-        "seasonStarts",
-        "Most Starts in a Season",
-        "The most appearances in a starting lineup.",
-        r => r.starts,
-        "high",
-        "starts",
-        0,
-        false,
-        r => String(r.starts)
-      ),
-      build(
         "seasonAverage",
         "Highest Points Per Start",
         "Best season averages with at least five starts.",
@@ -937,8 +922,8 @@ function playerTeams(
     return Array.from(names).join(", ");
   }
 
-  // Career records always use current franchise
-  // names, so Perth and Mt Isa are one franchise.
+  // Career records use current franchise names.
+  // Perth and Mt Isa count as one franchise.
   const names = new Set(
     entry.weeks.map(week =>
       currentName(week.rosterId)
@@ -1374,7 +1359,7 @@ export default function RecordsTabs({
 function FilterHeading({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <p style={filterHeadingStyle}>
