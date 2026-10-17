@@ -190,15 +190,23 @@ function FranchiseLogos({
   }
 
   const large = size === "large";
+
+  // One logo keeps the original dimensions.
+  // Multiple logos form a fixed two-column grid.
   const dimension = large ? 76 : 24;
+  const gap = large ? 10 : 4;
+  const multiple = franchises.length > 1;
 
   return (
     <div
       style={{
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: multiple
+          ? `repeat(2, ${dimension}px)`
+          : `${dimension}px`,
+        gap,
         alignItems: "center",
-        flexWrap: "wrap",
-        gap: large ? 10 : 4,
+        justifyItems: "center",
         flexShrink: 0,
       }}
     >
@@ -210,7 +218,6 @@ function FranchiseLogos({
             width: dimension,
             height: dimension,
             position: "relative",
-            flexShrink: 0,
           }}
         >
           <Image
@@ -1864,7 +1871,7 @@ function RecordCard<
         )}
       </div>
 
-      {/* LARGE RECORD HOLDER LOGO */}
+      {/* LARGE RECORD HOLDER LOGOS */}
 
       <div style={holderLayout}>
         <FranchiseLogos
@@ -1962,6 +1969,8 @@ function RecordCard<
                     <div style={rankText}>
                       {rank}
                     </div>
+
+                    {/* TWO-COLUMN SMALL LOGO GRID */}
 
                     <FranchiseLogos
                       rosterIds={logoIds(entry)}
