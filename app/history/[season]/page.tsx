@@ -5,6 +5,12 @@ import { getHistoricalData } from "../../../lib/sleeper";
 import { getFranchiseName } from "../../../lib/franchises";
 import { getPlayers, getPlayerName } from "../../../lib/players";
 
+import type {
+  HistoricalMatchup,
+  HistoricalSeason,
+  SleeperBracketMatch,
+} from "../../../lib/sleeper";
+
 const SLOOTBOWLS = [
   { season: "2025", champion: 10, runnerUp: 9 },
   { season: "2024", champion: 10, runnerUp: 4 },
@@ -14,6 +20,23 @@ const SLOOTBOWLS = [
 
 const OBFC = [4, 6, 8, 7, 9];
 const GPFC = [1, 2, 10, 3, 5];
+
+const FRANCHISE_IDS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+];
+
+const GM_NAMES: Record<number, string> = {
+  1: "Ed Nelms",
+  2: "Ben Smith",
+  3: "Jake Greenwood",
+  4: "George Pendleton",
+  5: "Ryan Whiting",
+  6: "Garrett Etheridge",
+  7: "Ollie Payne",
+  8: "Jack Brannigan",
+  9: "Tarl Brayer",
+  10: "Josh Thomas",
+};
 
 const FRANCHISE_LOGOS: Record<number, string> = {
   1: "/logos/mt-isa-ballbags.PNG",
@@ -26,6 +49,62 @@ const FRANCHISE_LOGOS: Record<number, string> = {
   8: "/logos/weybiza-babs.PNG",
   9: "/logos/east-rutherford-shitlickers.PNG",
   10: "/logos/chad-moist-discharge.PNG",
+};
+
+const GM_AWARDS = [
+  {
+    id: "gm",
+    icon: "🏆",
+    title: "GM of the Year",
+  },
+  {
+    id: "improved",
+    icon: "📈",
+    title: "Most Improved GM",
+  },
+  {
+    id: "lubed",
+    icon: "💀",
+    title: "The Lubed Up, Dicked Down Award",
+  },
+  {
+    id: "wonder",
+    icon: "⚡",
+    title: "One Week Wonder of the Year",
+  },
+  {
+    id: "shitcunt",
+    icon: "🚽",
+    title: "Shitcunt of the Year",
+  },
+];
+
+type GMAwardResult = {
+  awardId: string;
+  rosterId: number;
+  detail: string;
+};
+
+type TeamSeasonStats = {
+  rosterId: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+};
+
+type WeeklyScore = {
+  rosterId: number;
+  week: number;
+  points: number;
+};
+
+type SeasonStats = {
+  season: string;
+  complete: boolean;
+  teams: TeamSeasonStats[];
+  weeklyScores: WeeklyScore[];
 };
 
 function FranchiseLogo({
@@ -87,6 +166,371 @@ function labelStyle() {
   } as const;
 }
 
+// ============================================
+// COMPLETED MATCHUP VALIDATION
+// ============================================
+
+function isCompletedMatchup(
+  matchup: HistoricalMatchup
+): boolean {
+  return (
+    matchup.isComplete === true &&
+    Number.isFinite(matchup.scoreA) &&
+    Number.isFinite(matchup.scoreB) &&
+    matchup.scoreA >= 0 &&
+    matchup.scoreB >= 0 &&
+    (matchup.scoreA > 0 || matchup.scoreB > 0)
+  );
+}
+
+function isRegularSeasonComplete(
+  matchups: HistoricalMatchup[]
+): boolean {
+  const completed = matchups.filter(
+    (matchup) =>
+      matchup.phase === "Regular Season" &&
+      isCompletedMatchup(matchup)
+  );
+
+  return Array.from(
+    { length: 14 },
+    (_, index) => index + 1
+  ).every((week) => {
+    const weekly = completed.filter(
+      (matchup) => matchup.week === week
+    );
+
+    if (weekly.length !== 5) {
+      return false;
+    }
+
+    const rosters = new Set<number>();
+
+    for (const matchup of weekly) {
+      rosters.add(matchup.rosterA);
+      rosters.add(matchup.rosterB);
+    }
+
+    return rosters.size === 10;
+  });
+}
+
+// ============================================
+// GM AWARD STATISTICS
+// ============================================
+//
+// Matches the existing History page logic.
+// ============================================
+
+function buildSeasonStats(
+  seasonData: HistoricalSeason
+): SeasonStats {
+  const completedRegularMatchups =
+    seasonData.matchups.filter(
+      (matchup) =>
+        matchup.phase === "Regular Season" &&
+        isCompletedMatchup(matchup)
+    );
+
+  const teamMap = new Map<
+    number,
+    TeamSeasonStats
+  >();
+
+  for (const rosterId of FRANCHISE_IDS) {
+    teamMap.set(rosterId, {
+      rosterId,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+    });
+  }
+
+  const weeklyScores: WeeklyScore[] = [];
+
+  for (const matchup of completedRegularMatchups) {
+    const teamA = teamMap.get(matchup.rosterA);
+    const teamB = teamMap.get(matchup.rosterB);
+
+    if (!teamA || !teamB) {
+      continue;
+    }
+
+    teamA.pointsFor += matchup.scoreA;
+    teamA.pointsAgainst += matchup.scoreB;
+
+    teamB.pointsFor += matchup.scoreB;
+    teamB.pointsAgainst += matchup.scoreA;
+
+    weeklyScores.push({
+      rosterId: matchup.rosterA,
+      week: matchup.week,
+      points: matchup.scoreA,
+    });
+
+    weeklyScores.push({
+      rosterId: matchup.rosterB,
+      week: matchup.week,
+      points: matchup.scoreB,
+    });
+
+    if (matchup.scoreA > matchup.scoreB) {
+      teamA.wins++;
+      teamB.losses++;
+    } else if (matchup.scoreB > matchup.scoreA) {
+      teamB.wins++;
+      teamA.losses++;
+    } else {
+      teamA.ties++;
+      teamB.ties++;
+    }
+  }
+
+  return {
+    season: seasonData.league.season,
+    complete: isRegularSeasonComplete(
+      seasonData.matchups
+    ),
+    teams: Array.from(teamMap.values()),
+    weeklyScores,
+  };
+}
+
+function calculateRegularSeasonGMAwards(
+  seasonData: HistoricalSeason,
+  historicalData: HistoricalSeason[]
+): GMAwardResult[] {
+  const seasonStats = buildSeasonStats(
+    seasonData
+  );
+
+  const awards: GMAwardResult[] = [];
+
+  if (!seasonStats.complete) {
+    return awards;
+  }
+
+  const pointsForRanking = [
+    ...seasonStats.teams,
+  ].sort(
+    (a, b) =>
+      b.pointsFor - a.pointsFor ||
+      a.rosterId - b.rosterId
+  );
+
+  const gmOfTheYear = pointsForRanking[0];
+
+  if (gmOfTheYear) {
+    awards.push({
+      awardId: "gm",
+      rosterId: gmOfTheYear.rosterId,
+      detail:
+        `${gmOfTheYear.pointsFor.toFixed(2)} points scored`,
+    });
+  }
+
+  const pointsAgainstRanking = [
+    ...seasonStats.teams,
+  ].sort(
+    (a, b) =>
+      b.pointsAgainst - a.pointsAgainst ||
+      a.rosterId - b.rosterId
+  );
+
+  const mostPointsAgainst =
+    pointsAgainstRanking[0];
+
+  if (mostPointsAgainst) {
+    awards.push({
+      awardId: "lubed",
+      rosterId: mostPointsAgainst.rosterId,
+      detail:
+        `${mostPointsAgainst.pointsAgainst.toFixed(2)} points conceded`,
+    });
+  }
+
+  const highestWeeklyScore = [
+    ...seasonStats.weeklyScores,
+  ].sort(
+    (a, b) =>
+      b.points - a.points ||
+      a.week - b.week ||
+      a.rosterId - b.rosterId
+  )[0];
+
+  if (highestWeeklyScore) {
+    awards.push({
+      awardId: "wonder",
+      rosterId: highestWeeklyScore.rosterId,
+      detail:
+        `${highestWeeklyScore.points.toFixed(2)} points — Week ${highestWeeklyScore.week}`,
+    });
+  }
+
+  if (seasonStats.season === "2022") {
+    awards.push({
+      awardId: "improved",
+      rosterId: 7,
+      detail: "Inaugural honorary winner",
+    });
+  } else {
+    const previousSeason = String(
+      Number(seasonStats.season) - 1
+    );
+
+    const previousSeasonData =
+      historicalData.find(
+        (item) =>
+          item.league.season === previousSeason
+      );
+
+    if (previousSeasonData) {
+      const previousStats = buildSeasonStats(
+        previousSeasonData
+      );
+
+      if (previousStats.complete) {
+        const previousWins = new Map(
+          previousStats.teams.map((team) => [
+            team.rosterId,
+            team.wins,
+          ])
+        );
+
+        const improvements =
+          seasonStats.teams
+            .filter(
+              (team) =>
+                team.rosterId !==
+                gmOfTheYear?.rosterId
+            )
+            .map((team) => ({
+              rosterId: team.rosterId,
+              previousWins:
+                previousWins.get(team.rosterId) ?? 0,
+              currentWins: team.wins,
+              improvement:
+                team.wins -
+                (previousWins.get(team.rosterId) ?? 0),
+            }))
+            .sort(
+              (a, b) =>
+                b.improvement - a.improvement ||
+                b.currentWins - a.currentWins ||
+                a.rosterId - b.rosterId
+            );
+
+        const mostImproved = improvements[0];
+
+        if (mostImproved) {
+          const change = mostImproved.improvement;
+
+          const changeLabel =
+            change > 0
+              ? `+${change}`
+              : String(change);
+
+          awards.push({
+            awardId: "improved",
+            rosterId: mostImproved.rosterId,
+            detail:
+              `${mostImproved.previousWins} → ${mostImproved.currentWins} wins (${changeLabel})`,
+          });
+        }
+      }
+    }
+  }
+
+  return awards;
+}
+
+// ============================================
+// SHITCUNT OF THE YEAR
+// ============================================
+//
+// Uses the WINNER of the p:1 final in
+// Sleeper's losers bracket, Week 16.
+//
+// Same rule as the main History page.
+// ============================================
+
+async function calculateShitcuntAward(
+  seasonData: HistoricalSeason
+): Promise<GMAwardResult | null> {
+  const week16Complete =
+    seasonData.matchups.some(
+      (matchup) =>
+        matchup.week === 16 &&
+        matchup.isComplete === true
+    );
+
+  if (!week16Complete) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://api.sleeper.app/v1/league/${seasonData.league.league_id}/losers_bracket`,
+    {
+      next: {
+        revalidate: 300,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load losers bracket for league ${seasonData.league.league_id}`
+    );
+  }
+
+  const bracket: SleeperBracketMatch[] =
+    await response.json();
+
+  const final = bracket.find(
+    (match) =>
+      match.p === 1 &&
+      match.w !== null &&
+      match.l !== null &&
+      match.t1 !== null &&
+      match.t2 !== null
+  );
+
+  if (
+    !final ||
+    final.w === null ||
+    final.l === null ||
+    final.t1 === null ||
+    final.t2 === null
+  ) {
+    return null;
+  }
+
+  const finalists = [
+    final.t1,
+    final.t2,
+  ];
+
+  if (
+    !finalists.includes(final.w) ||
+    !finalists.includes(final.l) ||
+    final.w === final.l
+  ) {
+    return null;
+  }
+
+  return {
+    awardId: "shitcunt",
+    rosterId: final.w,
+    detail: "Toilet Bowl winner — Week 16",
+  };
+}
+
+// ============================================
+// SEASON ARCHIVE
+// ============================================
+
 export default async function SeasonPage({
   params,
 }: {
@@ -94,10 +538,11 @@ export default async function SeasonPage({
 }) {
   const { season } = await params;
 
-  const [historicalData, players] = await Promise.all([
-    getHistoricalData(),
-    getPlayers(),
-  ]);
+  const [historicalData, players] =
+    await Promise.all([
+      getHistoricalData(),
+      getPlayers(),
+    ]);
 
   const seasonData = historicalData.find(
     (item) => item.league.season === season
@@ -111,49 +556,26 @@ export default async function SeasonPage({
     (item) => item.season === season
   );
 
-  // Only completed NFL weeks count towards
-  // official SFL results and statistics.
   const completedRegularMatchups =
     seasonData.matchups.filter(
       (matchup) =>
         matchup.phase === "Regular Season" &&
-        matchup.isComplete === true &&
-        Number.isFinite(matchup.scoreA) &&
-        Number.isFinite(matchup.scoreB) &&
-        matchup.scoreA >= 0 &&
-        matchup.scoreB >= 0 &&
-        (matchup.scoreA > 0 || matchup.scoreB > 0)
+        isCompletedMatchup(matchup)
     );
 
-  // All 14 weeks must have five valid games
-  // involving all ten franchises.
-  const regularSeasonComplete = Array.from(
-    { length: 14 },
-    (_, index) => index + 1
-  ).every((week) => {
-    const weekly = completedRegularMatchups.filter(
-      (matchup) => matchup.week === week
+  const regularSeasonComplete =
+    isRegularSeasonComplete(
+      seasonData.matchups
     );
-
-    if (weekly.length !== 5) {
-      return false;
-    }
-
-    const rosterIds = new Set<number>();
-
-    for (const matchup of weekly) {
-      rosterIds.add(matchup.rosterA);
-      rosterIds.add(matchup.rosterB);
-    }
-
-    return rosterIds.size === 10;
-  });
 
   const standingsLabel = regularSeasonComplete
     ? "FINAL STANDINGS"
     : "CURRENT STANDINGS";
 
-  // Regular-season standings.
+  // ========================================
+  // REGULAR SEASON STANDINGS
+  // ========================================
+
   const standings = new Map<
     number,
     {
@@ -216,8 +638,10 @@ export default async function SeasonPage({
   const obfcStandings = sortStandings(OBFC);
   const gpfcStandings = sortStandings(GPFC);
 
-  // Only completed main-bracket games
-  // establish official playoff results.
+  // ========================================
+  // MAIN PLAYOFFS ONLY
+  // ========================================
+
   const playoffMatchups = seasonData.matchups
     .filter(
       (matchup) =>
@@ -241,8 +665,10 @@ export default async function SeasonPage({
     playoffTeams.add(matchup.rosterB);
   }
 
-  // Player awards use completed
-  // regular-season starter performances.
+  // ========================================
+  // PLAYER AWARDS
+  // ========================================
+
   const regularSeasonPerformances =
     completedRegularMatchups.flatMap(
       (matchup) => [
@@ -427,8 +853,6 @@ export default async function SeasonPage({
     }
   }
 
-  // Identify the player's franchise
-  // using the same rule as before.
   const getAwardRosterId = (
     result:
       | {
@@ -445,6 +869,28 @@ export default async function SeasonPage({
     "rosterId" in result
       ? result.rosterId
       : Array.from(result.rosters)[0];
+
+  // ========================================
+  // GM AWARDS
+  // ========================================
+
+  const regularSeasonGMAwards =
+    calculateRegularSeasonGMAwards(
+      seasonData,
+      historicalData
+    );
+
+  const shitcuntAward =
+    await calculateShitcuntAward(
+      seasonData
+    );
+
+  const gmAwards: GMAwardResult[] = [
+    ...regularSeasonGMAwards,
+    ...(shitcuntAward
+      ? [shitcuntAward]
+      : []),
+  ];
 
   const playoffWeeks = [15, 16, 17];
 
@@ -650,7 +1096,7 @@ export default async function SeasonPage({
         </section>
       ))}
 
-      {/* INDIVIDUAL AWARDS */}
+      {/* PLAYER AWARDS */}
 
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
@@ -791,7 +1237,128 @@ export default async function SeasonPage({
         </article>
       </section>
 
-      {/* PLAYOFFS */}
+      {/* GM AWARDS */}
+
+      <section style={{ marginTop: "30px" }}>
+        <div style={{ marginBottom: "12px" }}>
+          <p style={labelStyle()}>
+            GENERAL MANAGERS
+          </p>
+
+          <h2
+            style={{
+              margin: "4px 0 0",
+              fontSize: "22px",
+            }}
+          >
+            GM honours
+          </h2>
+        </div>
+
+        <article style={cardStyle()}>
+          {GM_AWARDS.map((award, index) => {
+            const result = gmAwards.find(
+              (item) =>
+                item.awardId === award.id
+            );
+
+            return (
+              <div
+                key={award.id}
+                style={{
+                  padding: "14px 0",
+                  borderBottom:
+                    index === GM_AWARDS.length - 1
+                      ? "none"
+                      : "1px solid #27303b",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    letterSpacing: "1.2px",
+                    color: "#687384",
+                  }}
+                >
+                  {award.icon} {award.title}
+                </div>
+
+                {result ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      marginTop: "10px",
+                    }}
+                  >
+                    <FranchiseLogo
+                      rosterId={result.rosterId}
+                      size={48}
+                    />
+
+                    <div
+                      style={{
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
+                      <strong
+                        style={{
+                          display: "block",
+                          fontSize: "16px",
+                        }}
+                      >
+                        {GM_NAMES[
+                          result.rosterId
+                        ] ??
+                          `GM ${result.rosterId}`}
+                      </strong>
+
+                      <span
+                        style={{
+                          display: "block",
+                          color: "#687384",
+                          fontSize: "13px",
+                          marginTop: "3px",
+                        }}
+                      >
+                        {getFranchiseName(
+                          result.rosterId
+                        )}
+                      </span>
+
+                      <span
+                        style={{
+                          display: "block",
+                          color: "#9da7b3",
+                          fontSize: "12px",
+                          marginTop: "4px",
+                        }}
+                      >
+                        {result.detail}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      marginTop: "8px",
+                      color: "#9da7b3",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Award not available
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </article>
+      </section>
+
+      {/* ROAD TO THE SLOOTBOWL */}
 
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
@@ -838,13 +1405,38 @@ export default async function SeasonPage({
               </h3>
 
               {games.map((matchup, index) => {
+                const completed =
+                  matchup.isComplete === true &&
+                  Number.isFinite(matchup.scoreA) &&
+                  Number.isFinite(matchup.scoreB) &&
+                  (matchup.scoreA > 0 ||
+                    matchup.scoreB > 0);
+
                 const aWon =
-                  matchup.isComplete &&
+                  completed &&
                   matchup.scoreA > matchup.scoreB;
 
                 const bWon =
-                  matchup.isComplete &&
+                  completed &&
                   matchup.scoreB > matchup.scoreA;
+
+                const aLost =
+                  completed &&
+                  matchup.scoreA < matchup.scoreB;
+
+                const bLost =
+                  completed &&
+                  matchup.scoreB < matchup.scoreA;
+
+                // Both teams use identical rules:
+                // winners bright, losers faded.
+                const aColor = aLost
+                  ? "#687384"
+                  : "#f5f7fa";
+
+                const bColor = bLost
+                  ? "#687384"
+                  : "#f5f7fa";
 
                 return (
                   <div
@@ -876,6 +1468,7 @@ export default async function SeasonPage({
                           "space-between",
                         alignItems: "center",
                         gap: "12px",
+                        color: aColor,
                       }}
                     >
                       <div
@@ -894,7 +1487,8 @@ export default async function SeasonPage({
 
                         <strong
                           style={{
-                            fontWeight: aWon ? 700 : 400,
+                            fontWeight:
+                              aWon ? 700 : 400,
                             fontSize: "13px",
                           }}
                         >
@@ -907,6 +1501,7 @@ export default async function SeasonPage({
                       <strong
                         style={{
                           whiteSpace: "nowrap",
+                          color: aColor,
                         }}
                       >
                         {matchup.scoreA.toFixed(1)}
@@ -921,9 +1516,7 @@ export default async function SeasonPage({
                         alignItems: "center",
                         gap: "12px",
                         marginTop: "10px",
-                        color: bWon
-                          ? "#f5f7fa"
-                          : "#687384",
+                        color: bColor,
                       }}
                     >
                       <div
@@ -942,7 +1535,8 @@ export default async function SeasonPage({
 
                         <strong
                           style={{
-                            fontWeight: bWon ? 700 : 400,
+                            fontWeight:
+                              bWon ? 700 : 400,
                             fontSize: "13px",
                           }}
                         >
@@ -955,6 +1549,7 @@ export default async function SeasonPage({
                       <strong
                         style={{
                           whiteSpace: "nowrap",
+                          color: bColor,
                         }}
                       >
                         {matchup.scoreB.toFixed(1)}
