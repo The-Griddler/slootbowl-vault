@@ -21,10 +21,7 @@ import type {
 
 import type {
   PlayerRecords,
-  PlayerRecordGroup,
   PlayerGameRecord,
-  PlayerSeasonRecord,
-  PlayerCareerRecord,
   PlayerWeeklyPerformance,
   PlayerRecordIdentity,
 } from "../../lib/playerRecords";
@@ -38,16 +35,15 @@ type Scope = "franchises" | "players";
 type Period = "games" | "season" | "career";
 type Competition = "regularSeason" | "mainPlayoffs";
 
-type RecordCategory<T> = {
+type Category<T> = {
   key: string;
   title: string;
   description: string;
-  record: T | null;
   leaderboard: T[];
-  metric: (record: T) => number;
-  format: (record: T) => string;
+  metric: (entry: T) => number;
+  format: (entry: T) => string;
   suffix?: string;
-  detail?: (record: T) => string;
+  detail?: (entry: T) => string;
 };
 
 type PlayerEntry = {
@@ -56,7 +52,7 @@ type PlayerEntry = {
   position: string;
   rosterId: number;
   season: string;
-  week?: number;
+  week: number;
   points: number;
   starts: number;
   average: number;
@@ -69,844 +65,887 @@ type PlayerEntry = {
 const POSITIONS = ["QB", "RB", "WR", "TE"];
 const LIMIT = 10;
 
-const points = (value: number) =>
-  value.toFixed(2);
+const pts = (n: number) => n.toFixed(2);
 
-const differential = (value: number) =>
-  value >= 0
-    ? `+${value.toFixed(2)}`
-    : value.toFixed(2);
+const signed = (n: number) =>
+  n >= 0 ? `+${pts(n)}` : pts(n);
 
-const franchise = (id: number) =>
+const currentName = (id: number) =>
   getFranchiseName(id);
 
-const historicalFranchise = (
+const historicalName = (
   id: number,
   season: string | number
 ) => getHistoricalFranchiseName(id, season);
 
-function matchupDetail(r: LeagueRecord) {
+function chronological(
+  aSeason: string,
+  aWeek: number,
+  bSeason: string,
+  bWeek: number
+) {
   return (
-    `${historicalFranchise(r.rosterId, r.season)} ` +
-    `${points(r.score)} vs ` +
-    `${historicalFranchise(
-      r.opponentRosterId,
-      r.season
-    )} ${points(r.opponentScore)}`
+    Number(aSeason) - Number(bSeason) ||
+    aWeek - bWeek
   );
 }
 
-function gameMeta(r: LeagueRecord) {
-  return `${r.season} · Week ${r.week} · ${r.phase}`;
+function rounded(n: number) {
+  return Math.round((n + Number.EPSILON) * 100);
 }
 
-function seasonDetail(r: SeasonRecord) {
-  return (
-    `${r.season} · ${r.wins}W-${r.losses}L` +
-    (r.ties ? `-${r.ties}T` : "")
-  );
+function topTen<T>(
+  entries: T[],
+  metric: (entry: T) => number,
+  direction: "high" | "low",
+  compareTie: (a: T, b: T) => number,
+  positiveOnly = false
+): T[] {
+  return entries
+    .filter(
+      entry =>
+        Number.isFinite(metric(entry)) &&
+        (!positiveOnly || metric(entry) > 0)
+    )
+    .sort((a, b) => {
+      const difference =
+        rounded(metric(a)) -
+        rounded(metric(b));
+
+      if (difference !== 0) {
+        return direction === "high"
+          ? -difference
+          : difference;
+      }
+
+      return compareTie(a, b);
+    })
+    .slice(0, LIMIT);
 }
 
-function careerDetail(r: AllTimeFranchiseRecord) {
-  return (
-    `${r.wins}W-${r.losses}L` +
-    (r.ties ? `-${r.ties}T` : "")
-  );
+function category<T>(
+  key: string,
+  title: string,
+  description: string,
+  leaderboard: T[],
+  metric: (entry: T) => number,
+  format: (entry: T) => string,
+  suffix?: string,
+  detail?: (entry: T) => string
+): Category<T> {
+  return {
+    key,
+    title,
+    description,
+    leaderboard,
+    metric,
+    format,
+    suffix,
+    detail,
+  };
 }
 
 function gameCategories(
   records: RecordSet,
   leaders: RecordLeaderboardSet
-): RecordCategory<LeagueRecord>[] {
-  return [
+): Category<LeagueRecord>[] {
+  const definitions: {
+    key: keyof RecordSet;
+    title: string;
+    description: string;
+    metric: (r: LeagueRecord) => number;
+    direction: "high" | "low";
+  }[] = [
     {
       key: "highestTeamScore",
       title: "Highest Team Score",
-      description:
-        "The greatest single-game team performances.",
-      record: records.highestTeamScore,
-      leaderboard: leaders.highestTeamScore,
+      description: "The greatest single-game team performances.",
       metric: r => r.score,
-      format: r => points(r.score),
-      suffix: "pts",
+      direction: "high",
     },
     {
       key: "lowestTeamScore",
       title: "Lowest Team Score",
-      description:
-        "The most miserable single-game totals.",
-      record: records.lowestTeamScore,
-      leaderboard: leaders.lowestTeamScore,
+      description: "The lowest single-game team totals.",
       metric: r => r.score,
-      format: r => points(r.score),
-      suffix: "pts",
+      direction: "low",
     },
     {
       key: "biggestWinningMargin",
       title: "Biggest Winning Margin",
-      description:
-        "The most comprehensive demolitions.",
-      record: records.biggestWinningMargin,
-      leaderboard: leaders.biggestWinningMargin,
+      description: "The most comprehensive victories.",
       metric: r => r.margin,
-      format: r => points(r.margin),
-      suffix: "pts",
+      direction: "high",
     },
     {
       key: "closestGame",
       title: "Closest Game",
-      description:
-        "Matches decided by the smallest margins.",
-      record: records.closestGame,
-      leaderboard: leaders.closestGame,
+      description: "The narrowest margins in SFL history.",
       metric: r => r.margin,
-      format: r => points(r.margin),
-      suffix: "pts",
+      direction: "low",
     },
     {
       key: "highestCombinedScore",
       title: "Highest Combined Score",
-      description:
-        "The biggest shootouts in SFL history.",
-      record: records.highestCombinedScore,
-      leaderboard: leaders.highestCombinedScore,
-      metric: r =>
-        r.score + r.opponentScore,
-      format: r =>
-        points(r.score + r.opponentScore),
-      suffix: "pts",
+      description: "The biggest scoring shootouts.",
+      metric: r => r.score + r.opponentScore,
+      direction: "high",
     },
     {
       key: "lowestCombinedScore",
       title: "Lowest Combined Score",
-      description:
-        "Two teams united in offensive incompetence.",
-      record: records.lowestCombinedScore,
-      leaderboard: leaders.lowestCombinedScore,
-      metric: r =>
-        r.score + r.opponentScore,
-      format: r =>
-        points(r.score + r.opponentScore),
-      suffix: "pts",
+      description: "The lowest-scoring encounters.",
+      metric: r => r.score + r.opponentScore,
+      direction: "low",
     },
     {
       key: "highestLosingScore",
       title: "Highest Losing Score",
-      description:
-        "Outstanding performances rewarded with defeat.",
-      record: records.highestLosingScore,
-      leaderboard: leaders.highestLosingScore,
+      description: "Great performances rewarded with defeat.",
       metric: r => r.score,
-      format: r => points(r.score),
-      suffix: "pts",
+      direction: "high",
     },
     {
       key: "lowestWinningScore",
       title: "Lowest Winning Score",
-      description:
-        "Proof that sometimes both teams deserve to lose.",
-      record: records.lowestWinningScore,
-      leaderboard: leaders.lowestWinningScore,
+      description: "Victories achieved with the fewest points.",
       metric: r => r.score,
-      format: r => points(r.score),
-      suffix: "pts",
+      direction: "low",
     },
     {
       key: "mostPointsConcededInVictory",
-      title: "Most Points Conceded in a Victory",
-      description:
-        "The highest opponent scores overcome in victory.",
-      record:
-        records.mostPointsConcededInVictory,
-      leaderboard:
-        leaders.mostPointsConcededInVictory,
+      title: "Most Points Conceded in Victory",
+      description: "The highest opposition totals overcome.",
       metric: r => r.opponentScore,
-      format: r => points(r.opponentScore),
-      suffix: "pts",
+      direction: "high",
     },
   ];
+
+  return definitions.map(def => {
+    const entries = topTen(
+      leaders[def.key],
+      def.metric,
+      def.direction,
+      (a, b) =>
+        chronological(
+          a.season,
+          a.week,
+          b.season,
+          b.week
+        ) || a.rosterId - b.rosterId
+    );
+
+    return category(
+      def.key,
+      def.title,
+      def.description,
+      entries.length
+        ? entries
+        : records[def.key]
+        ? [records[def.key] as LeagueRecord]
+        : [],
+      def.metric,
+      r => pts(def.metric(r)),
+      "pts"
+    );
+  });
 }
 
 function seasonCategories(
   records: SeasonRecordSet,
   leaders: SeasonLeaderboardSet,
   competition: Competition
-): RecordCategory<SeasonRecord>[] {
-  const mostPoints: RecordCategory<SeasonRecord> = {
-    key: "mostPointsFor",
-    title: "Most Points Scored",
-    description:
-      "The highest season-long scoring totals.",
-    record: records.mostPointsFor,
-    leaderboard: leaders.mostPointsFor,
-    metric: r => r.pointsFor,
-    format: r => points(r.pointsFor),
-    suffix: "pts",
-  };
-
-  const mostAgainst: RecordCategory<SeasonRecord> = {
-    key: "mostPointsAgainst",
-    title: "Most Points Conceded",
-    description:
-      "The unluckiest defensive records.",
-    record: records.mostPointsAgainst,
-    leaderboard: leaders.mostPointsAgainst,
-    metric: r => r.pointsAgainst,
-    format: r => points(r.pointsAgainst),
-    suffix: "pts",
-  };
-
-  if (competition === "mainPlayoffs") {
-    return [mostPoints, mostAgainst];
-  }
-
-  return [
+): Category<SeasonRecord>[] {
+  const definitions: {
+    key: keyof SeasonRecordSet;
+    title: string;
+    description: string;
+    metric: (r: SeasonRecord) => number;
+    direction: "high" | "low";
+    suffix: string;
+    format?: (r: SeasonRecord) => string;
+  }[] = [
     {
       key: "mostWins",
       title: "Most Wins",
-      description:
-        "The most successful individual seasons.",
-      record: records.mostWins,
-      leaderboard: leaders.mostWins,
+      description: "The most successful regular seasons.",
       metric: r => r.wins,
-      format: r => `${r.wins}`,
+      direction: "high",
       suffix: "wins",
+      format: r => String(r.wins),
     },
     {
       key: "fewestWins",
       title: "Fewest Wins",
-      description:
-        "The bleakest regular-season campaigns.",
-      record: records.fewestWins,
-      leaderboard: leaders.fewestWins,
+      description: "The least successful regular seasons.",
       metric: r => r.wins,
-      format: r => `${r.wins}`,
+      direction: "low",
       suffix: "wins",
+      format: r => String(r.wins),
     },
-    mostPoints,
+    {
+      key: "mostPointsFor",
+      title: "Most Points Scored",
+      description: "The highest season scoring totals.",
+      metric: r => r.pointsFor,
+      direction: "high",
+      suffix: "pts",
+    },
     {
       key: "fewestPointsFor",
       title: "Fewest Points Scored",
-      description:
-        "The lowest season-long scoring totals.",
-      record: records.fewestPointsFor,
-      leaderboard: leaders.fewestPointsFor,
+      description: "The lowest season scoring totals.",
       metric: r => r.pointsFor,
-      format: r => points(r.pointsFor),
+      direction: "low",
       suffix: "pts",
     },
-    mostAgainst,
+    {
+      key: "mostPointsAgainst",
+      title: "Most Points Conceded",
+      description: "The highest points-against totals.",
+      metric: r => r.pointsAgainst,
+      direction: "high",
+      suffix: "pts",
+    },
     {
       key: "fewestPointsAgainst",
       title: "Fewest Points Conceded",
-      description:
-        "The lowest points-against totals.",
-      record: records.fewestPointsAgainst,
-      leaderboard: leaders.fewestPointsAgainst,
+      description: "The lowest points-against totals.",
       metric: r => r.pointsAgainst,
-      format: r => points(r.pointsAgainst),
+      direction: "low",
       suffix: "pts",
     },
     {
       key: "bestPointDifferential",
       title: "Best Point Differential",
-      description:
-        "The most dominant scoring advantages.",
-      record: records.bestPointDifferential,
-      leaderboard: leaders.bestPointDifferential,
+      description: "The greatest scoring advantages.",
       metric: r => r.pointDifferential,
-      format: r =>
-        differential(r.pointDifferential),
+      direction: "high",
       suffix: "pts",
+      format: r => signed(r.pointDifferential),
     },
     {
       key: "worstPointDifferential",
       title: "Worst Point Differential",
-      description:
-        "The largest season-long scoring deficits.",
-      record: records.worstPointDifferential,
-      leaderboard: leaders.worstPointDifferential,
+      description: "The greatest scoring deficits.",
       metric: r => r.pointDifferential,
-      format: r =>
-        differential(r.pointDifferential),
+      direction: "low",
       suffix: "pts",
+      format: r => signed(r.pointDifferential),
     },
     {
       key: "mostGamesOver150",
       title: "Most 150+ Point Games",
-      description:
-        "The most games scoring at least 150 points in a season.",
-      record: records.mostGamesOver150,
-      leaderboard: leaders.mostGamesOver150,
+      description: "The most 150+ point team performances in one season.",
       metric: r => r.gamesOver150,
-      format: r => `${r.gamesOver150}`,
+      direction: "high",
       suffix: "games",
+      format: r => String(r.gamesOver150),
     },
     {
       key: "mostGames100OrFewer",
       title: "Most Games Scoring 100 or Fewer",
-      description:
-        "The most games scoring 100 points or less in a season.",
-      record: records.mostGames100OrFewer,
-      leaderboard:
-        leaders.mostGames100OrFewer,
+      description: "The most games at or below 100 points.",
       metric: r => r.games100OrFewer,
-      format: r => `${r.games100OrFewer}`,
+      direction: "high",
       suffix: "games",
+      format: r => String(r.games100OrFewer),
     },
   ];
+
+  return definitions
+    .filter(
+      def =>
+        competition === "regularSeason" ||
+        def.key === "mostPointsFor" ||
+        def.key === "mostPointsAgainst"
+    )
+    .map(def => {
+      const entries = topTen(
+        leaders[def.key],
+        def.metric,
+        def.direction,
+        (a, b) =>
+          Number(a.season) -
+            Number(b.season) ||
+          a.rosterId - b.rosterId
+      );
+
+      return category(
+        def.key,
+        def.title,
+        def.description,
+        entries.length
+          ? entries
+          : records[def.key]
+          ? [records[def.key] as SeasonRecord]
+          : [],
+        def.metric,
+        def.format ??
+          (r => pts(def.metric(r))),
+        def.suffix
+      );
+    });
 }
 
-function careerCategories(
+function franchiseCareerCategories(
   records: AllTimeRecordSet,
   leaders: AllTimeLeaderboardSet
-): RecordCategory<AllTimeFranchiseRecord>[] {
-  return [
+): Category<AllTimeFranchiseRecord>[] {
+  const definitions: {
+    key: keyof AllTimeRecordSet;
+    title: string;
+    description: string;
+    metric: (r: AllTimeFranchiseRecord) => number;
+    suffix: string;
+    format: (r: AllTimeFranchiseRecord) => string;
+  }[] = [
     {
       key: "mostWins",
       title: "Most Career Wins",
-      description:
-        "The winningest franchises in SFL history.",
-      record: records.mostWins,
-      leaderboard: leaders.mostWins,
+      description: "The winningest franchises in SFL history.",
       metric: r => r.wins,
-      format: r => `${r.wins}`,
       suffix: "wins",
+      format: r => String(r.wins),
     },
     {
       key: "mostPointsFor",
       title: "Most Career Points",
-      description:
-        "The greatest cumulative scoring totals.",
-      record: records.mostPointsFor,
-      leaderboard: leaders.mostPointsFor,
+      description: "The greatest cumulative scoring totals.",
       metric: r => r.pointsFor,
-      format: r => points(r.pointsFor),
       suffix: "pts",
+      format: r => pts(r.pointsFor),
     },
     {
       key: "mostPointsAgainst",
       title: "Most Career Points Conceded",
-      description:
-        "The most punishment absorbed over time.",
-      record: records.mostPointsAgainst,
-      leaderboard: leaders.mostPointsAgainst,
+      description: "The most points conceded across SFL history.",
       metric: r => r.pointsAgainst,
-      format: r => points(r.pointsAgainst),
       suffix: "pts",
+      format: r => pts(r.pointsAgainst),
     },
     {
       key: "bestPointDifferential",
       title: "Best Career Point Differential",
-      description:
-        "The greatest cumulative scoring advantages.",
-      record: records.bestPointDifferential,
-      leaderboard:
-        leaders.bestPointDifferential,
+      description: "The greatest cumulative scoring advantages.",
       metric: r => r.pointDifferential,
-      format: r =>
-        differential(r.pointDifferential),
       suffix: "pts",
+      format: r => signed(r.pointDifferential),
     },
   ];
+
+  return definitions.map(def =>
+    category(
+      def.key,
+      def.title,
+      def.description,
+      topTen(
+        leaders[def.key],
+        def.metric,
+        "high",
+        (a, b) => a.rosterId - b.rosterId
+      ).length
+        ? topTen(
+            leaders[def.key],
+            def.metric,
+            "high",
+            (a, b) => a.rosterId - b.rosterId
+          )
+        : records[def.key]
+        ? [records[def.key] as AllTimeFranchiseRecord]
+        : [],
+      def.metric,
+      def.format,
+      def.suffix
+    )
+  );
 }
 
 function achievementCategories(
   records: AllTimeRecords
-): RecordCategory<FranchiseAchievement>[] {
+): Category<FranchiseAchievement>[] {
   const leaders =
     records.historicalAchievements.leaderboards;
 
-  return [
+  const definitions: {
+    key: keyof typeof leaders;
+    title: string;
+    description: string;
+    metric: (r: FranchiseAchievement) => number;
+    detail: (r: FranchiseAchievement) => string;
+    suffix: string;
+  }[] = [
     {
       key: "championships",
       title: "Slootbowl Championships",
-      description:
-        "The franchises that have lifted the Slootbowl trophy.",
-      record: leaders.championships[0] ?? null,
-      leaderboard: leaders.championships,
+      description: "The franchises that have won the Slootbowl.",
       metric: r => r.championships,
-      format: r => `${r.championships}`,
+      detail: r => r.championshipSeasons.join(" · "),
       suffix: "titles",
-      detail: r =>
-        r.championshipSeasons.join(" · "),
     },
     {
       key: "slootbowlAppearances",
       title: "Slootbowl Appearances",
-      description:
-        "Reaching the championship game, whether victorious or not.",
-      record:
-        leaders.slootbowlAppearances[0] ?? null,
-      leaderboard:
-        leaders.slootbowlAppearances,
+      description: "Appearances in the championship game.",
       metric: r => r.slootbowlAppearances,
-      format: r => `${r.slootbowlAppearances}`,
+      detail: r => r.slootbowlSeasons.join(" · "),
       suffix: "appearances",
-      detail: r =>
-        r.slootbowlSeasons.join(" · "),
     },
     {
       key: "runnerUpFinishes",
       title: "Slootbowl Runner-Up Finishes",
-      description:
-        "Getting all the way to the final, only to lose.",
-      record:
-        leaders.runnerUpFinishes[0] ?? null,
-      leaderboard:
-        leaders.runnerUpFinishes,
+      description: "Finishing second in the Slootbowl.",
       metric: r => r.runnerUpFinishes,
-      format: r => `${r.runnerUpFinishes}`,
+      detail: r => r.runnerUpSeasons.join(" · "),
       suffix: "finishes",
-      detail: r =>
-        r.runnerUpSeasons.join(" · "),
     },
     {
       key: "playoffAppearances",
       title: "Most Playoff Appearances",
-      description:
-        "Seasons competing in the main winners bracket.",
-      record:
-        leaders.playoffAppearances[0] ?? null,
-      leaderboard:
-        leaders.playoffAppearances,
+      description: "Seasons reaching the main winners bracket.",
       metric: r => r.playoffAppearances,
-      format: r => `${r.playoffAppearances}`,
+      detail: r => r.playoffSeasons.join(" · "),
       suffix: "seasons",
-      detail: r =>
-        r.playoffSeasons.join(" · "),
     },
     {
       key: "playoffWins",
       title: "Most Playoff Wins",
-      description:
-        "Main winners-bracket wins only.",
-      record: leaders.playoffWins[0] ?? null,
-      leaderboard: leaders.playoffWins,
+      description: "Victories in the main winners bracket.",
       metric: r => r.playoffWins,
-      format: r => `${r.playoffWins}`,
-      suffix: "wins",
       detail: r =>
         `${r.playoffWins}W · ${r.playoffLosses}L`,
+      suffix: "wins",
     },
     {
       key: "playoffLosses",
       title: "Most Playoff Losses",
-      description:
-        "Defeats in the main winners bracket only.",
-      record: leaders.playoffLosses[0] ?? null,
-      leaderboard: leaders.playoffLosses,
+      description: "Defeats in the main winners bracket.",
       metric: r => r.playoffLosses,
-      format: r => `${r.playoffLosses}`,
-      suffix: "losses",
       detail: r =>
         `${r.playoffWins}W · ${r.playoffLosses}L`,
+      suffix: "losses",
     },
   ];
+
+  return definitions.map(def =>
+    category(
+      def.key,
+      def.title,
+      def.description,
+      topTen(
+        leaders[def.key],
+        def.metric,
+        "high",
+        (a, b) => {
+          const yearsA =
+            def.key === "championships"
+              ? a.championshipSeasons
+              : def.key === "slootbowlAppearances"
+              ? a.slootbowlSeasons
+              : def.key === "runnerUpFinishes"
+              ? a.runnerUpSeasons
+              : a.playoffSeasons;
+
+          const yearsB =
+            def.key === "championships"
+              ? b.championshipSeasons
+              : def.key === "slootbowlAppearances"
+              ? b.slootbowlSeasons
+              : def.key === "runnerUpFinishes"
+              ? b.runnerUpSeasons
+              : b.playoffSeasons;
+
+          return (
+            Number(yearsA[0] ?? 9999) -
+              Number(yearsB[0] ?? 9999) ||
+            a.rosterId - b.rosterId
+          );
+        }
+      ),
+      def.metric,
+      r => String(def.metric(r)),
+      def.suffix,
+      def.detail
+    )
+  );
 }
 
 function streakCategories(
   records: AllTimeRecords,
   competition: Competition
-): RecordCategory<StreakRecord>[] {
-  const leaders =
+): Category<StreakRecord>[] {
+  const streaks =
     records.historicalAchievements.streaks;
-
-  const period = (r: StreakRecord) => {
-    const start =
-      `${r.startSeason} W${r.startWeek}`;
-    const end =
-      `${r.endSeason} W${r.endWeek}`;
-
-    return start === end
-      ? start
-      : `${start} → ${end}`;
-  };
 
   const winning =
     competition === "regularSeason"
-      ? leaders.regularSeasonWinning
-      : leaders.mainPlayoffsWinning;
+      ? streaks.regularSeasonWinning
+      : streaks.mainPlayoffsWinning;
 
   const losing =
     competition === "regularSeason"
-      ? leaders.regularSeasonLosing
-      : leaders.mainPlayoffsLosing;
+      ? streaks.regularSeasonLosing
+      : streaks.mainPlayoffsLosing;
 
   return [
     {
       key: "winningStreak",
       title: "Longest Winning Streak",
-      description:
-        "Consecutive victories within the selected competition.",
-      record: winning[0] ?? null,
-      leaderboard: winning,
-      metric: r => r.length,
-      format: r => `${r.length}`,
+      description: "Consecutive victories in the selected competition.",
+      entries: winning,
       suffix: "wins",
-      detail: period,
     },
     {
       key: "losingStreak",
       title: "Longest Losing Streak",
-      description:
-        "Consecutive defeats within the selected competition.",
-      record: losing[0] ?? null,
-      leaderboard: losing,
-      metric: r => r.length,
-      format: r => `${r.length}`,
+      description: "Consecutive defeats in the selected competition.",
+      entries: losing,
       suffix: "losses",
-      detail: period,
     },
-  ];
-}
-
-function roundMetric(value: number) {
-  return Math.round(
-    (value + Number.EPSILON) * 100
-  );
-}
-
-function rankEntries<T>(
-  entries: T[],
-  metric: (entry: T) => number,
-  direction: "highest" | "lowest"
-): T[] {
-  const sorted = [...entries].sort((a, b) => {
-    const difference =
-      roundMetric(metric(a)) -
-      roundMetric(metric(b));
-
-    return direction === "highest"
-      ? -difference
-      : difference;
-  });
-
-  if (sorted.length <= LIMIT) {
-    return sorted;
-  }
-
-  const cutoff = roundMetric(
-    metric(sorted[LIMIT - 1])
-  );
-
-  return sorted.filter(
-    (entry, index) =>
-      index < LIMIT ||
-      roundMetric(metric(entry)) === cutoff
+  ].map(def =>
+    category(
+      def.key,
+      def.title,
+      def.description,
+      topTen(
+        def.entries,
+        r => r.length,
+        "high",
+        (a, b) =>
+          chronological(
+            a.startSeason,
+            a.startWeek,
+            b.startSeason,
+            b.startWeek
+          ) || a.rosterId - b.rosterId
+      ),
+      r => r.length,
+      r => String(r.length),
+      def.suffix,
+      r =>
+        `${r.startSeason} W${r.startWeek} → ` +
+        `${r.endSeason} W${r.endWeek}`
+    )
   );
 }
 
 function makePlayerEntry(
   playerId: string,
   weeks: PlayerWeeklyPerformance[],
-  directory: Record<
-    string,
-    PlayerRecordIdentity
-  >,
+  directory: Record<string, PlayerRecordIdentity>,
   season = ""
 ): PlayerEntry {
-  const identity = directory[playerId];
+  const sorted = [...weeks].sort(
+    (a, b) =>
+      chronological(
+        a.season,
+        a.week,
+        b.season,
+        b.week
+      ) || a.rosterId - b.rosterId
+  );
 
-  const total = weeks.reduce(
+  const total = sorted.reduce(
     (sum, week) => sum + week.points,
     0
   );
 
-  const starts = weeks.length;
-
-  const latest = weeks[weeks.length - 1];
+  const first = sorted[0];
+  const starts = sorted.length;
 
   return {
     playerId,
     name:
-      identity?.name ?? `Player ${playerId}`,
+      directory[playerId]?.name ??
+      `Player ${playerId}`,
     position:
-      identity?.position ?? "UNKNOWN",
-    rosterId: latest?.rosterId ?? 0,
-    season,
-    week: latest?.week,
+      directory[playerId]?.position ??
+      "UNKNOWN",
+    rosterId: first?.rosterId ?? 0,
+    season: season || first?.season || "",
+    week: first?.week ?? 0,
     points: Math.round(total * 100) / 100,
     starts,
-    average:
-      starts > 0 ? total / starts : 0,
-    over20: weeks.filter(
-      week => week.points >= 20
-    ).length,
-    over30: weeks.filter(
-      week => week.points >= 30
-    ).length,
-    over40: weeks.filter(
-      week => week.points >= 40
-    ).length,
-    weeks,
+    average: starts ? total / starts : 0,
+    over20: sorted.filter(w => w.points >= 20).length,
+    over30: sorted.filter(w => w.points >= 30).length,
+    over40: sorted.filter(w => w.points >= 40).length,
+    weeks: sorted,
   };
 }
 
-function gamePlayerEntries(
-  games: PlayerGameRecord[],
-  directory: Record<
-    string,
-    PlayerRecordIdentity
-  >
+function playerEntries(
+  weekly: PlayerWeeklyPerformance[],
+  period: Period,
+  directory: Record<string, PlayerRecordIdentity>
 ): PlayerEntry[] {
-  return games.map(game =>
-    makePlayerEntry(
-      game.playerId,
-      [{
-        season: game.season,
-        week: game.week,
-        phase: game.phase,
-        rosterId: game.rosterId,
-        playerId: game.playerId,
-        points: game.points,
-      }],
-      directory,
-      game.season
-    )
-  );
-}
+  if (period === "games") {
+    return weekly.map(week =>
+      makePlayerEntry(
+        week.playerId,
+        [week],
+        directory,
+        week.season
+      )
+    );
+  }
 
-function seasonPlayerEntries(
-  seasons: PlayerSeasonRecord[],
-  directory: Record<
+  const grouped = new Map<
     string,
-    PlayerRecordIdentity
-  >
-): PlayerEntry[] {
-  return seasons.map(season =>
-    makePlayerEntry(
-      season.playerId,
-      season.weeks,
-      directory,
-      season.season
-    )
-  );
-}
+    PlayerWeeklyPerformance[]
+  >();
 
-function careerPlayerEntries(
-  careers: PlayerCareerRecord[],
-  directory: Record<
-    string,
-    PlayerRecordIdentity
-  >
-): PlayerEntry[] {
-  return careers.map(career =>
-    makePlayerEntry(
-      career.playerId,
-      career.weeks,
-      directory
-    )
+  for (const week of weekly) {
+    const key =
+      period === "season"
+        ? `${week.season}|${week.playerId}`
+        : week.playerId;
+
+    const existing = grouped.get(key) ?? [];
+    existing.push(week);
+    grouped.set(key, existing);
+  }
+
+  return Array.from(grouped.values()).map(
+    weeks =>
+      makePlayerEntry(
+        weeks[0].playerId,
+        weeks,
+        directory,
+        period === "season"
+          ? weeks[0].season
+          : ""
+      )
   );
 }
 
 function playerCategories(
   entries: PlayerEntry[],
   period: Period
-): RecordCategory<PlayerEntry>[] {
-  function category(
+): Category<PlayerEntry>[] {
+  const tieBreak = (
+    a: PlayerEntry,
+    b: PlayerEntry
+  ) =>
+    chronological(
+      a.season,
+      a.week,
+      b.season,
+      b.week
+    ) ||
+    a.playerId.localeCompare(b.playerId);
+
+  function build(
     key: string,
     title: string,
     description: string,
     metric: (entry: PlayerEntry) => number,
-    direction: "highest" | "lowest",
-    suffix: string,
+    direction: "high" | "low" = "high",
+    suffix = "pts",
+    minimumStarts = 0,
+    positiveOnly = false,
     format?: (entry: PlayerEntry) => string
-  ): RecordCategory<PlayerEntry> {
-    const leaderboard = rankEntries(
-      entries,
-      metric,
-      direction
+  ) {
+    const eligible = entries.filter(
+      entry => entry.starts >= minimumStarts
     );
 
-    return {
+    return category(
       key,
       title,
       description,
-      record: leaderboard[0] ?? null,
-      leaderboard,
+      topTen(
+        eligible,
+        metric,
+        direction,
+        tieBreak,
+        positiveOnly
+      ),
       metric,
-      format:
-        format ??
-        (entry => points(metric(entry))),
-      suffix,
-    };
+      format ??
+        (entry => pts(metric(entry))),
+      suffix
+    );
   }
 
   if (period === "games") {
     return [
-      category(
+      build(
         "highestScore",
         "Highest Single-Game Score",
         "The greatest individual performances in SFL history.",
-        entry => entry.points,
-        "highest",
-        "pts"
+        r => r.points
       ),
-      category(
+      build(
         "lowestScore",
         "Lowest Single-Game Score",
         "The lowest scores recorded by a starting player.",
-        entry => entry.points,
-        "lowest",
-        "pts"
+        r => r.points,
+        "low"
       ),
     ];
   }
 
   if (period === "season") {
     return [
-      category(
-        "mostPoints",
+      build(
+        "seasonPoints",
         "Most Points in a Season",
         "The highest individual season scoring totals.",
-        entry => entry.points,
-        "highest",
-        "pts"
+        r => r.points
       ),
-      category(
-        "mostStarts",
+      build(
+        "seasonStarts",
         "Most Starts in a Season",
-        "The most appearances in an SFL starting lineup.",
-        entry => entry.starts,
-        "highest",
+        "The most appearances in a starting lineup.",
+        r => r.starts,
+        "high",
         "starts",
-        entry => `${entry.starts}`
+        0,
+        false,
+        r => String(r.starts)
       ),
-      category(
-        "highestAverage",
+      build(
+        "seasonAverage",
         "Highest Points Per Start",
-        "The best scoring averages among players with at least five starts.",
-        entry => entry.average,
-        "highest",
-        "pts/start"
+        "Best season averages with at least five starts.",
+        r => r.average,
+        "high",
+        "pts/start",
+        5
       ),
-      category(
-        "most20",
+      build(
+        "season20",
         "Most 20+ Point Games",
-        "The most 20-point performances in a season.",
-        entry => entry.over20,
-        "highest",
+        "The most 20+ point performances in a season.",
+        r => r.over20,
+        "high",
         "games",
-        entry => `${entry.over20}`
+        0,
+        true,
+        r => String(r.over20)
       ),
-      category(
-        "most30",
+      build(
+        "season30",
         "Most 30+ Point Games",
-        "The most 30-point performances in a season.",
-        entry => entry.over30,
-        "highest",
+        "The most 30+ point performances in a season.",
+        r => r.over30,
+        "high",
         "games",
-        entry => `${entry.over30}`
+        0,
+        true,
+        r => String(r.over30)
       ),
-      category(
-        "most40",
+      build(
+        "season40",
         "Most 40+ Point Games",
-        "The most 40-point performances in a season.",
-        entry => entry.over40,
-        "highest",
+        "The most 40+ point performances in a season.",
+        r => r.over40,
+        "high",
         "games",
-        entry => `${entry.over40}`
+        0,
+        true,
+        r => String(r.over40)
       ),
-    ].map(item =>
-      item.key === "highestAverage"
-        ? {
-            ...item,
-            leaderboard: rankEntries(
-              entries.filter(
-                entry => entry.starts >= 5
-              ),
-              entry => entry.average,
-              "highest"
-            ),
-            record:
-              rankEntries(
-                entries.filter(
-                  entry => entry.starts >= 5
-                ),
-                entry => entry.average,
-                "highest"
-              )[0] ?? null,
-          }
-        : item
-    );
+    ];
   }
 
   return [
-    category(
+    build(
       "careerPoints",
       "Most Career Points",
       "The highest cumulative SFL scoring totals.",
-      entry => entry.points,
-      "highest",
-      "pts"
+      r => r.points
     ),
-    category(
+    build(
       "careerStarts",
       "Most Career Starts",
-      "The most appearances in SFL starting lineups.",
-      entry => entry.starts,
-      "highest",
+      "The most SFL starting appearances.",
+      r => r.starts,
+      "high",
       "starts",
-      entry => `${entry.starts}`
+      0,
+      false,
+      r => String(r.starts)
     ),
-    category(
+    build(
       "careerAverage",
       "Highest Career Points Per Start",
-      "The highest career averages among players with at least ten starts.",
-      entry => entry.average,
-      "highest",
-      "pts/start"
+      "The best averages among players with at least ten starts.",
+      r => r.average,
+      "high",
+      "pts/start",
+      10
     ),
-    category(
+    build(
       "career20",
       "Most Career 20+ Point Games",
-      "The most 20-point games across an SFL career.",
-      entry => entry.over20,
-      "highest",
+      "The most career games scoring 20+ points.",
+      r => r.over20,
+      "high",
       "games",
-      entry => `${entry.over20}`
+      0,
+      true,
+      r => String(r.over20)
     ),
-    category(
+    build(
       "career30",
       "Most Career 30+ Point Games",
-      "The most 30-point games across an SFL career.",
-      entry => entry.over30,
-      "highest",
+      "The most career games scoring 30+ points.",
+      r => r.over30,
+      "high",
       "games",
-      entry => `${entry.over30}`
+      0,
+      true,
+      r => String(r.over30)
     ),
-    category(
+    build(
       "career40",
       "Most Career 40+ Point Games",
-      "The most 40-point games across an SFL career.",
-      entry => entry.over40,
-      "highest",
+      "The most career games scoring 40+ points.",
+      r => r.over40,
+      "high",
       "games",
-      entry => `${entry.over40}`
+      0,
+      true,
+      r => String(r.over40)
     ),
-  ].map(item =>
-    item.key === "careerAverage"
-      ? {
-          ...item,
-          leaderboard: rankEntries(
-            entries.filter(
-              entry => entry.starts >= 10
-            ),
-            entry => entry.average,
-            "highest"
-          ),
-          record:
-            rankEntries(
-              entries.filter(
-                entry => entry.starts >= 10
-              ),
-              entry => entry.average,
-              "highest"
-            )[0] ?? null,
-        }
-      : item
+  ];
+}
+
+function playerTeams(
+  entry: PlayerEntry,
+  period: Period
+) {
+  if (period === "games") {
+    return historicalName(
+      entry.rosterId,
+      entry.season
+    );
+  }
+
+  if (period === "season") {
+    const names = new Set(
+      entry.weeks.map(week =>
+        historicalName(
+          week.rosterId,
+          week.season
+        )
+      )
+    );
+
+    return Array.from(names).join(", ");
+  }
+
+  // Career records always use current franchise
+  // names, so Perth and Mt Isa are one franchise.
+  const names = new Set(
+    entry.weeks.map(week =>
+      currentName(week.rosterId)
+    )
   );
+
+  return Array.from(names).join(", ");
 }
 
 export default function RecordsTabs({
@@ -919,11 +958,11 @@ export default function RecordsTabs({
   const [scope, setScope] =
     useState<Scope>("franchises");
 
-  const [period, setPeriod] =
-    useState<Period>("games");
-
   const [competition, setCompetition] =
     useState<Competition>("regularSeason");
+
+  const [period, setPeriod] =
+    useState<Period>("games");
 
   const [selectedSeason, setSelectedSeason] =
     useState("all");
@@ -931,206 +970,114 @@ export default function RecordsTabs({
   const [positions, setPositions] =
     useState<string[]>([...POSITIONS]);
 
-  const [showHonours, setShowHonours] =
-    useState(false);
-
-  const filtered =
+  const filteredFranchise =
     selectedSeason === "all"
       ? records
       : records.bySeason[selectedSeason] ??
         records;
 
-  const seasonComplete =
-    selectedSeason === "all" ||
-    records.completedSeasons[
-      competition
-    ].includes(selectedSeason);
-
-  const achievements =
-    achievementCategories(records);
-
-  const playerGroup: PlayerRecordGroup =
+  const selectedCompetition =
     playerRecords.competitions[competition];
 
-  const allowedPositions = new Set(
-    positions
+  const allowed = new Set(positions);
+
+  const completed = new Set(
+    playerRecords.completedSeasons[competition]
   );
 
   const filteredWeeks =
-    playerGroup.weekly.filter(week => {
+    selectedCompetition.weekly.filter(week => {
+      const position =
+        playerRecords.players[week.playerId]
+          ?.position ?? "UNKNOWN";
+
+      if (!allowed.has(position)) {
+        return false;
+      }
+
+      if (period === "career") {
+        return true;
+      }
+
       if (
         selectedSeason !== "all" &&
-        period !== "career" &&
         week.season !== selectedSeason
       ) {
         return false;
       }
 
-      const identity =
-        playerRecords.players[week.playerId];
-
-      return allowedPositions.has(
-        identity?.position ?? "UNKNOWN"
-      );
-    });
-
-  const gameEntries = gamePlayerEntries(
-    playerGroup.games.filter(game => {
       if (
-        selectedSeason !== "all" &&
-        game.season !== selectedSeason
+        period === "season" &&
+        selectedSeason === "all" &&
+        !completed.has(week.season)
       ) {
         return false;
       }
 
-      return allowedPositions.has(
-        playerRecords.players[game.playerId]
-          ?.position ?? "UNKNOWN"
-      );
-    }),
+      return true;
+    });
+
+  const entries = playerEntries(
+    filteredWeeks,
+    period,
     playerRecords.players
   );
 
-  const seasonMap = new Map<
-    string,
-    PlayerWeeklyPerformance[]
-  >();
-
-  for (const week of filteredWeeks) {
-    const key =
-      `${week.season}|${week.playerId}`;
-
-    const weeks = seasonMap.get(key) ?? [];
-    weeks.push(week);
-    seasonMap.set(key, weeks);
-  }
-
-  const seasonEntries = Array.from(
-    seasonMap.entries()
-  )
-    .filter(([key]) => {
-      const season = key.split("|")[0];
-
-      return (
-        selectedSeason !== "all" ||
-        playerRecords.completedSeasons[
-          competition
-        ].includes(season)
-      );
-    })
-    .map(([key, weeks]) => {
-      const [season, playerId] =
-        key.split("|");
-
-      return makePlayerEntry(
-        playerId,
-        weeks,
-        playerRecords.players,
-        season
-      );
-    });
-
-  const careerMap = new Map<
-    string,
-    PlayerWeeklyPerformance[]
-  >();
-
-  for (const week of playerGroup.weekly) {
-    if (
-      !allowedPositions.has(
-        playerRecords.players[week.playerId]
-          ?.position ?? "UNKNOWN"
-      )
-    ) {
-      continue;
-    }
-
-    const weeks =
-      careerMap.get(week.playerId) ?? [];
-
-    weeks.push(week);
-    careerMap.set(week.playerId, weeks);
-  }
-
-  const careerEntries = Array.from(
-    careerMap.entries()
-  ).map(([playerId, weeks]) =>
-    makePlayerEntry(
-      playerId,
-      weeks,
-      playerRecords.players
-    )
-  );
-
-  const currentPlayerEntries =
-    period === "games"
-      ? gameEntries
-      : period === "season"
-      ? seasonEntries
-      : careerEntries;
-
-  const togglePosition = (position: string) => {
+  const togglePosition = (position: string) =>
     setPositions(current =>
       current.includes(position)
-        ? current.filter(
-            item => item !== position
-          )
+        ? current.filter(p => p !== position)
         : [...current, position]
     );
-  };
+
+  const seasonComplete =
+    selectedSeason === "all" ||
+    (scope === "players"
+      ? playerRecords.completedSeasons[
+          competition
+        ]
+      : records.completedSeasons[
+          competition
+        ]
+    ).includes(selectedSeason);
+
+  const honours = achievementCategories(records);
 
   return (
     <div>
-      <p style={subheadingStyle}>
-        RECORD TYPE
-      </p>
-
+      <FilterHeading>RECORD TYPE</FilterHeading>
       <div style={tabsStyle}>
         <TabButton
           label="Franchises"
           active={scope === "franchises"}
-          onClick={() =>
-            setScope("franchises")
-          }
+          onClick={() => setScope("franchises")}
         />
         <TabButton
           label="Players"
           active={scope === "players"}
-          onClick={() =>
-            setScope("players")
-          }
+          onClick={() => setScope("players")}
         />
       </div>
 
-      <p style={subheadingStyle}>
-        COMPETITION
-      </p>
-
+      <FilterHeading>COMPETITION</FilterHeading>
       <div style={tabsStyle}>
         <TabButton
           label="Regular Season"
-          active={
-            competition === "regularSeason"
-          }
+          active={competition === "regularSeason"}
           onClick={() =>
             setCompetition("regularSeason")
           }
         />
         <TabButton
           label="Main Playoffs"
-          active={
-            competition === "mainPlayoffs"
-          }
+          active={competition === "mainPlayoffs"}
           onClick={() =>
             setCompetition("mainPlayoffs")
           }
         />
       </div>
 
-      <p style={subheadingStyle}>
-        RECORD PERIOD
-      </p>
-
+      <FilterHeading>RECORD PERIOD</FilterHeading>
       <div style={tabsStyle}>
         <TabButton
           label="Game"
@@ -1151,13 +1098,14 @@ export default function RecordsTabs({
 
       {scope === "players" && (
         <div style={{ marginBottom: 24 }}>
-          <div style={filterHeadingStyle}>
-            <p style={subheadingStyle}>
+          <div style={filterHeadingRow}>
+            <FilterHeading>
               PLAYER POSITIONS
-            </p>
+            </FilterHeading>
 
             <button
               type="button"
+              style={clearButtonStyle}
               onClick={() =>
                 setPositions(
                   positions.length ===
@@ -1166,7 +1114,6 @@ export default function RecordsTabs({
                     : [...POSITIONS]
                 )
               }
-              style={smallButtonStyle}
             >
               {positions.length ===
               POSITIONS.length
@@ -1177,26 +1124,26 @@ export default function RecordsTabs({
 
           <div style={positionRowStyle}>
             {POSITIONS.map(position => {
-              const selected =
+              const active =
                 positions.includes(position);
 
               return (
                 <button
                   key={position}
                   type="button"
-                  aria-pressed={selected}
+                  aria-pressed={active}
                   onClick={() =>
                     togglePosition(position)
                   }
                   style={{
                     ...positionButtonStyle,
-                    background: selected
+                    background: active
                       ? "#ffffff"
                       : "#151b23",
-                    color: selected
+                    color: active
                       ? "#0b0f14"
                       : "#aeb8c5",
-                    borderColor: selected
+                    borderColor: active
                       ? "#ffffff"
                       : "#27303b",
                   }}
@@ -1208,28 +1155,23 @@ export default function RecordsTabs({
           </div>
 
           <p style={filterNoteStyle}>
-            {positions.length === 0
-              ? "Select at least one position."
-              : `Showing ${POSITIONS.filter(
-                  position =>
-                    positions.includes(position)
-                ).join(" + ")} records`}
+            {positions.length
+              ? `Showing ${POSITIONS.filter(
+                  p => positions.includes(p)
+                ).join(" + ")} records`
+              : "Select at least one position."}
           </p>
         </div>
       )}
 
       {period !== "career" && (
         <div style={{ marginBottom: 24 }}>
-          <p style={subheadingStyle}>
-            SEASON
-          </p>
+          <FilterHeading>SEASON</FilterHeading>
 
           <select
             value={selectedSeason}
             onChange={event =>
-              setSelectedSeason(
-                event.target.value
-              )
+              setSelectedSeason(event.target.value)
             }
             style={selectStyle}
           >
@@ -1241,10 +1183,7 @@ export default function RecordsTabs({
               ? playerRecords.availableSeasons
               : records.availableSeasons
             ).map(year => (
-              <option
-                key={year}
-                value={year}
-              >
+              <option key={year} value={year}>
                 {year}
               </option>
             ))}
@@ -1253,9 +1192,9 @@ export default function RecordsTabs({
           {period === "season" &&
             !seasonComplete && (
               <p style={noticeStyle}>
-                Season in Progress —
-                these totals are provisional
-                and excluded from all-season
+                Season in Progress — these
+                totals are provisional and
+                excluded from all-season
                 records until the competition
                 is complete.
               </p>
@@ -1266,46 +1205,62 @@ export default function RecordsTabs({
       {scope === "franchises" &&
         period === "games" && (
           <RecordSection
-            key={`franchise-games-${selectedSeason}-${competition}`}
+            key={`fg-${competition}-${selectedSeason}`}
             title="Individual Game"
             subtitle="The greatest performances, closest finishes and most spectacular disasters."
             categories={gameCategories(
-              filtered.individualGame[
+              filteredFranchise.individualGame[
                 competition
               ],
-              filtered.leaderboards
+              filteredFranchise.leaderboards
                 .individualGame[competition]
             )}
             primaryLabel={r =>
-              historicalFranchise(
+              historicalName(
                 r.rosterId,
                 r.season
               )
             }
-            defaultDetail={matchupDetail}
-            metaLabel={gameMeta}
+            detailLabel={r =>
+              `${historicalName(
+                r.rosterId,
+                r.season
+              )} ${pts(r.score)} vs ` +
+              `${historicalName(
+                r.opponentRosterId,
+                r.season
+              )} ${pts(r.opponentScore)}`
+            }
+            metaLabel={r =>
+              `${r.season} · Week ${r.week} · ${r.phase}`
+            }
           />
         )}
 
       {scope === "franchises" &&
         period === "season" && (
           <RecordSection
-            key={`franchise-season-${selectedSeason}-${competition}`}
+            key={`fs-${competition}-${selectedSeason}`}
             title="Season Long"
             subtitle="The best and worst campaigns across SFL history."
             categories={seasonCategories(
-              filtered.season[competition],
-              filtered.leaderboards
+              filteredFranchise.season[
+                competition
+              ],
+              filteredFranchise.leaderboards
                 .season[competition],
               competition
             )}
             primaryLabel={r =>
-              historicalFranchise(
+              historicalName(
                 r.rosterId,
                 r.season
               )
             }
-            defaultDetail={seasonDetail}
+            detailLabel={r =>
+              `${r.wins}W-${r.losses}L` +
+              (r.ties ? `-${r.ties}T` : "")
+            }
             metaLabel={r => r.season}
           />
         )}
@@ -1313,28 +1268,23 @@ export default function RecordsTabs({
       {scope === "franchises" &&
         period === "career" && (
           <>
-            {competition ===
-              "mainPlayoffs" && (
+            {competition === "mainPlayoffs" && (
               <>
                 <RecordSection
                   title="Slootbowl Honours"
-                  subtitle="Championship glory and the heartbreak of finishing second."
-                  categories={
-                    achievements.slice(0, 3)
-                  }
+                  subtitle="Championship glory and runner-up finishes."
+                  categories={honours.slice(0, 3)}
                   primaryLabel={r =>
-                    franchise(r.rosterId)
+                    currentName(r.rosterId)
                   }
                 />
 
                 <RecordSection
                   title="Playoff History"
-                  subtitle="Main winners-bracket results only. No toilet bowl or placement games."
-                  categories={
-                    achievements.slice(3)
-                  }
+                  subtitle="Main winners-bracket records only."
+                  categories={honours.slice(3)}
                   primaryLabel={r =>
-                    franchise(r.rosterId)
+                    currentName(r.rosterId)
                   }
                 />
               </>
@@ -1342,29 +1292,31 @@ export default function RecordsTabs({
 
             <RecordSection
               title="Historical Streaks"
-              subtitle="Winning and losing runs tracked separately by competition."
+              subtitle="Winning and losing runs within the selected competition."
               categories={streakCategories(
                 records,
                 competition
               )}
               primaryLabel={r =>
-                franchise(r.rosterId)
+                currentName(r.rosterId)
               }
             />
 
-            {competition ===
-              "regularSeason" && (
+            {competition === "regularSeason" && (
               <RecordSection
                 title="Career Totals"
-                subtitle="All-time franchise totals across completed regular-season and main-playoff games."
-                categories={careerCategories(
+                subtitle="All-time franchise totals across regular-season and main-playoff games."
+                categories={franchiseCareerCategories(
                   records.allTime,
                   records.allTimeLeaderboards
                 )}
                 primaryLabel={r =>
-                  franchise(r.rosterId)
+                  currentName(r.rosterId)
                 }
-                defaultDetail={careerDetail}
+                detailLabel={r =>
+                  `${r.wins}W-${r.losses}L` +
+                  (r.ties ? `-${r.ties}T` : "")
+                }
               />
             )}
           </>
@@ -1373,7 +1325,7 @@ export default function RecordsTabs({
       {scope === "players" &&
         positions.length > 0 && (
           <RecordSection
-            key={`players-${period}-${competition}-${selectedSeason}-${positions.join("-")}`}
+            key={`p-${period}-${competition}-${selectedSeason}-${positions.join("-")}`}
             title={
               period === "games"
                 ? "Player Game Records"
@@ -1383,34 +1335,21 @@ export default function RecordsTabs({
             }
             subtitle={
               "Started players only. " +
-              (competition ===
-              "regularSeason"
+              (competition === "regularSeason"
                 ? "Regular-season performances."
                 : "Main winners-bracket performances only.")
             }
             categories={playerCategories(
-              currentPlayerEntries,
+              entries,
               period
             )}
             primaryLabel={r => r.name}
-            defaultDetail={r => {
-              const teams = Array.from(
-                new Set(
-                  r.weeks.map(
-                    week =>
-                      historicalFranchise(
-                        week.rosterId,
-                        week.season
-                      )
-                  )
-                )
-              );
-
-              return (
-                `${r.position} · ` +
-                teams.join(", ")
-              );
-            }}
+            detailLabel={r =>
+              `${r.position} · ${playerTeams(
+                r,
+                period
+              )}`
+            }
             metaLabel={r =>
               period === "games"
                 ? `${r.season} · Week ${r.week}`
@@ -1432,279 +1371,15 @@ export default function RecordsTabs({
   );
 }
 
-function RecordSection<
-  T extends { rosterId: number }
->({
-  title,
-  subtitle,
-  categories,
-  primaryLabel,
-  defaultDetail,
-  metaLabel,
+function FilterHeading({
+  children,
 }: {
-  title: string;
-  subtitle: string;
-  categories: RecordCategory<T>[];
-  primaryLabel: (record: T) => string;
-  defaultDetail?: (record: T) => string;
-  metaLabel?: (record: T) => string;
+  children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 32 }}>
-      <div style={headingRowStyle}>
-        <div style={headingAccentStyle} />
-        <h2 style={headingStyle}>
-          {title}
-        </h2>
-      </div>
-
-      <p style={sectionDescriptionStyle}>
-        {subtitle}
-      </p>
-
-      {categories.map(category => (
-        <RecordCard
-          key={category.key}
-          category={category}
-          primaryLabel={primaryLabel}
-          detailLabel={
-            category.detail ??
-            defaultDetail
-          }
-          metaLabel={metaLabel}
-        />
-      ))}
-    </section>
-  );
-}
-
-function RecordCard<
-  T extends { rosterId: number }
->({
-  category,
-  primaryLabel,
-  detailLabel,
-  metaLabel,
-}: {
-  category: RecordCategory<T>;
-  primaryLabel: (record: T) => string;
-  detailLabel?: (record: T) => string;
-  metaLabel?: (record: T) => string;
-}) {
-  const [expanded, setExpanded] =
-    useState(false);
-
-  const {
-    record,
-    leaderboard,
-    metric,
-    format,
-    suffix,
-  } = category;
-
-  if (!record) {
-    return null;
-  }
-
-  const normalized = (entry: T) =>
-    Math.round(
-      (metric(entry) + Number.EPSILON) *
-        100
-    );
-
-  const leaderValue = normalized(record);
-
-  const jointCount = leaderboard.filter(
-    entry =>
-      normalized(entry) === leaderValue
-  ).length;
-
-  let previousValue: number | null = null;
-  let previousRank = 0;
-
-  return (
-    <article style={cardStyle}>
-      <div style={cardHeaderStyle}>
-        <div
-          style={{
-            minWidth: 0,
-            flex: 1,
-          }}
-        >
-          <p style={labelStyle}>
-            {category.title.toUpperCase()}
-          </p>
-
-          <p style={descriptionStyle}>
-            {category.description}
-          </p>
-        </div>
-
-        {jointCount > 1 && (
-          <span style={jointBadgeStyle}>
-            JOINT
-          </span>
-        )}
-      </div>
-
-      <div style={valueRowStyle}>
-        <h3 style={valueStyle}>
-          {format(record)}
-        </h3>
-
-        {suffix && (
-          <span style={suffixStyle}>
-            {suffix}
-          </span>
-        )}
-      </div>
-
-      <p style={teamStyle}>
-        {primaryLabel(record)}
-      </p>
-
-      {detailLabel?.(record) && (
-        <p style={detailStyle}>
-          {detailLabel(record)}
-        </p>
-      )}
-
-      {metaLabel?.(record) && (
-        <p style={metaStyle}>
-          {metaLabel(record)}
-        </p>
-      )}
-
-      {jointCount > 1 && (
-        <p style={jointNoticeStyle}>
-          {jointCount} entries share
-          this record.
-        </p>
-      )}
-
-      {leaderboard.length > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={() =>
-              setExpanded(value => !value)
-            }
-            aria-expanded={expanded}
-            style={expandButtonStyle}
-          >
-            <span>
-              {expanded
-                ? "Hide leaderboard"
-                : `View leaderboard (${leaderboard.length})`}
-            </span>
-
-            <span aria-hidden="true">
-              {expanded ? "▲" : "▼"}
-            </span>
-          </button>
-
-          {expanded && (
-            <div style={leaderboardStyle}>
-              <p style={leaderboardHeadingStyle}>
-                HISTORICAL LEADERBOARD
-              </p>
-
-              {leaderboard.map(
-                (entry, index) => {
-                  const currentValue =
-                    normalized(entry);
-
-                  const rank =
-                    previousValue ===
-                    currentValue
-                      ? previousRank
-                      : index + 1;
-
-                  previousValue =
-                    currentValue;
-
-                  previousRank = rank;
-
-                  return (
-                    <div
-                      key={`${category.key}-${index}`}
-                      style={{
-                        ...leaderboardRowStyle,
-                        borderBottom:
-                          index ===
-                          leaderboard.length -
-                            1
-                            ? "none"
-                            : "1px solid #27303b",
-                      }}
-                    >
-                      <div style={rankStyle}>
-                        {rank}
-                      </div>
-
-                      <div
-                        style={
-                          leaderboardInfoStyle
-                        }
-                      >
-                        <p
-                          style={
-                            leaderboardTeamStyle
-                          }
-                        >
-                          {primaryLabel(entry)}
-                        </p>
-
-                        {detailLabel?.(
-                          entry
-                        ) && (
-                          <p
-                            style={
-                              leaderboardDetailStyle
-                            }
-                          >
-                            {detailLabel(entry)}
-                          </p>
-                        )}
-
-                        {metaLabel?.(
-                          entry
-                        ) && (
-                          <p
-                            style={
-                              leaderboardMetaStyle
-                            }
-                          >
-                            {metaLabel(entry)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div
-                        style={
-                          leaderboardValueStyle
-                        }
-                      >
-                        {format(entry)}
-                      </div>
-                    </div>
-                  );
-                }
-              )}
-
-              <p
-                style={
-                  leaderboardFootnoteStyle
-                }
-              >
-                Top ten entries,
-                including ties at the cutoff.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-    </article>
+    <p style={filterHeadingStyle}>
+      {children}
+    </p>
   );
 }
 
@@ -1744,6 +1419,234 @@ function TabButton({
   );
 }
 
+function RecordSection<
+  T extends { rosterId: number }
+>({
+  title,
+  subtitle,
+  categories,
+  primaryLabel,
+  detailLabel,
+  metaLabel,
+}: {
+  title: string;
+  subtitle: string;
+  categories: Category<T>[];
+  primaryLabel: (entry: T) => string;
+  detailLabel?: (entry: T) => string;
+  metaLabel?: (entry: T) => string;
+}) {
+  return (
+    <section style={{ marginBottom: 32 }}>
+      <div style={sectionHeadingRow}>
+        <div style={headingAccent} />
+        <h2 style={sectionHeading}>
+          {title}
+        </h2>
+      </div>
+
+      <p style={sectionSubtitle}>
+        {subtitle}
+      </p>
+
+      {categories.map(item => (
+        <RecordCard
+          key={item.key}
+          item={item}
+          primaryLabel={primaryLabel}
+          detailLabel={
+            item.detail ?? detailLabel
+          }
+          metaLabel={metaLabel}
+        />
+      ))}
+    </section>
+  );
+}
+
+function RecordCard<
+  T extends { rosterId: number }
+>({
+  item,
+  primaryLabel,
+  detailLabel,
+  metaLabel,
+}: {
+  item: Category<T>;
+  primaryLabel: (entry: T) => string;
+  detailLabel?: (entry: T) => string;
+  metaLabel?: (entry: T) => string;
+}) {
+  const [expanded, setExpanded] =
+    useState(false);
+
+  const entries = item.leaderboard.slice(
+    0,
+    LIMIT
+  );
+
+  const leader = entries[0];
+
+  if (!leader) {
+    return null;
+  }
+
+  const jointCount = entries.filter(
+    entry =>
+      rounded(item.metric(entry)) ===
+      rounded(item.metric(leader))
+  ).length;
+
+  let previousValue: number | null = null;
+  let previousRank = 0;
+
+  return (
+    <article style={cardStyle}>
+      <div style={cardHeaderStyle}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={cardLabel}>
+            {item.title.toUpperCase()}
+          </p>
+          <p style={cardDescription}>
+            {item.description}
+          </p>
+        </div>
+
+        {jointCount > 1 && (
+          <span style={jointBadge}>
+            JOINT
+          </span>
+        )}
+      </div>
+
+      <div style={valueRow}>
+        <h3 style={valueText}>
+          {item.format(leader)}
+        </h3>
+        {item.suffix && (
+          <span style={suffixText}>
+            {item.suffix}
+          </span>
+        )}
+      </div>
+
+      <p style={primaryText}>
+        {primaryLabel(leader)}
+      </p>
+
+      {detailLabel && (
+        <p style={detailText}>
+          {detailLabel(leader)}
+        </p>
+      )}
+
+      {metaLabel && (
+        <p style={metaText}>
+          {metaLabel(leader)}
+        </p>
+      )}
+
+      {jointCount > 1 && (
+        <p style={jointNotice}>
+          {jointCount} entries share
+          this record within the top ten.
+          Earliest achievement is listed first.
+        </p>
+      )}
+
+      {entries.length > 1 && (
+        <>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() =>
+              setExpanded(value => !value)
+            }
+            style={expandButton}
+          >
+            <span>
+              {expanded
+                ? "Hide leaderboard"
+                : `View leaderboard (${entries.length})`}
+            </span>
+            <span aria-hidden="true">
+              {expanded ? "▲" : "▼"}
+            </span>
+          </button>
+
+          {expanded && (
+            <div style={leaderboardContainer}>
+              <p style={leaderboardHeading}>
+                HISTORICAL LEADERBOARD
+              </p>
+
+              {entries.map((entry, index) => {
+                const value = rounded(
+                  item.metric(entry)
+                );
+
+                const rank =
+                  previousValue === value
+                    ? previousRank
+                    : index + 1;
+
+                previousValue = value;
+                previousRank = rank;
+
+                return (
+                  <div
+                    key={`${item.key}-${index}`}
+                    style={{
+                      ...leaderboardRow,
+                      borderBottom:
+                        index === entries.length - 1
+                          ? "none"
+                          : "1px solid #27303b",
+                    }}
+                  >
+                    <div style={rankText}>
+                      {rank}
+                    </div>
+
+                    <div style={leaderboardInfo}>
+                      <p style={leaderboardName}>
+                        {primaryLabel(entry)}
+                      </p>
+
+                      {detailLabel && (
+                        <p style={leaderboardDetail}>
+                          {detailLabel(entry)}
+                        </p>
+                      )}
+
+                      {metaLabel && (
+                        <p style={leaderboardMeta}>
+                          {metaLabel(entry)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div style={leaderboardValue}>
+                      {item.format(entry)}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <p style={leaderboardFootnote}>
+                Maximum ten entries.
+                Ties are ordered by earliest
+                achievement where historical
+                dates are available.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </article>
+  );
+}
+
 const tabsStyle: CSSProperties = {
   display: "flex",
   background: "#151b23",
@@ -1754,17 +1657,7 @@ const tabsStyle: CSSProperties = {
   gap: 3,
 };
 
-const selectStyle: CSSProperties = {
-  width: "100%",
-  padding: "13px 14px",
-  background: "#151b23",
-  border: "1px solid #27303b",
-  borderRadius: 12,
-  color: "#ffffff",
-  fontSize: 14,
-};
-
-const subheadingStyle: CSSProperties = {
+const filterHeadingStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   letterSpacing: 1,
@@ -1772,21 +1665,13 @@ const subheadingStyle: CSSProperties = {
   marginBottom: 10,
 };
 
-const noticeStyle: CSSProperties = {
-  marginTop: 12,
-  marginBottom: 20,
-  fontSize: 12,
-  color: "#aeb8c5",
-  lineHeight: 1.6,
-};
-
-const filterHeadingStyle: CSSProperties = {
+const filterHeadingRow: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
 };
 
-const smallButtonStyle: CSSProperties = {
+const clearButtonStyle: CSSProperties = {
   border: "none",
   background: "transparent",
   color: "#ffffff",
@@ -1818,14 +1703,32 @@ const filterNoteStyle: CSSProperties = {
   fontSize: 12,
 };
 
-const headingRowStyle: CSSProperties = {
+const selectStyle: CSSProperties = {
+  width: "100%",
+  padding: "13px 14px",
+  background: "#151b23",
+  border: "1px solid #27303b",
+  borderRadius: 12,
+  color: "#ffffff",
+  fontSize: 14,
+};
+
+const noticeStyle: CSSProperties = {
+  marginTop: 12,
+  marginBottom: 20,
+  fontSize: 12,
+  color: "#aeb8c5",
+  lineHeight: 1.6,
+};
+
+const sectionHeadingRow: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
   marginBottom: 8,
 };
 
-const headingAccentStyle: CSSProperties = {
+const headingAccent: CSSProperties = {
   width: 4,
   height: 26,
   background: "#ffffff",
@@ -1833,12 +1736,12 @@ const headingAccentStyle: CSSProperties = {
   flexShrink: 0,
 };
 
-const headingStyle: CSSProperties = {
+const sectionHeading: CSSProperties = {
   margin: 0,
   fontSize: 24,
 };
 
-const sectionDescriptionStyle: CSSProperties = {
+const sectionSubtitle: CSSProperties = {
   marginTop: 0,
   marginBottom: 20,
   color: "#aeb8c5",
@@ -1862,7 +1765,7 @@ const cardHeaderStyle: CSSProperties = {
   gap: 10,
 };
 
-const labelStyle: CSSProperties = {
+const cardLabel: CSSProperties = {
   margin: 0,
   fontSize: 11,
   fontWeight: 700,
@@ -1870,7 +1773,7 @@ const labelStyle: CSSProperties = {
   color: "#aeb8c5",
 };
 
-const descriptionStyle: CSSProperties = {
+const cardDescription: CSSProperties = {
   marginTop: 7,
   marginBottom: 0,
   fontSize: 12,
@@ -1878,7 +1781,7 @@ const descriptionStyle: CSSProperties = {
   color: "#687384",
 };
 
-const valueRowStyle: CSSProperties = {
+const valueRow: CSSProperties = {
   display: "flex",
   alignItems: "baseline",
   gap: 7,
@@ -1886,7 +1789,7 @@ const valueRowStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const valueStyle: CSSProperties = {
+const valueText: CSSProperties = {
   margin: 0,
   fontSize: 32,
   fontWeight: 800,
@@ -1894,12 +1797,12 @@ const valueStyle: CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
-const suffixStyle: CSSProperties = {
+const suffixText: CSSProperties = {
   fontSize: 13,
   color: "#aeb8c5",
 };
 
-const teamStyle: CSSProperties = {
+const primaryText: CSSProperties = {
   marginTop: 10,
   marginBottom: 4,
   color: "#ffffff",
@@ -1907,7 +1810,7 @@ const teamStyle: CSSProperties = {
   fontSize: 15,
 };
 
-const detailStyle: CSSProperties = {
+const detailText: CSSProperties = {
   marginTop: 5,
   marginBottom: 0,
   fontSize: 13,
@@ -1916,14 +1819,14 @@ const detailStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-const metaStyle: CSSProperties = {
+const metaText: CSSProperties = {
   marginTop: 8,
   marginBottom: 0,
   fontSize: 12,
   color: "#8793a3",
 };
 
-const jointBadgeStyle: CSSProperties = {
+const jointBadge: CSSProperties = {
   fontSize: 10,
   fontWeight: 800,
   letterSpacing: 0.8,
@@ -1934,14 +1837,15 @@ const jointBadgeStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const jointNoticeStyle: CSSProperties = {
+const jointNotice: CSSProperties = {
   marginTop: 10,
   marginBottom: 0,
   color: "#aeb8c5",
   fontSize: 12,
+  lineHeight: 1.5,
 };
 
-const expandButtonStyle: CSSProperties = {
+const expandButton: CSSProperties = {
   display: "flex",
   width: "100%",
   justifyContent: "space-between",
@@ -1958,13 +1862,13 @@ const expandButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const leaderboardStyle: CSSProperties = {
+const leaderboardContainer: CSSProperties = {
   marginTop: 16,
   paddingTop: 14,
   borderTop: "1px solid #27303b",
 };
 
-const leaderboardHeadingStyle: CSSProperties = {
+const leaderboardHeading: CSSProperties = {
   marginTop: 0,
   marginBottom: 10,
   fontSize: 10,
@@ -1973,14 +1877,14 @@ const leaderboardHeadingStyle: CSSProperties = {
   color: "#8793a3",
 };
 
-const leaderboardRowStyle: CSSProperties = {
+const leaderboardRow: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   gap: 10,
   padding: "13px 0",
 };
 
-const rankStyle: CSSProperties = {
+const rankText: CSSProperties = {
   width: 24,
   flexShrink: 0,
   fontSize: 13,
@@ -1988,12 +1892,12 @@ const rankStyle: CSSProperties = {
   color: "#aeb8c5",
 };
 
-const leaderboardInfoStyle: CSSProperties = {
+const leaderboardInfo: CSSProperties = {
   flex: 1,
   minWidth: 0,
 };
 
-const leaderboardTeamStyle: CSSProperties = {
+const leaderboardName: CSSProperties = {
   margin: 0,
   fontSize: 13,
   fontWeight: 700,
@@ -2001,7 +1905,7 @@ const leaderboardTeamStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-const leaderboardDetailStyle: CSSProperties = {
+const leaderboardDetail: CSSProperties = {
   marginTop: 5,
   marginBottom: 0,
   fontSize: 12,
@@ -2010,14 +1914,14 @@ const leaderboardDetailStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-const leaderboardMetaStyle: CSSProperties = {
+const leaderboardMeta: CSSProperties = {
   marginTop: 5,
   marginBottom: 0,
   fontSize: 11,
   color: "#687384",
 };
 
-const leaderboardValueStyle: CSSProperties = {
+const leaderboardValue: CSSProperties = {
   flexShrink: 0,
   fontSize: 14,
   fontWeight: 800,
@@ -2025,7 +1929,7 @@ const leaderboardValueStyle: CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
-const leaderboardFootnoteStyle: CSSProperties = {
+const leaderboardFootnote: CSSProperties = {
   marginTop: 12,
   marginBottom: 0,
   fontSize: 11,
