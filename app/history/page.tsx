@@ -7,6 +7,7 @@ import HistoryTabs from "./HistoryTabs";
 import type {
   HistoricalMatchup,
   HistoricalSeason,
+  SleeperBracketMatch,
 } from "../../lib/sleeper";
 
 import type {
@@ -31,8 +32,6 @@ const FRANCHISE_IDS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 ];
 
-// Manager names are kept separate from franchise
-// names because GM awards belong to the managers.
 const GM_NAMES: Record<number, string> = {
   1: "Ed Nelms",
   2: "Ben Smith",
@@ -231,14 +230,11 @@ function calculateGMAwards(
   for (const seasonStats of allStats) {
     const season = seasonStats.season;
 
-    // Do not declare regular-season awards
-    // before all 14 weeks are complete.
     if (!seasonStats.complete) {
       continue;
     }
 
-    // GM of the Year:
-    // Highest regular-season points for.
+    // GM of the Year
     const pointsForRanking = [
       ...seasonStats.teams,
     ].sort(
@@ -261,8 +257,7 @@ function calculateGMAwards(
       );
     }
 
-    // Lubed Up, Dicked Down:
-    // Highest regular-season points against.
+    // Lubed Up, Dicked Down
     const pointsAgainstRanking = [
       ...seasonStats.teams,
     ].sort(
@@ -285,8 +280,7 @@ function calculateGMAwards(
       );
     }
 
-    // One Week Wonder:
-    // Highest single team score in Weeks 1-14.
+    // One Week Wonder
     const highestWeeklyScore = [
       ...seasonStats.weeklyScores,
     ].sort(
@@ -307,14 +301,7 @@ function calculateGMAwards(
       );
     }
 
-    // Most Improved GM:
-    // Compare regular-season wins against
-    // the immediately preceding season.
-    //
-    // The current season's GM of the Year
-    // is ineligible for this award.
-    //
-    // 2022 is handled separately below.
+    // Most Improved GM
     if (season !== "2022") {
       const previousSeason = String(
         Number(season) - 1
@@ -388,10 +375,8 @@ function calculateGMAwards(
     }
   }
 
-  // Special inaugural honour agreed for 2022.
-  if (
-    statsBySeason.has("2022")
-  ) {
+  // Inaugural honorary award
+  if (statsBySeason.has("2022")) {
     awards.push({
       season: "2022",
       awardId: "improved",
@@ -403,6 +388,161 @@ function calculateGMAwards(
   }
 
   return awards;
+}
+
+/**
+ * Retrieve the actual consolation bracket
+ * for one historical Sleeper league.
+ *
+ * The bracket identifies the Toilet Bowl
+ * final using placement p === 1.
+ */
+async function getLosersBracket(
+  leagueId: string
+): Promise<SleeperBracketMatch[]> {
+  const response = await fetch(
+    `https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`,
+    {
+      next: {
+        revalidate: 300,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load losers bracket for league ${leagueId}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Shitcunt of the Year:
+ *
+ * - Toilet Bowl final takes place in Week 16
+ * - Find the final using p === 1
+ * - Ignore consolation placement matches
+ * - Require the actual matchup to be complete
+ * - Confirm the recorded loser against the score
+ *
+ * Toilet Bowl results are kept separate
+ * from official main-playoff records.
+ */
+async function calculateShitcuntAwards(
+  historicalData: HistoricalSeason[]
+): Promise<GMAwardRecord[]> {
+  const awards = await Promise.all(
+    historicalData.map(async (seasonData) => {
+      const season =
+        seasonData.league.season;
+
+      const week16ToiletBowl =
+        seasonData.matchups.filter(
+          (matchup) =>
+            matchup.week === 16 &&
+            matchup.phase === "Toilet Bowl" &&
+            isCompletedMatchup(matchup)
+        );
+
+      // No completed Week 16 consolation
+      // games means no award yet.
+      if (
+        week16ToiletBowl.length === 0
+      ) {
+        return null;
+      }
+
+      const bracket =
+        await getLosersBracket(
+          seasonData.league.league_id
+        );
+
+      // p: 1 identifies the Toilet Bowl
+      // final; p: 3 is a placement game.
+      const final = bracket.find(
+        (match) =>
+          match.r === 2 &&
+          match.p === 1 &&
+          match.t1 !== null &&
+          match.t2 !== null &&
+          match.l !== null &&
+          match.w !== null
+      );
+
+      if (
+        !final ||
+        final.t1 === null ||
+        final.t2 === null ||
+        final.l === null ||
+        final.w === null
+      ) {
+        return null;
+      }
+
+      // Verify that the bracket final
+      // corresponds to a completed Week 16
+      // matchup, not another consolation game.
+      const actualMatchup =
+        week16ToiletBowl.find(
+          (matchup) =>
+            (
+              matchup.rosterA === final.t1 &&
+              matchup.rosterB === final.t2
+            ) ||
+            (
+              matchup.rosterA === final.t2 &&
+              matchup.rosterB === final.t1
+            )
+        );
+
+      if (!actualMatchup) {
+        return null;
+      }
+
+      // Don't award a tied or inconsistent
+      // result. Sleeper's bracket loser
+      // must agree with the matchup score.
+      if (
+        actualMatchup.scoreA ===
+        actualMatchup.scoreB
+      ) {
+        return null;
+      }
+
+      const scoreLoser =
+        actualMatchup.scoreA <
+        actualMatchup.scoreB
+          ? actualMatchup.rosterA
+          : actualMatchup.rosterB;
+
+      const scoreWinner =
+        actualMatchup.scoreA >
+        actualMatchup.scoreB
+          ? actualMatchup.rosterA
+          : actualMatchup.rosterB;
+
+      if (
+        scoreLoser !== final.l ||
+        scoreWinner !== final.w
+      ) {
+        return null;
+      }
+
+      return makeGMAward(
+        season,
+        "shitcunt",
+        final.l,
+        "Toilet Bowl loser — Week 16"
+      );
+    })
+  );
+
+  return awards.filter(
+    (award): award is GMAwardRecord =>
+      award !== null
+  );
 }
 
 export default async function HistoryPage() {
@@ -461,8 +601,6 @@ export default async function HistoryPage() {
       continue;
     }
 
-    // Only main-playoff franchises are
-    // eligible for SFL MVP.
     const playoffTeams =
       new Set<number>();
 
@@ -609,10 +747,24 @@ export default async function HistoryPage() {
     });
   }
 
-  const gmAwards =
-    calculateGMAwards(
+  const [
+    regularSeasonGMAwards,
+    shitcuntAwards,
+  ] = await Promise.all([
+    Promise.resolve(
+      calculateGMAwards(
+        historicalData
+      )
+    ),
+    calculateShitcuntAwards(
       historicalData
-    );
+    ),
+  ]);
+
+  const gmAwards = [
+    ...regularSeasonGMAwards,
+    ...shitcuntAwards,
+  ];
 
   return (
     <HistoryTabs
