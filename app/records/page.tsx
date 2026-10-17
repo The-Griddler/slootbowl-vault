@@ -1,8 +1,14 @@
+
 import { getAllTimeRecords } from "../../lib/records";
+import { getPlayerRecords } from "../../lib/playerRecords";
 import RecordsTabs from "./RecordsTabs";
 
 export default async function RecordsPage() {
-  const records = await getAllTimeRecords();
+  const [records, playerRecords] =
+    await Promise.all([
+      getAllTimeRecords(),
+      getPlayerRecords(),
+    ]);
 
   return (
     <main>
@@ -29,7 +35,10 @@ export default async function RecordsPage() {
         The Dynasty Sluts record book.
       </p>
 
-      <RecordsTabs records={records} />
+      <RecordsTabs
+        records={records}
+        playerRecords={playerRecords}
+      />
     </main>
   );
 }
