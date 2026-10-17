@@ -917,8 +917,8 @@ export default function HistoryTabs({
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "minmax(65px, 1fr) 52px minmax(0, 1fr)",
-                    gap: "10px",
+                      "66px 48px minmax(0, 1fr)",
+                    gap: "12px",
                     alignItems: "center",
                     minHeight: "72px",
                   }}
@@ -943,7 +943,7 @@ export default function HistoryTabs({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      width: "52px",
+                      width: "48px",
                       height: "52px",
                     }}
                   >
@@ -965,8 +965,9 @@ export default function HistoryTabs({
                       <>
                         <div
                           style={{
-                            fontSize: "11px",
+                            fontSize: "10px",
                             color: "#687384",
+                            letterSpacing: "0.4px",
                           }}
                         >
                           SLOOTBOWL CHAMPION
@@ -996,6 +997,32 @@ export default function HistoryTabs({
                       </span>
                     )}
                   </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    alignItems: "center",
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "1px solid #27303b",
+                    color: "#9da7b3",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    letterSpacing: "0.2px",
+                  }}
+                >
+                  View season
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      marginLeft: "6px",
+                      fontSize: "15px",
+                    }}
+                  >
+                    →
+                  </span>
                 </div>
               </article>
             </Link>
