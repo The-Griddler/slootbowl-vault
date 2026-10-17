@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getHistoricalData } from "../../../lib/sleeper";
 import { getFranchiseName } from "../../../lib/franchises";
 import { getPlayers, getPlayerName } from "../../../lib/players";
+import { calculateSeasonPlayerAwards } from "../../../lib/playerAwards";
 
 const SLOOTBOWLS = [
   { season: "2025", champion: 10, runnerUp: 9 },
@@ -58,6 +59,29 @@ export default async function SeasonPage({
   );
 
   /*
+   * SHARED PLAYER AWARDS
+   *
+   * All four awards are now calculated
+   * by lib/playerAwards.ts.
+   *
+   * The main History page will use
+   * this same function in the next step.
+   */
+  const playerAwards = calculateSeasonPlayerAwards(
+    seasonData,
+    historicalData,
+    players
+  );
+
+  const {
+    regularSeasonComplete,
+    mvp,
+    opoy,
+    roy,
+    sbMvp,
+  } = playerAwards;
+
+  /*
    * Only completed NFL weeks are eligible
    * for official SFL results and statistics.
    */
@@ -72,33 +96,6 @@ export default async function SeasonPage({
         matchup.scoreB >= 0 &&
         (matchup.scoreA > 0 || matchup.scoreB > 0)
     );
-
-  /*
-   * A regular season is complete only if
-   * all 14 weeks contain five valid matchups
-   * involving all ten franchises.
-   */
-  const regularSeasonComplete = Array.from(
-    { length: 14 },
-    (_, index) => index + 1
-  ).every((week) => {
-    const weekly = completedRegularMatchups.filter(
-      (matchup) => matchup.week === week
-    );
-
-    if (weekly.length !== 5) {
-      return false;
-    }
-
-    const rosterIds = new Set<number>();
-
-    for (const matchup of weekly) {
-      rosterIds.add(matchup.rosterA);
-      rosterIds.add(matchup.rosterB);
-    }
-
-    return rosterIds.size === 10;
-  });
 
   const standingsLabel = regularSeasonComplete
     ? "FINAL STANDINGS"
@@ -173,8 +170,11 @@ export default async function SeasonPage({
   const gpfcStandings = sortStandings(GPFC);
 
   /*
-   * Only completed main-bracket games
-   * establish official playoff results.
+   * Only main-bracket games are displayed
+   * in the official playoff section.
+   *
+   * Toilet Bowl and placement games
+   * remain excluded.
    */
   const playoffMatchups = seasonData.matchups
     .filter(
@@ -182,233 +182,6 @@ export default async function SeasonPage({
         matchup.phase === "Main Playoffs"
     )
     .sort((a, b) => a.week - b.week);
-
-  const completedPlayoffMatchups =
-    playoffMatchups.filter(
-      (matchup) =>
-        matchup.isComplete === true &&
-        Number.isFinite(matchup.scoreA) &&
-        Number.isFinite(matchup.scoreB) &&
-        (matchup.scoreA > 0 || matchup.scoreB > 0)
-    );
-
-  const playoffTeams = new Set<number>();
-
-  for (const matchup of completedPlayoffMatchups) {
-    playoffTeams.add(matchup.rosterA);
-    playoffTeams.add(matchup.rosterB);
-  }
-
-  /*
-   * Player award calculations use only
-   * officially completed regular-season
-   * performances.
-   */
-  const regularSeasonPerformances =
-    completedRegularMatchups.flatMap(
-      (matchup) => [
-        ...matchup.startersA.map(
-          (playerId, index) => ({
-            playerId,
-            rosterId: matchup.rosterA,
-            points:
-              matchup.startersPointsA[index] ?? 0,
-          })
-        ),
-
-        ...matchup.startersB.map(
-          (playerId, index) => ({
-            playerId,
-            rosterId: matchup.rosterB,
-            points:
-              matchup.startersPointsB[index] ?? 0,
-          })
-        ),
-      ]
-    );
-
-  const playerTotals = new Map<
-    string,
-    {
-      playerId: string;
-      points: number;
-      rosters: Set<number>;
-    }
-  >();
-
-  for (const performance of regularSeasonPerformances) {
-    if (
-      !performance.playerId ||
-      performance.playerId === "0" ||
-      !Number.isFinite(performance.points)
-    ) {
-      continue;
-    }
-
-    const existing = playerTotals.get(
-      performance.playerId
-    );
-
-    if (!existing) {
-      playerTotals.set(performance.playerId, {
-        playerId: performance.playerId,
-        points: performance.points,
-        rosters: new Set([performance.rosterId]),
-      });
-    } else {
-      existing.points += performance.points;
-      existing.rosters.add(performance.rosterId);
-    }
-  }
-
-  /*
-   * MVP: highest-scoring regular-season
-   * starter whose franchise reached
-   * the main playoffs.
-   */
-  const mvpCandidates = Array.from(
-    playerTotals.values()
-  )
-    .filter((player) =>
-      Array.from(player.rosters).some(
-        (rosterId) => playoffTeams.has(rosterId)
-      )
-    )
-    .sort((a, b) => b.points - a.points);
-
-  /*
-   * Awards are final only after the
-   * regular season has finished.
-   */
-  const mvp = regularSeasonComplete
-    ? mvpCandidates[0]
-    : undefined;
-
-  /*
-   * OPOY: highest-scoring eligible player
-   * at a different position from the MVP.
-   */
-  const mvpPlayer = mvp
-    ? players[mvp.playerId]
-    : null;
-
-  const mvpPosition =
-    mvpPlayer?.position ??
-    mvpPlayer?.fantasy_positions?.[0] ??
-    null;
-
-  const opoy = regularSeasonComplete
-    ? mvpCandidates.find((candidate) => {
-        const player = players[candidate.playerId];
-
-        const position =
-          player?.position ??
-          player?.fantasy_positions?.[0] ??
-          null;
-
-        return (
-          position &&
-          position !== mvpPosition
-        );
-      })
-    : undefined;
-
-  /*
-   * ROY: highest-scoring eligible rookie
-   * whose NFL rookie season matches the
-   * selected SFL season.
-   *
-   * Sleeper years_exp is relative to
-   * the current NFL player dataset.
-   */
-  const seasonNumber = Number(season);
-  const currentPlayerDataSeason = Math.max(
-    ...historicalData.map((item) =>
-      Number(item.league.season)
-    )
-  );
-
-  const rookieCandidates = Array.from(
-    playerTotals.values()
-  )
-    .filter((candidate) => {
-      const player = players[candidate.playerId];
-
-      if (
-        player?.years_exp === null ||
-        player?.years_exp === undefined
-      ) {
-        return false;
-      }
-
-      const rookieSeason =
-        currentPlayerDataSeason -
-        player.years_exp;
-
-      return rookieSeason === seasonNumber;
-    })
-    .sort((a, b) => b.points - a.points);
-
-  const roy = regularSeasonComplete
-    ? rookieCandidates[0]
-    : undefined;
-
-  /*
-   * Slootbowl MVP: highest-scoring starter
-   * on the winning franchise in a
-   * completed Week 17 championship game.
-   */
-  const slootbowl =
-    completedPlayoffMatchups.find(
-      (matchup) => matchup.week === 17
-    );
-
-  let sbMvp:
-    | {
-        playerId: string;
-        rosterId: number;
-        points: number;
-      }
-    | undefined;
-
-  if (slootbowl) {
-    const winningRosterId =
-      slootbowl.scoreA > slootbowl.scoreB
-        ? slootbowl.rosterA
-        : slootbowl.scoreB > slootbowl.scoreA
-        ? slootbowl.rosterB
-        : null;
-
-    if (winningRosterId !== null) {
-      const winningStarters =
-        winningRosterId === slootbowl.rosterA
-          ? slootbowl.startersA
-          : slootbowl.startersB;
-
-      const winningStarterPoints =
-        winningRosterId === slootbowl.rosterA
-          ? slootbowl.startersPointsA
-          : slootbowl.startersPointsB;
-
-      const candidates = winningStarters
-        .map((playerId, index) => ({
-          playerId,
-          rosterId: winningRosterId,
-          points:
-            winningStarterPoints[index] ?? 0,
-        }))
-        .filter(
-          (candidate) =>
-            candidate.playerId &&
-            candidate.playerId !== "0" &&
-            Number.isFinite(candidate.points)
-        );
-
-      sbMvp = candidates.sort(
-        (a, b) => b.points - a.points
-      )[0];
-    }
-  }
 
   const playoffWeeks = [15, 16, 17];
 
@@ -442,12 +215,17 @@ export default async function SeasonPage({
                 fontSize: "22px",
               }}
             >
-              🏆 {getFranchiseName(championship.champion)}
+              🏆{" "}
+              {getFranchiseName(
+                championship.champion
+              )}
             </h2>
 
             <p>
               Defeated{" "}
-              {getFranchiseName(championship.runnerUp)}
+              {getFranchiseName(
+                championship.runnerUp
+              )}
             </p>
           </>
         ) : (
@@ -717,11 +495,7 @@ export default async function SeasonPage({
                         }}
                       >
                         {getFranchiseName(
-                          "rosterId" in result
-                            ? result.rosterId
-                            : Array.from(
-                                result.rosters
-                              )[0]
+                          result.rosterId
                         )}
                       </span>
                     </div>
@@ -747,7 +521,9 @@ export default async function SeasonPage({
 
       <section style={{ marginTop: "30px" }}>
         <div style={{ marginBottom: "12px" }}>
-          <p style={labelStyle()}>PLAYOFFS</p>
+          <p style={labelStyle()}>
+            PLAYOFFS
+          </p>
 
           <h2
             style={{
@@ -809,8 +585,7 @@ export default async function SeasonPage({
                     style={{
                       padding: "12px 0",
                       borderBottom:
-                        index ===
-                        games.length - 1
+                        index === games.length - 1
                           ? "none"
                           : "1px solid #27303b",
                     }}
