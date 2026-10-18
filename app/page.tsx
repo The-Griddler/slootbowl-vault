@@ -1,12 +1,16 @@
 
 import Link from "next/link";
 import { getHistoricalData } from "../lib/sleeper";
+import { getPlayers, getPlayerName } from "../lib/players";
 import {
   calculateHomeStats,
-  type HomeGame,
   type HomeStanding,
 } from "../lib/homeStats";
+import {
+  calculateWeeklyRecaps,
+} from "../lib/weeklyRecap";
 import { FRANCHISES } from "../lib/franchises";
+import WeeklyRecapSection from "./WeeklyRecap";
 
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
@@ -113,140 +117,6 @@ function SectionHeading({
           {description}
         </p>
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div
-      style={{
-        background: CARD,
-        border: BORDER,
-        borderRadius: 14,
-        padding: 15,
-        minWidth: 0,
-      }}
-    >
-      <div
-        style={{
-          color: MUTED,
-          fontSize: 11,
-          lineHeight: 1.4,
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          color: "#ffffff",
-          fontSize: 25,
-          fontWeight: 900,
-          marginTop: 9,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </div>
-
-      {detail && (
-        <div
-          style={{
-            color: MUTED,
-            fontSize: 11,
-            lineHeight: 1.5,
-            marginTop: 7,
-          }}
-        >
-          {detail}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GameSummary({
-  game,
-}: {
-  game: HomeGame;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 9,
-      }}
-    >
-      <div
-        style={{
-          color: MUTED,
-          fontSize: 11,
-          fontWeight: 700,
-        }}
-      >
-        WEEK {game.week}
-      </div>
-
-      {[
-        {
-          id: game.rosterA,
-          score: game.scoreA,
-        },
-        {
-          id: game.rosterB,
-          score: game.scoreB,
-        },
-      ].map((team) => (
-        <div
-          key={team.id}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 9,
-          }}
-        >
-          <TeamLogo
-            rosterId={team.id}
-            size={28}
-          />
-
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 12,
-              fontWeight:
-                game.winnerId === team.id
-                  ? 800
-                  : 500,
-              lineHeight: 1.4,
-            }}
-          >
-            {teamName(team.id)}
-          </span>
-
-          <strong
-            style={{
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              fontVariantNumeric:
-                "tabular-nums",
-            }}
-          >
-            {formatPoints(team.score)}
-          </strong>
-        </div>
-      ))}
     </div>
   );
 }
@@ -395,7 +265,49 @@ export default async function HomePage() {
     "2026"
   );
 
-  const stats = home.seasonStats;
+  const weeklyRecaps =
+    calculateWeeklyRecaps(
+      historicalData,
+      "2026"
+    );
+
+  const awardPlayerIds = new Set<string>();
+
+  for (const recap of weeklyRecaps.recaps) {
+    if (recap.obfcPlayerOfTheWeek) {
+      awardPlayerIds.add(
+        recap.obfcPlayerOfTheWeek.playerId
+      );
+    }
+
+    if (recap.gpfcPlayerOfTheWeek) {
+      awardPlayerIds.add(
+        recap.gpfcPlayerOfTheWeek.playerId
+      );
+    }
+  }
+
+  const playerInfo: Record<
+    string,
+    {
+      name: string;
+      position: string;
+    }
+  > = {};
+
+  if (awardPlayerIds.size > 0) {
+    const players = await getPlayers();
+
+    for (const playerId of awardPlayerIds) {
+      const player = players[playerId] ?? null;
+
+      playerInfo[playerId] = {
+        name: getPlayerName(player),
+        position: player?.position ?? "—",
+      };
+    }
+  }
+
   const record = home.recordWatch[0];
 
   return (
@@ -471,136 +383,18 @@ export default async function HomePage() {
             }}
           />
 
-          {stats.latestCompletedWeek > 0
-            ? `Results through Week ${stats.latestCompletedWeek}`
+          {home.seasonStats.latestCompletedWeek > 0
+            ? `Results through Week ${home.seasonStats.latestCompletedWeek}`
             : "Awaiting completed games"}
         </div>
       </header>
 
-      {/* Season statistics */}
+      {/* Weekly Recap replaces At a Glance */}
 
-      <section style={{ marginTop: 28 }}>
-        <SectionHeading
-          eyebrow="THE SEASON SO FAR"
-          title="2026 at a Glance"
-          description="Statistics from completed regular-season matchups."
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(2, minmax(0, 1fr))",
-            gap: 10,
-          }}
-        >
-          <StatCard
-            label="Games completed"
-            value={String(stats.gamesPlayed)}
-            detail={`${stats.completedWeeks} weeks represented`}
-          />
-
-          <StatCard
-            label="Highest team score"
-            value={
-              stats.highestTeamScore
-                ? formatPoints(
-                    stats.highestTeamScore.points
-                  )
-                : "—"
-            }
-            detail={
-              stats.highestTeamScore
-                ? `${teamName(
-                    stats.highestTeamScore.rosterId
-                  )} · Week ${
-                    stats.highestTeamScore.week
-                  }`
-                : "No completed games"
-            }
-          />
-
-          <StatCard
-            label="Closest finish"
-            value={
-              stats.closestGame
-                ? formatPoints(
-                    stats.closestGame.margin
-                  )
-                : "—"
-            }
-            detail={
-              stats.closestGame
-                ? `Week ${stats.closestGame.week} · Winning margin`
-                : "No completed games"
-            }
-          />
-
-          <StatCard
-            label="Biggest demolition"
-            value={
-              stats.biggestBlowout
-                ? formatPoints(
-                    stats.biggestBlowout.margin
-                  )
-                : "—"
-            }
-            detail={
-              stats.biggestBlowout
-                ? `Week ${stats.biggestBlowout.week} · Winning margin`
-                : "No completed games"
-            }
-          />
-        </div>
-
-        {stats.highestScoringGame && (
-          <div
-            style={{
-              background: CARD,
-              border: BORDER,
-              borderRadius: 14,
-              padding: 16,
-              marginTop: 10,
-            }}
-          >
-            <div
-              style={{
-                color: GOLD,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: 0.7,
-                marginBottom: 12,
-              }}
-            >
-              🔥 HIGHEST-SCORING MATCHUP
-            </div>
-
-            <GameSummary
-              game={stats.highestScoringGame}
-            />
-
-            <div
-              style={{
-                borderTop: BORDER,
-                paddingTop: 12,
-                marginTop: 14,
-                color: MUTED,
-                fontSize: 12,
-              }}
-            >
-              Combined score:{" "}
-              <strong
-                style={{ color: "#ffffff" }}
-              >
-                {formatPoints(
-                  stats.highestScoringGame
-                    .combinedScore
-                )}
-              </strong>
-            </div>
-          </div>
-        )}
-      </section>
+      <WeeklyRecapSection
+        data={weeklyRecaps}
+        playerInfo={playerInfo}
+      />
 
       {/* MVP Ladder preview */}
 
