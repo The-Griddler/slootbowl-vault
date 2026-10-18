@@ -370,8 +370,6 @@ function PlayerAward({
         padding: 12,
         minWidth: 0,
         textAlign: "center",
-
-        // Both cards share identical row heights.
         display: "grid",
         gridTemplateRows:
           "44px 78px 46px 22px 42px 32px",
@@ -379,7 +377,7 @@ function PlayerAward({
         alignContent: "start",
       }}
     >
-      {/* Fixed-height conference heading */}
+      {/* Identical two-line headings */}
       <div
         style={{
           color:
@@ -392,13 +390,20 @@ function PlayerAward({
           lineHeight: 1.35,
           width: "100%",
           display: "flex",
-          justifyContent: "center",
-          alignItems: "flex-start",
-          textAlign: "center",
-          overflowWrap: "break-word",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          gap: 2,
+          whiteSpace: "nowrap",
         }}
       >
-        {conference} PLAYER OF THE WEEK
+        <span>
+          {conference} PLAYER
+        </span>
+
+        <span>
+          OF THE WEEK
+        </span>
       </div>
 
       {/* Player photo */}
@@ -436,7 +441,7 @@ function PlayerAward({
         )}
       </div>
 
-      {/* Fixed-height player name */}
+      {/* Player name */}
       <div
         style={{
           color: "#ffffff",
