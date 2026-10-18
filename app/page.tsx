@@ -1,7 +1,10 @@
 
 import Link from "next/link";
 import { getHistoricalData } from "../lib/sleeper";
-import { getPlayers, getPlayerName } from "../lib/players";
+import {
+  getPlayers,
+  getPlayerName,
+} from "../lib/players";
 import {
   calculateHomeStats,
   type HomeStanding,
@@ -11,6 +14,7 @@ import {
 } from "../lib/weeklyRecap";
 import {
   calculateMVPLeaderboard,
+  type MVPPlayerTeams,
 } from "../lib/mvp";
 import { FRANCHISES } from "../lib/franchises";
 import WeeklyRecapSection from "./weeklyRecap";
@@ -42,7 +46,10 @@ const NAMES = new Map(
 );
 
 function teamName(rosterId: number) {
-  return NAMES.get(rosterId) ?? `Team ${rosterId}`;
+  return (
+    NAMES.get(rosterId) ??
+    `Team ${rosterId}`
+  );
 }
 
 function formatPoints(value: number) {
@@ -190,18 +197,20 @@ function ConferenceTable({
               alignItems: "center",
               padding: "9px 6px",
               borderRadius: 9,
-              background: team.inPlayoffPosition
-                ? "#202d2b"
-                : "transparent",
+              background:
+                team.inPlayoffPosition
+                  ? "#202d2b"
+                  : "transparent",
               textDecoration: "none",
               color: "#ffffff",
             }}
           >
             <span
               style={{
-                color: team.inPlayoffPosition
-                  ? "#86efac"
-                  : MUTED,
+                color:
+                  team.inPlayoffPosition
+                    ? "#86efac"
+                    : MUTED,
                 fontSize: 11,
                 fontWeight: 800,
               }}
@@ -222,7 +231,9 @@ function ConferenceTable({
                 minWidth: 0,
               }}
             >
-              {teamName(team.rosterId)}
+              {teamName(
+                team.rosterId
+              )}
             </span>
 
             <div
@@ -250,7 +261,10 @@ function ConferenceTable({
                   marginTop: 3,
                 }}
               >
-                {formatPoints(team.pointsFor)} PF
+                {formatPoints(
+                  team.pointsFor
+                )}{" "}
+                PF
               </div>
             </div>
           </Link>
@@ -261,9 +275,24 @@ function ConferenceTable({
 }
 
 export default async function HomePage() {
-  const historicalData =
-    await getHistoricalData();
+  /**
+   * Fetch historical SFL data and
+   * Sleeper's NFL player directory.
+   *
+   * Both requests can run together.
+   */
+  const [
+    historicalData,
+    players,
+  ] = await Promise.all([
+    getHistoricalData(),
+    getPlayers(),
+  ]);
 
+  /**
+   * Calculate the existing
+   * homepage features.
+   */
   const home = calculateHomeStats(
     historicalData,
     "2026"
@@ -275,37 +304,90 @@ export default async function HomePage() {
       "2026"
     );
 
+  /**
+   * Build the NFL team lookup.
+   *
+   * The MVP engine uses this
+   * information to identify
+   * players whose NFL team has
+   * completed its bye week.
+   */
+  const playerTeams: MVPPlayerTeams = {};
+
+  for (const [
+    playerId,
+    player,
+  ] of Object.entries(players)) {
+    playerTeams[playerId] =
+      player.team ?? null;
+  }
+
+  /**
+   * Calculate the live MVP Ladder
+   * using bye-week protection.
+   *
+   * The third argument is the
+   * requested final week (14).
+   *
+   * Only completed weeks are
+   * actually included.
+   */
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
-      "2026"
+      "2026",
+      14,
+      playerTeams
     );
 
-  // Gather player IDs for both homepage features.
-  // This allows one Sleeper player-directory fetch.
-
-  const homepagePlayerIds = new Set<string>();
+  /**
+   * Collect every player whose
+   * name and position is needed
+   * on the homepage.
+   *
+   * Includes weekly award winners
+   * and all MVP top-10 contenders.
+   */
+  const homepagePlayerIds =
+    new Set<string>();
 
   for (const recap of weeklyRecaps.recaps) {
-    if (recap.obfcPlayerOfTheWeek) {
+    if (
+      recap.obfcPlayerOfTheWeek
+    ) {
       homepagePlayerIds.add(
-        recap.obfcPlayerOfTheWeek.playerId
+        recap.obfcPlayerOfTheWeek
+          .playerId
       );
     }
 
-    if (recap.gpfcPlayerOfTheWeek) {
+    if (
+      recap.gpfcPlayerOfTheWeek
+    ) {
       homepagePlayerIds.add(
-        recap.gpfcPlayerOfTheWeek.playerId
+        recap.gpfcPlayerOfTheWeek
+          .playerId
       );
     }
   }
 
-  for (const candidate of mvpLeaderboard.topTen) {
+  for (
+    const candidate of
+    mvpLeaderboard.topTen
+  ) {
     homepagePlayerIds.add(
       candidate.playerId
     );
   }
 
+  /**
+   * Player names and positions
+   * for both homepage components.
+   *
+   * Reuses the directory fetched
+   * above, avoiding a second
+   * Sleeper request.
+   */
   const playerInfo: Record<
     string,
     {
@@ -314,20 +396,22 @@ export default async function HomePage() {
     }
   > = {};
 
-  if (homepagePlayerIds.size > 0) {
-    const players = await getPlayers();
+  for (
+    const playerId of
+    homepagePlayerIds
+  ) {
+    const player =
+      players[playerId] ?? null;
 
-    for (const playerId of homepagePlayerIds) {
-      const player = players[playerId] ?? null;
-
-      playerInfo[playerId] = {
-        name: getPlayerName(player),
-        position: player?.position ?? "—",
-      };
-    }
+    playerInfo[playerId] = {
+      name: getPlayerName(player),
+      position:
+        player?.position ?? "—",
+    };
   }
 
-  const record = home.recordWatch[0];
+  const record =
+    home.recordWatch[0];
 
   return (
     <main
@@ -357,7 +441,8 @@ export default async function HomePage() {
 
         <h1
           style={{
-            fontSize: "clamp(29px, 7vw, 42px)",
+            fontSize:
+              "clamp(29px, 7vw, 42px)",
             fontWeight: 900,
             letterSpacing: -1.2,
             lineHeight: 1.1,
@@ -402,7 +487,8 @@ export default async function HomePage() {
             }}
           />
 
-          {home.seasonStats.latestCompletedWeek > 0
+          {home.seasonStats
+            .latestCompletedWeek > 0
             ? `Results through Week ${home.seasonStats.latestCompletedWeek}`
             : "Awaiting completed games"}
         </div>
@@ -415,7 +501,7 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* Live MVP Ladder */}
+      {/* Bye-adjusted MVP Ladder */}
 
       <MVPLadder
         leaderboard={mvpLeaderboard}
@@ -424,7 +510,9 @@ export default async function HomePage() {
 
       {/* Record Watch */}
 
-      <section style={{ marginTop: 36 }}>
+      <section
+        style={{ marginTop: 36 }}
+      >
         <SectionHeading
           eyebrow="THE RECORD BOOK"
           title="SFL Record Watch"
@@ -459,7 +547,8 @@ export default async function HomePage() {
                 marginBottom: 16,
               }}
             >
-              {record.challengerRosterId !== null && (
+              {record.challengerRosterId !==
+                null && (
                 <TeamLogo
                   rosterId={
                     record.challengerRosterId
@@ -475,7 +564,8 @@ export default async function HomePage() {
                     fontSize: 15,
                   }}
                 >
-                  {record.challengerRosterId !== null
+                  {record.challengerRosterId !==
+                  null
                     ? teamName(
                         record.challengerRosterId
                       )
@@ -497,14 +587,17 @@ export default async function HomePage() {
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent:
+                  "space-between",
                 gap: 12,
                 fontSize: 12,
                 marginBottom: 10,
               }}
             >
               <span>
-                {formatPoints(record.challenger)}
+                {formatPoints(
+                  record.challenger
+                )}
               </span>
 
               <span
@@ -513,7 +606,9 @@ export default async function HomePage() {
                   fontWeight: 800,
                 }}
               >
-                {formatPoints(record.record)}
+                {formatPoints(
+                  record.record
+                )}
               </span>
             </div>
 
@@ -544,13 +639,17 @@ export default async function HomePage() {
               }}
             >
               Historical record:{" "}
-              {record.recordRosterId !== null
-                ? teamName(record.recordRosterId)
+              {record.recordRosterId !==
+              null
+                ? teamName(
+                    record.recordRosterId
+                  )
                 : "Unknown franchise"}{" "}
               ({record.recordSeason})
             </div>
 
-            {record.projectedTotal !== null && (
+            {record.projectedTotal !==
+              null && (
               <div
                 style={{
                   background: "#202b38",
@@ -563,9 +662,10 @@ export default async function HomePage() {
               >
                 <strong
                   style={{
-                    color: record.onRecordPace
-                      ? "#86efac"
-                      : "#ffffff",
+                    color:
+                      record.onRecordPace
+                        ? "#86efac"
+                        : "#ffffff",
                   }}
                 >
                   {record.onRecordPace
@@ -579,7 +679,8 @@ export default async function HomePage() {
                     marginTop: 5,
                   }}
                 >
-                  Projected 14-week total:{" "}
+                  Projected 14-week
+                  total:{" "}
                   {formatPoints(
                     record.projectedTotal
                   )}
@@ -608,7 +709,9 @@ export default async function HomePage() {
 
       {/* Conference standings */}
 
-      <section style={{ marginTop: 36 }}>
+      <section
+        style={{ marginTop: 36 }}
+      >
         <SectionHeading
           eyebrow="THE PLAYOFF PICTURE"
           title="Conference Standings"
@@ -623,13 +726,17 @@ export default async function HomePage() {
         >
           <ConferenceTable
             title="OBFC"
-            standings={home.conferences.OBFC}
+            standings={
+              home.conferences.OBFC
+            }
             accent="#299DB9"
           />
 
           <ConferenceTable
             title="GPFC"
-            standings={home.conferences.GPFC}
+            standings={
+              home.conferences.GPFC
+            }
             accent="#C83E2F"
           />
         </div>
@@ -642,16 +749,19 @@ export default async function HomePage() {
             marginTop: 12,
           }}
         >
-          Green-highlighted teams currently
-          occupy playoff positions.
-          Standings remain provisional
-          until the regular season ends.
+          Green-highlighted teams
+          currently occupy playoff
+          positions. Standings remain
+          provisional until the
+          regular season ends.
         </p>
       </section>
 
       {/* Archive highlights */}
 
-      <section style={{ marginTop: 36 }}>
+      <section
+        style={{ marginTop: 36 }}
+      >
         <SectionHeading
           eyebrow="THE VAULT"
           title="2026 Archive Highlights"
@@ -761,7 +871,7 @@ export default async function HomePage() {
         }}
       >
         Slootbowl Vault · SFL Historical
-        & Statistical Archive
+        &amp; Statistical Archive
       </footer>
     </main>
   );
