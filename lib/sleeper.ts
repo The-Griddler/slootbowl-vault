@@ -38,7 +38,11 @@ export type SleeperMatchup = {
   custom_points: number | null;
   starters?: string[] | null;
   starters_points?: number[] | null;
-  players_points?: Record<string, number> | null;
+  players?: string[] | null;
+  players_points?: Record<
+    string,
+    number
+  > | null;
 };
 
 export type SleeperBracketMatch = {
@@ -69,21 +73,37 @@ export type HistoricalMatchup = {
   season: string;
   week: number;
   phase: HistoricalMatchupPhase;
+
   rosterA: number;
   rosterB: number;
+
   scoreA: number;
   scoreB: number;
+
   startersA: string[];
   startersB: string[];
+
   startersPointsA: number[];
   startersPointsB: number[];
 
   /**
-   * True when Sleeper's NFL state indicates
-   * that this fantasy week has finished.
+   * Full Sleeper matchup rosters.
    *
-   * Current-week scores remain available
-   * for live display, but are not final.
+   * These include starters and
+   * bench players.
+   *
+   * They are historical roster
+   * evidence, but Sleeper does not
+   * guarantee that their snapshot
+   * timestamp equals the exact
+   * end-of-week MVP cutoff.
+   */
+  playersA?: string[];
+  playersB?: string[];
+
+  /**
+   * Only completed fantasy weeks
+   * count towards official records.
    */
   isComplete: boolean;
 };
@@ -102,6 +122,76 @@ export type SleeperNFLState = {
   league_season?: string;
   previous_season?: string;
 };
+
+/**
+ * Sleeper transaction records.
+ *
+ * The adds/drops maps use:
+ *
+ * player ID -> roster ID
+ *
+ * Trades can include the same
+ * player in both maps, showing
+ * the roster they left and the
+ * roster they joined.
+ */
+export type SleeperTransaction = {
+  transaction_id: string;
+
+  type:
+    | "trade"
+    | "waiver"
+    | "free_agent"
+    | string;
+
+  status: string;
+
+  /**
+   * Sleeper timestamps are in
+   * milliseconds since epoch.
+   */
+  created: number | null;
+  status_updated: number | null;
+
+  /**
+   * Sleeper's transaction week.
+   */
+  leg: number | null;
+
+  roster_ids: number[];
+
+  adds: Record<
+    string,
+    number
+  > | null;
+
+  drops: Record<
+    string,
+    number
+  > | null;
+
+  creator?: string | null;
+  metadata?: Record<
+    string,
+    unknown
+  > | null;
+
+  draft_picks?: unknown[];
+};
+
+/**
+ * A transaction with its
+ * originating Sleeper round.
+ *
+ * The round matters because
+ * transaction weeks do not always
+ * correspond exactly to the time
+ * the move was completed.
+ */
+export type HistoricalTransaction =
+  SleeperTransaction & {
+    round: number;
+  };
 
 async function fetchLeague(
   leagueId: string
@@ -148,12 +238,6 @@ async function fetchBracket(
   return response.json();
 }
 
-/**
- * Get Sleeper's current NFL season and week.
- *
- * Do not use display_week for completion:
- * it can differ from the actual NFL week.
- */
 export async function getNFLState():
   Promise<SleeperNFLState> {
   const response = await fetch(
@@ -175,21 +259,8 @@ export async function getNFLState():
 }
 
 /**
- * Determine whether an NFL fantasy week
- * has officially passed.
- *
- * Past seasons are complete.
- * Future seasons are incomplete.
- *
- * During the current NFL regular season,
- * only weeks earlier than the active
- * NFL week are considered complete.
- *
- * Once the NFL postseason begins,
- * fantasy Weeks 1-17 are complete.
- *
- * During preseason, no games in that
- * season are considered complete.
+ * Determine whether a fantasy
+ * week has finished.
  */
 export function isNFLWeekComplete(
   season: string,
@@ -197,7 +268,9 @@ export function isNFLWeekComplete(
   nflState: SleeperNFLState
 ): boolean {
   const matchupYear = Number(season);
-  const nflYear = Number(nflState.season);
+  const nflYear = Number(
+    nflState.season
+  );
 
   if (
     !Number.isFinite(matchupYear) ||
@@ -344,6 +417,156 @@ export async function getMatchups(
   return response.json();
 }
 
+/**
+ * Fetch transactions for one
+ * Sleeper round.
+ *
+ * Includes trades, waivers,
+ * free agents and other moves.
+ */
+export async function getTransactions(
+  round: number,
+  leagueId: string = LEAGUE_ID
+): Promise<SleeperTransaction[]> {
+  if (
+    !Number.isInteger(round) ||
+    round < 0
+  ) {
+    throw new Error(
+      `Invalid Sleeper transaction round: ${round}`
+    );
+  }
+
+  const response = await fetch(
+    `https://api.sleeper.app/v1/league/${leagueId}/transactions/${round}`,
+    {
+      next: {
+        revalidate: 300,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load Sleeper transactions for league ${leagueId}, round ${round}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Retrieve completed transactions
+ * across a range of rounds.
+ *
+ * Transactions are sorted by
+ * completion timestamp.
+ *
+ * The function deliberately does
+ * not assume a transaction's round
+ * is the exact time it occurred.
+ */
+export async function getTransactionHistory(
+  startRound: number,
+  endRound: number,
+  leagueId: string = LEAGUE_ID
+): Promise<HistoricalTransaction[]> {
+  if (
+    !Number.isInteger(startRound) ||
+    !Number.isInteger(endRound) ||
+    startRound < 0 ||
+    endRound < startRound
+  ) {
+    throw new Error(
+      "Invalid transaction round range"
+    );
+  }
+
+  const rounds = Array.from(
+    {
+      length:
+        endRound - startRound + 1,
+    },
+    (_, index) =>
+      startRound + index
+  );
+
+  const responses = await Promise.all(
+    rounds.map(async (round) => {
+      const transactions =
+        await getTransactions(
+          round,
+          leagueId
+        );
+
+      return transactions.map(
+        (transaction) => ({
+          ...transaction,
+          round,
+        })
+      );
+    })
+  );
+
+  const unique = new Map<
+    string,
+    HistoricalTransaction
+  >();
+
+  for (const transaction of
+    responses.flat()) {
+    if (
+      transaction.status !==
+      "complete"
+    ) {
+      continue;
+    }
+
+    unique.set(
+      transaction.transaction_id,
+      transaction
+    );
+  }
+
+  return [...unique.values()].sort(
+    (a, b) =>
+      (a.status_updated ??
+        a.created ??
+        0) -
+        (b.status_updated ??
+          b.created ??
+          0) ||
+      a.transaction_id.localeCompare(
+        b.transaction_id
+      )
+  );
+}
+
+/**
+ * Transactions relevant to the
+ * Week 9 MVP franchise cutoff.
+ *
+ * Include round 0 (preseason)
+ * through round 10 so that moves
+ * near the week boundary are
+ * available for timestamp-based
+ * analysis.
+ *
+ * This helper retrieves evidence.
+ * It does not independently decide
+ * which side of the cutoff a
+ * transaction belongs to.
+ */
+export async function getMVPTransactions(
+  leagueId: string = LEAGUE_ID
+): Promise<HistoricalTransaction[]> {
+  return getTransactionHistory(
+    0,
+    10,
+    leagueId
+  );
+}
+
 function rosterPairKey(
   rosterA: number,
   rosterB: number
@@ -472,7 +695,8 @@ export async function getHistoricalSeason(
         SleeperMatchup[]
       >();
 
-    for (const matchup of weeklyMatchups) {
+    for (const matchup of
+      weeklyMatchups) {
       if (
         matchup.matchup_id === null
       ) {
@@ -533,6 +757,17 @@ export async function getHistoricalSeason(
       const startersPointsB =
         teamB.starters_points ?? [];
 
+      /**
+       * New: retain the full
+       * historical matchup roster,
+       * including bench players.
+       */
+      const playersA =
+        teamA.players ?? [];
+
+      const playersB =
+        teamB.players ?? [];
+
       const isComplete =
         isNFLWeekComplete(
           league.season,
@@ -544,14 +779,22 @@ export async function getHistoricalSeason(
         season: league.season,
         week,
         phase,
+
         rosterA: teamA.roster_id,
         rosterB: teamB.roster_id,
+
         scoreA,
         scoreB,
+
         startersA,
         startersB,
+
         startersPointsA,
         startersPointsB,
+
+        playersA,
+        playersB,
+
         isComplete,
       });
     }
