@@ -2,6 +2,7 @@
 import type {
   HistoricalMatchup,
   HistoricalSeason,
+  HistoricalTransaction,
 } from "./sleeper";
 
 export const MVP_SEASON = "2026";
@@ -11,54 +12,40 @@ export const MVP_REGULAR_SEASON_WEEKS = 14;
 const OBFC = [4, 6, 8, 7, 9];
 const GPFC = [1, 2, 10, 3, 5];
 
-/**
- * 2026 NFL bye-week lookup.
- *
- * Preserve the bye adjustment
- * already used by the homepage.
- */
 export const NFL_BYES_2026: Record<
   string,
   number
 > = {
   CAR: 5,
   KC: 5,
-
   CIN: 6,
   DET: 6,
   MIA: 6,
   MIN: 6,
-
   BUF: 7,
   JAX: 7,
   LAC: 7,
   WAS: 7,
-
   HOU: 8,
   NO: 8,
   NYG: 8,
   SF: 8,
-
   PIT: 9,
   TEN: 9,
-
   CHI: 10,
   DEN: 10,
   PHI: 10,
   TB: 10,
-
   ATL: 11,
   CLE: 11,
   GB: 11,
   LAR: 11,
   NE: 11,
   SEA: 11,
-
   BAL: 13,
   IND: 13,
   LV: 13,
   NYJ: 13,
-
   ARI: 14,
   DAL: 14,
 };
@@ -74,32 +61,19 @@ export type MVPPlayerWeek = {
 
 export type MVPCandidate = {
   playerId: string;
-
   totalPoints: number;
   gamesStarted: number;
 
   mvpRosterId: number | null;
   latestStartingRosterId: number | null;
-
-  /**
-   * True only if ownership at the
-   * exact Week 9 cutoff has been
-   * independently verified.
-   *
-   * A weekly matchup snapshot
-   * alone does not guarantee that.
-   */
   franchiseConfirmed: boolean;
 
-  /**
-   * Explains how the attributed
-   * franchise was established.
-   */
   franchiseSource:
     | "week9_roster"
     | "week9_starter"
     | "pre_cutoff_starter"
     | "current_starter"
+    | "transaction"
     | "unresolved";
 
   inPlayoffPosition: boolean;
@@ -187,10 +161,7 @@ function collectPlayerStarts(
   ) {
     starters.forEach(
       (playerId, index) => {
-        if (
-          !playerId ||
-          playerId === "0"
-        ) {
+        if (!playerId || playerId === "0") {
           return;
         }
 
@@ -267,13 +238,8 @@ function calculateStandings(
   }
 
   for (const game of games) {
-    const a = standings.get(
-      game.rosterA
-    );
-
-    const b = standings.get(
-      game.rosterB
-    );
+    const a = standings.get(game.rosterA);
+    const b = standings.get(game.rosterB);
 
     if (!a || !b) continue;
 
@@ -283,9 +249,7 @@ function calculateStandings(
     if (game.scoreA > game.scoreB) {
       a.wins++;
       b.losses++;
-    } else if (
-      game.scoreB > game.scoreA
-    ) {
+    } else if (game.scoreB > game.scoreA) {
       b.wins++;
       a.losses++;
     } else {
@@ -294,10 +258,7 @@ function calculateStandings(
     }
   }
 
-  for (const conference of [
-    OBFC,
-    GPFC,
-  ]) {
+  for (const conference of [OBFC, GPFC]) {
     const teams = conference
       .map((id) => standings.get(id)!)
       .sort((a, b) => {
@@ -309,14 +270,12 @@ function calculateStandings(
 
         const pctA =
           gamesA > 0
-            ? (a.wins + a.ties / 2) /
-              gamesA
+            ? (a.wins + a.ties / 2) / gamesA
             : 0;
 
         const pctB =
           gamesB > 0
-            ? (b.wins + b.ties / 2) /
-              gamesB
+            ? (b.wins + b.ties / 2) / gamesB
             : 0;
 
         return (
@@ -334,18 +293,6 @@ function calculateStandings(
   return standings;
 }
 
-/**
- * Build a lookup of players
- * appearing on the complete
- * Week 9 matchup rosters.
- *
- * This includes bench players.
- *
- * If a player appears on multiple
- * franchises' rosters, ownership
- * is ambiguous and no automatic
- * assignment is made.
- */
 function buildWeekNineOwners(
   games: HistoricalMatchup[]
 ): Map<string, number> {
@@ -359,10 +306,7 @@ function buildWeekNineOwners(
     playerIds: string[]
   ) {
     for (const playerId of playerIds) {
-      if (
-        !playerId ||
-        playerId === "0"
-      ) {
+      if (!playerId || playerId === "0") {
         continue;
       }
 
@@ -398,10 +342,7 @@ function buildWeekNineOwners(
     );
   }
 
-  const owners = new Map<
-    string,
-    number
-  >();
+  const owners = new Map<string, number>();
 
   for (const [
     playerId,
@@ -419,32 +360,64 @@ function buildWeekNineOwners(
 }
 
 /**
- * Establish the best available
- * MVP franchise attribution.
+ * Transactions are passed into the
+ * MVP engine but only used when
+ * an explicit cutoff timestamp is
+ * available.
  *
- * Before Week 9:
- * Most recent starting franchise.
- *
- * From Week 9 onwards:
- * Prefer the Week 9 full roster,
- * including bench players.
- *
- * If that isn't available:
- * Use Week 9 starter evidence,
- * then the latest pre-cutoff start.
- *
- * Do not substitute a later
- * franchise for an unknown
- * Week 9 owner.
+ * This prevents incorrectly treating
+ * a transaction's Sleeper round as
+ * its actual completion time.
  */
+function findTransactionOwner(
+  playerId: string,
+  transactions: HistoricalTransaction[],
+  cutoffTimestamp: number | null
+): number | null {
+  if (cutoffTimestamp === null) {
+    return null;
+  }
+
+  const relevant = transactions
+    .filter((transaction) => {
+      const timestamp =
+        transaction.status_updated ??
+        transaction.created;
+
+      return (
+        transaction.status === "complete" &&
+        timestamp !== null &&
+        timestamp <= cutoffTimestamp &&
+        transaction.adds?.[playerId] !==
+          undefined
+      );
+    })
+    .sort((a, b) => {
+      const timeA =
+        a.status_updated ??
+        a.created ??
+        0;
+
+      const timeB =
+        b.status_updated ??
+        b.created ??
+        0;
+
+      return timeB - timeA;
+    });
+
+  const latest = relevant[0];
+
+  return latest?.adds?.[playerId] ?? null;
+}
+
 function findMVPFranchise(
   weeks: MVPPlayerWeek[],
   throughWeek: number,
   playerId: string,
-  weekNineOwners: Map<
-    string,
-    number
-  >
+  weekNineOwners: Map<string, number>,
+  transactions: HistoricalTransaction[],
+  cutoffTimestamp: number | null
 ): FranchiseResult {
   if (weeks.length === 0) {
     return {
@@ -460,19 +433,31 @@ function findMVPFranchise(
   ) {
     return {
       rosterId:
-        weeks[weeks.length - 1]
-          .rosterId,
+        weeks[weeks.length - 1].rosterId,
       confirmed: false,
       source: "current_starter",
+    };
+  }
+
+  const transactionOwner =
+    findTransactionOwner(
+      playerId,
+      transactions,
+      cutoffTimestamp
+    );
+
+  if (transactionOwner !== null) {
+    return {
+      rosterId: transactionOwner,
+      confirmed: true,
+      source: "transaction",
     };
   }
 
   const rosterOwner =
     weekNineOwners.get(playerId);
 
-  if (
-    rosterOwner !== undefined
-  ) {
+  if (rosterOwner !== undefined) {
     return {
       rosterId: rosterOwner,
       confirmed: false,
@@ -504,8 +489,7 @@ function findMVPFranchise(
 
   if (beforeCutoff) {
     return {
-      rosterId:
-        beforeCutoff.rosterId,
+      rosterId: beforeCutoff.rosterId,
       confirmed: false,
       source: "pre_cutoff_starter",
     };
@@ -557,9 +541,7 @@ function completedByes(
 
   if (!byeWeek) return 0;
 
-  return byeWeek <= throughWeek
-    ? 1
-    : 0;
+  return byeWeek <= throughWeek ? 1 : 0;
 }
 
 function calculateAdjustedPoints(
@@ -590,9 +572,7 @@ function minimumStarts(
 ): number {
   return Math.max(
     1,
-    Math.ceil(
-      availableWeeks * 0.6
-    )
+    Math.ceil(availableWeeks * 0.6)
   );
 }
 
@@ -600,43 +580,37 @@ function calculateCandidates(
   games: HistoricalMatchup[],
   throughWeek: number,
   season: string,
-  playerTeams: MVPPlayerTeams
+  playerTeams: MVPPlayerTeams,
+  transactions: HistoricalTransaction[],
+  cutoffTimestamp: number | null
 ): MVPCandidate[] {
-  const players =
-    collectPlayerStarts(games);
-
-  const standings =
-    calculateStandings(games);
-
+  const players = collectPlayerStarts(games);
+  const standings = calculateStandings(games);
   const weekNineOwners =
     buildWeekNineOwners(games);
 
-  const candidates: MVPCandidate[] =
-    [];
+  const candidates: MVPCandidate[] = [];
 
   for (const player of players.values()) {
-    const latest =
-      player.weeks.at(-1);
+    const latest = player.weeks.at(-1);
 
-    const franchise =
-      findMVPFranchise(
-        player.weeks,
-        throughWeek,
-        player.playerId,
-        weekNineOwners
-      );
+    const franchise = findMVPFranchise(
+      player.weeks,
+      throughWeek,
+      player.playerId,
+      weekNineOwners,
+      transactions,
+      cutoffTimestamp
+    );
 
     const standing =
       franchise.rosterId !== null
-        ? standings.get(
-            franchise.rosterId
-          )
+        ? standings.get(franchise.rosterId)
         : null;
 
     const totalPoints =
       player.weeks.reduce(
-        (sum, item) =>
-          sum + item.points,
+        (sum, item) => sum + item.points,
         0
       );
 
@@ -668,9 +642,7 @@ function calculateCandidates(
 
     const meetsMinimumParticipation =
       gamesStarted >=
-      minimumStarts(
-        eligibleWeeks
-      );
+      minimumStarts(eligibleWeeks);
 
     const adjustedPoints =
       calculateAdjustedPoints(
@@ -682,9 +654,7 @@ function calculateCandidates(
     const mvpScore =
       meetsMinimumParticipation
         ? adjustedPoints *
-          playoffAdjustment(
-            conferenceRank
-          )
+          playoffAdjustment(conferenceRank)
         : 0;
 
     candidates.push({
@@ -692,17 +662,12 @@ function calculateCandidates(
       totalPoints,
       gamesStarted,
 
-      mvpRosterId:
-        franchise.rosterId,
-
+      mvpRosterId: franchise.rosterId,
       latestStartingRosterId:
         latest?.rosterId ?? null,
-
       franchiseConfirmed:
         franchise.confirmed,
-
-      franchiseSource:
-        franchise.source,
+      franchiseSource: franchise.source,
 
       inPlayoffPosition,
       conferenceRank,
@@ -722,41 +687,29 @@ function calculateCandidates(
     });
   }
 
-  /**
-   * Enforce minimum participation.
-   *
-   * Once Week 14 is complete,
-   * only players attributed to
-   * playoff-qualified franchises
-   * remain eligible.
-   */
   const eligibleCandidates =
-    candidates.filter(
-      (candidate) => {
-        if (
-          !candidate
-            .meetsMinimumParticipation
-        ) {
-          return false;
-        }
-
-        if (
-          throughWeek >=
-            MVP_REGULAR_SEASON_WEEKS &&
-          !candidate.inPlayoffPosition
-        ) {
-          return false;
-        }
-
-        return true;
+    candidates.filter((candidate) => {
+      if (
+        !candidate.meetsMinimumParticipation
+      ) {
+        return false;
       }
-    );
+
+      if (
+        throughWeek >=
+          MVP_REGULAR_SEASON_WEEKS &&
+        !candidate.inPlayoffPosition
+      ) {
+        return false;
+      }
+
+      return true;
+    });
 
   eligibleCandidates.sort(
     (a, b) =>
       b.mvpScore - a.mvpScore ||
-      b.totalPoints -
-        a.totalPoints ||
+      b.totalPoints - a.totalPoints ||
       a.playerId.localeCompare(
         b.playerId
       )
@@ -771,28 +724,38 @@ function calculateCandidates(
   return eligibleCandidates;
 }
 
+/**
+ * Backwards-compatible MVP entrypoint.
+ *
+ * Existing homepage calls still work.
+ *
+ * The fifth argument accepts
+ * completed Sleeper transactions.
+ *
+ * The sixth argument is the exact
+ * Week 9 cutoff timestamp in
+ * milliseconds since epoch.
+ */
 export function calculateMVPLeaderboard(
   historicalData: HistoricalSeason[],
   season = MVP_SEASON,
   throughWeek = MVP_REGULAR_SEASON_WEEKS,
-  playerTeams: MVPPlayerTeams = {}
+  playerTeams: MVPPlayerTeams = {},
+  transactions: HistoricalTransaction[] = [],
+  cutoffTimestamp: number | null = null
 ): MVPLeaderboard {
-  const completedGames =
-    collectGames(
-      historicalData,
-      season,
-      throughWeek
-    );
-
-  const completedWeeks =
-    completedGames.map(
-      (game) => game.week
-    );
+  const completedGames = collectGames(
+    historicalData,
+    season,
+    throughWeek
+  );
 
   const latestWeek =
-    completedWeeks.length > 0
+    completedGames.length > 0
       ? Math.max(
-          ...completedWeeks
+          ...completedGames.map(
+            (game) => game.week
+          )
         )
       : 0;
 
@@ -801,33 +764,35 @@ export function calculateMVPLeaderboard(
       completedGames,
       latestWeek,
       season,
-      playerTeams
+      playerTeams,
+      transactions,
+      cutoffTimestamp
     );
 
   if (latestWeek > 1) {
-    const previousGames =
-      collectGames(
-        historicalData,
-        season,
-        latestWeek - 1
-      );
+    const previousGames = collectGames(
+      historicalData,
+      season,
+      latestWeek - 1
+    );
 
     const previousCandidates =
       calculateCandidates(
         previousGames,
         latestWeek - 1,
         season,
-        playerTeams
+        playerTeams,
+        transactions,
+        cutoffTimestamp
       );
 
-    const previousRanks =
-      new Map(
-        previousCandidates.map(
-          (player) => [
-            player.playerId,
-            player.rank,
-          ])
-      );
+    const previousRanks = new Map(
+      previousCandidates.map(
+        (player) => [
+          player.playerId,
+          player.rank,
+        ])
+    );
 
     for (const candidate of candidates) {
       const previousRank =
@@ -849,17 +814,11 @@ export function calculateMVPLeaderboard(
   return {
     season,
     throughWeek: latestWeek,
-
-    cutoffWeek:
-      MVP_TRADE_CUTOFF_WEEK,
-
+    cutoffWeek: MVP_TRADE_CUTOFF_WEEK,
     cutoffLocked:
       latestWeek >=
       MVP_TRADE_CUTOFF_WEEK,
-
     candidates,
-
-    topTen:
-      candidates.slice(0, 10),
+    topTen: candidates.slice(0, 10),
   };
 }
