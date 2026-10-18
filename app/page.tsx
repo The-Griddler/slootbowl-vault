@@ -9,8 +9,12 @@ import {
 import {
   calculateWeeklyRecaps,
 } from "../lib/weeklyRecap";
+import {
+  calculateMVPLeaderboard,
+} from "../lib/mvp";
 import { FRANCHISES } from "../lib/franchises";
 import WeeklyRecapSection from "./weeklyRecap";
+import MVPLadder from "./MVPLadder";
 
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
@@ -271,20 +275,35 @@ export default async function HomePage() {
       "2026"
     );
 
-  const awardPlayerIds = new Set<string>();
+  const mvpLeaderboard =
+    calculateMVPLeaderboard(
+      historicalData,
+      "2026"
+    );
+
+  // Gather player IDs for both homepage features.
+  // This allows one Sleeper player-directory fetch.
+
+  const homepagePlayerIds = new Set<string>();
 
   for (const recap of weeklyRecaps.recaps) {
     if (recap.obfcPlayerOfTheWeek) {
-      awardPlayerIds.add(
+      homepagePlayerIds.add(
         recap.obfcPlayerOfTheWeek.playerId
       );
     }
 
     if (recap.gpfcPlayerOfTheWeek) {
-      awardPlayerIds.add(
+      homepagePlayerIds.add(
         recap.gpfcPlayerOfTheWeek.playerId
       );
     }
+  }
+
+  for (const candidate of mvpLeaderboard.topTen) {
+    homepagePlayerIds.add(
+      candidate.playerId
+    );
   }
 
   const playerInfo: Record<
@@ -295,10 +314,10 @@ export default async function HomePage() {
     }
   > = {};
 
-  if (awardPlayerIds.size > 0) {
+  if (homepagePlayerIds.size > 0) {
     const players = await getPlayers();
 
-    for (const playerId of awardPlayerIds) {
+    for (const playerId of homepagePlayerIds) {
       const player = players[playerId] ?? null;
 
       playerInfo[playerId] = {
@@ -396,61 +415,12 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* MVP Ladder preview */}
+      {/* Live MVP Ladder */}
 
-      <section style={{ marginTop: 36 }}>
-        <SectionHeading
-          eyebrow="2026 SFL AWARDS"
-          title="🏆 MVP Ladder"
-          description="Ten contenders. One MVP. Rankings shaped by individual production and the playoff race."
-        />
-
-        <div
-          style={{
-            background: CARD,
-            border: "1px solid #665221",
-            borderRadius: 16,
-            padding: 20,
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 37,
-              marginBottom: 10,
-            }}
-          >
-            🏆
-          </div>
-
-          <div
-            style={{
-              color: "#ffffff",
-              fontSize: 17,
-              fontWeight: 800,
-            }}
-          >
-            The MVP Race Is Coming
-          </div>
-
-          <p
-            style={{
-              color: MUTED,
-              fontSize: 12,
-              lineHeight: 1.8,
-              margin: "10px 0 0",
-            }}
-          >
-            Our top-10 MVP Ladder will
-            feature a frontrunner,
-            two leading challengers
-            and the chasing pack.
-            Weekly movement will be
-            tracked without revealing
-            fantasy points or ratings.
-          </p>
-        </div>
-      </section>
+      <MVPLadder
+        leaderboard={mvpLeaderboard}
+        playerInfo={playerInfo}
+      />
 
       {/* Record Watch */}
 
