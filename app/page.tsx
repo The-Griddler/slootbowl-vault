@@ -1,6 +1,9 @@
 
 import Link from "next/link";
-import { getHistoricalData } from "../lib/sleeper";
+import {
+  getHistoricalData,
+  getMVPTransactions,
+} from "../lib/sleeper";
 import {
   getPlayers,
   getPlayerName,
@@ -14,6 +17,7 @@ import {
 } from "../lib/weeklyRecap";
 import {
   calculateMVPLeaderboard,
+  MVP_CUTOFF_TIMESTAMP,
   type MVPPlayerTeams,
 } from "../lib/mvp";
 import { FRANCHISES } from "../lib/franchises";
@@ -276,22 +280,26 @@ function ConferenceTable({
 
 export default async function HomePage() {
   /**
-   * Fetch historical SFL data and
-   * Sleeper's NFL player directory.
+   * Fetch SFL history, NFL player
+   * information and completed
+   * transaction history together.
    *
-   * Both requests can run together.
+   * Sleeper transactions include
+   * trades, waiver acquisitions
+   * and free-agent moves.
    */
   const [
     historicalData,
     players,
+    transactions,
   ] = await Promise.all([
     getHistoricalData(),
     getPlayers(),
+    getMVPTransactions(),
   ]);
 
   /**
-   * Calculate the existing
-   * homepage features.
+   * Existing homepage features.
    */
   const home = calculateHomeStats(
     historicalData,
@@ -305,12 +313,8 @@ export default async function HomePage() {
     );
 
   /**
-   * Build the NFL team lookup.
-   *
-   * The MVP engine uses this
-   * information to identify
-   * players whose NFL team has
-   * completed its bye week.
+   * Build NFL team lookup for
+   * the bye-adjusted MVP system.
    */
   const playerTeams: MVPPlayerTeams = {};
 
@@ -323,30 +327,30 @@ export default async function HomePage() {
   }
 
   /**
-   * Calculate the live MVP Ladder
-   * using bye-week protection.
+   * Transaction-aware MVP Ladder.
    *
-   * The third argument is the
-   * requested final week (14).
+   * The cutoff timestamp is
+   * provisional. The MVP engine
+   * keeps franchiseConfirmed
+   * false until ownership can
+   * be established definitively.
    *
-   * Only completed weeks are
-   * actually included.
+   * All started points follow
+   * players across SFL trades.
    */
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
       "2026",
       14,
-      playerTeams
+      playerTeams,
+      transactions,
+      MVP_CUTOFF_TIMESTAMP
     );
 
   /**
-   * Collect every player whose
-   * name and position is needed
-   * on the homepage.
-   *
-   * Includes weekly award winners
-   * and all MVP top-10 contenders.
+   * Collect players needed for
+   * weekly awards and MVP display.
    */
   const homepagePlayerIds =
     new Set<string>();
@@ -380,14 +384,6 @@ export default async function HomePage() {
     );
   }
 
-  /**
-   * Player names and positions
-   * for both homepage components.
-   *
-   * Reuses the directory fetched
-   * above, avoiding a second
-   * Sleeper request.
-   */
   const playerInfo: Record<
     string,
     {
@@ -501,7 +497,7 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* Bye-adjusted MVP Ladder */}
+      {/* Transaction-aware MVP Ladder */}
 
       <MVPLadder
         leaderboard={mvpLeaderboard}
