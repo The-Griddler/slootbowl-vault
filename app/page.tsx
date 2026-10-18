@@ -50,10 +50,7 @@ const NAMES = new Map(
 );
 
 function teamName(rosterId: number) {
-  return (
-    NAMES.get(rosterId) ??
-    `Team ${rosterId}`
-  );
+  return NAMES.get(rosterId) ?? `Team ${rosterId}`;
 }
 
 function formatPoints(value: number) {
@@ -235,9 +232,7 @@ function ConferenceTable({
                 minWidth: 0,
               }}
             >
-              {teamName(
-                team.rosterId
-              )}
+              {teamName(team.rosterId)}
             </span>
 
             <div
@@ -265,10 +260,7 @@ function ConferenceTable({
                   marginTop: 3,
                 }}
               >
-                {formatPoints(
-                  team.pointsFor
-                )}{" "}
-                PF
+                {formatPoints(team.pointsFor)} PF
               </div>
             </div>
           </Link>
@@ -324,32 +316,21 @@ export default async function HomePage() {
     new Set<string>();
 
   for (const recap of weeklyRecaps.recaps) {
-    if (
-      recap.obfcPlayerOfTheWeek
-    ) {
+    if (recap.obfcPlayerOfTheWeek) {
       homepagePlayerIds.add(
-        recap.obfcPlayerOfTheWeek
-          .playerId
+        recap.obfcPlayerOfTheWeek.playerId
       );
     }
 
-    if (
-      recap.gpfcPlayerOfTheWeek
-    ) {
+    if (recap.gpfcPlayerOfTheWeek) {
       homepagePlayerIds.add(
-        recap.gpfcPlayerOfTheWeek
-          .playerId
+        recap.gpfcPlayerOfTheWeek.playerId
       );
     }
   }
 
-  for (
-    const candidate of
-    mvpLeaderboard.topTen
-  ) {
-    homepagePlayerIds.add(
-      candidate.playerId
-    );
+  for (const candidate of mvpLeaderboard.topTen) {
+    homepagePlayerIds.add(candidate.playerId);
   }
 
   const playerInfo: Record<
@@ -360,22 +341,16 @@ export default async function HomePage() {
     }
   > = {};
 
-  for (
-    const playerId of
-    homepagePlayerIds
-  ) {
-    const player =
-      players[playerId] ?? null;
+  for (const playerId of homepagePlayerIds) {
+    const player = players[playerId] ?? null;
 
     playerInfo[playerId] = {
       name: getPlayerName(player),
-      position:
-        player?.position ?? "—",
+      position: player?.position ?? "—",
     };
   }
 
-  const record =
-    home.recordWatch[0];
+  const record = home.recordWatch[0];
 
   return (
     <main
@@ -384,11 +359,11 @@ export default async function HomePage() {
         color: "#f4f5f7",
       }}
     >
-      {/* Homepage heading — matches other tabs */}
+      {/* Hero: aligned with Franchises and History */}
 
       <header
         style={{
-          padding: "26px 0 12px",
+          padding: "0 0 12px",
         }}
       >
         <p
@@ -405,8 +380,7 @@ export default async function HomePage() {
 
         <h1
           style={{
-            fontSize:
-              "clamp(34px, 8vw, 48px)",
+            fontSize: "clamp(36px, 9vw, 52px)",
             fontWeight: 900,
             letterSpacing: -1.2,
             lineHeight: 1.1,
@@ -421,12 +395,11 @@ export default async function HomePage() {
             color: MUTED,
             fontSize: 15,
             lineHeight: 1.7,
-            margin: "16px 0 0",
+            margin: "14px 0 0",
           }}
         >
-          Your home for the latest SFL
-          action, standings and standout
-          performances.
+          Your home for the latest SFL action,
+          standings and standout performances.
         </p>
 
         <div
@@ -452,8 +425,7 @@ export default async function HomePage() {
             }}
           />
 
-          {home.seasonStats
-            .latestCompletedWeek > 0
+          {home.seasonStats.latestCompletedWeek > 0
             ? `Results through Week ${home.seasonStats.latestCompletedWeek}`
             : "Awaiting completed games"}
         </div>
@@ -475,9 +447,7 @@ export default async function HomePage() {
 
       {/* Record Watch */}
 
-      <section
-        style={{ marginTop: 36 }}
-      >
+      <section style={{ marginTop: 36 }}>
         <SectionHeading
           eyebrow="THE RECORD BOOK"
           title="SFL Record Watch"
@@ -512,12 +482,9 @@ export default async function HomePage() {
                 marginBottom: 16,
               }}
             >
-              {record.challengerRosterId !==
-                null && (
+              {record.challengerRosterId !== null && (
                 <TeamLogo
-                  rosterId={
-                    record.challengerRosterId
-                  }
+                  rosterId={record.challengerRosterId}
                   size={48}
                 />
               )}
@@ -529,11 +496,8 @@ export default async function HomePage() {
                     fontSize: 15,
                   }}
                 >
-                  {record.challengerRosterId !==
-                  null
-                    ? teamName(
-                        record.challengerRosterId
-                      )
+                  {record.challengerRosterId !== null
+                    ? teamName(record.challengerRosterId)
                     : "No challenger"}
                 </div>
 
@@ -552,17 +516,14 @@ export default async function HomePage() {
             <div
               style={{
                 display: "flex",
-                justifyContent:
-                  "space-between",
+                justifyContent: "space-between",
                 gap: 12,
                 fontSize: 12,
                 marginBottom: 10,
               }}
             >
               <span>
-                {formatPoints(
-                  record.challenger
-                )}
+                {formatPoints(record.challenger)}
               </span>
 
               <span
@@ -571,9 +532,7 @@ export default async function HomePage() {
                   fontWeight: 800,
                 }}
               >
-                {formatPoints(
-                  record.record
-                )}
+                {formatPoints(record.record)}
               </span>
             </div>
 
@@ -604,17 +563,13 @@ export default async function HomePage() {
               }}
             >
               Historical record:{" "}
-              {record.recordRosterId !==
-              null
-                ? teamName(
-                    record.recordRosterId
-                  )
+              {record.recordRosterId !== null
+                ? teamName(record.recordRosterId)
                 : "Unknown franchise"}{" "}
               ({record.recordSeason})
             </div>
 
-            {record.projectedTotal !==
-              null && (
+            {record.projectedTotal !== null && (
               <div
                 style={{
                   background: "#202b38",
@@ -627,10 +582,9 @@ export default async function HomePage() {
               >
                 <strong
                   style={{
-                    color:
-                      record.onRecordPace
-                        ? "#86efac"
-                        : "#ffffff",
+                    color: record.onRecordPace
+                      ? "#86efac"
+                      : "#ffffff",
                   }}
                 >
                   {record.onRecordPace
@@ -644,11 +598,8 @@ export default async function HomePage() {
                     marginTop: 5,
                   }}
                 >
-                  Projected 14-week
-                  total:{" "}
-                  {formatPoints(
-                    record.projectedTotal
-                  )}
+                  Projected 14-week total:{" "}
+                  {formatPoints(record.projectedTotal)}
                 </div>
               </div>
             )}
@@ -665,18 +616,15 @@ export default async function HomePage() {
               lineHeight: 1.7,
             }}
           >
-            Record Watch will appear
-            once completed 2026 results
-            are available.
+            Record Watch will appear once completed
+            2026 results are available.
           </div>
         )}
       </section>
 
       {/* Conference standings */}
 
-      <section
-        style={{ marginTop: 36 }}
-      >
+      <section style={{ marginTop: 36 }}>
         <SectionHeading
           eyebrow="THE PLAYOFF PICTURE"
           title="Conference Standings"
@@ -691,17 +639,13 @@ export default async function HomePage() {
         >
           <ConferenceTable
             title="OBFC"
-            standings={
-              home.conferences.OBFC
-            }
+            standings={home.conferences.OBFC}
             accent="#299DB9"
           />
 
           <ConferenceTable
             title="GPFC"
-            standings={
-              home.conferences.GPFC
-            }
+            standings={home.conferences.GPFC}
             accent="#C83E2F"
           />
         </div>
@@ -714,19 +658,15 @@ export default async function HomePage() {
             marginTop: 12,
           }}
         >
-          Green-highlighted teams
-          currently occupy playoff
-          positions. Standings remain
-          provisional until the
-          regular season ends.
+          Green-highlighted teams currently occupy
+          playoff positions. Standings remain
+          provisional until the regular season ends.
         </p>
       </section>
 
       {/* Archive highlights */}
 
-      <section
-        style={{ marginTop: 36 }}
-      >
+      <section style={{ marginTop: 36 }}>
         <SectionHeading
           eyebrow="THE VAULT"
           title="2026 Archive Highlights"
