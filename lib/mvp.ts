@@ -11,6 +11,74 @@ export const MVP_REGULAR_SEASON_WEEKS = 14;
 const OBFC = [4, 6, 8, 7, 9];
 const GPFC = [1, 2, 10, 3, 5];
 
+/**
+ * Official 2026 NFL bye weeks.
+ *
+ * These are NFL team abbreviations,
+ * matching Sleeper's player directory.
+ */
+export const NFL_BYES_2026: Record<
+  string,
+  number
+> = {
+  CAR: 5,
+  KC: 5,
+
+  CIN: 6,
+  DET: 6,
+  MIA: 6,
+  MIN: 6,
+
+  BUF: 7,
+  JAX: 7,
+  LAC: 7,
+  WAS: 7,
+
+  HOU: 8,
+  NO: 8,
+  NYG: 8,
+  SF: 8,
+
+  PIT: 9,
+  TEN: 9,
+
+  CHI: 10,
+  DEN: 10,
+  PHI: 10,
+  TB: 10,
+
+  ATL: 11,
+  CLE: 11,
+  GB: 11,
+  LAR: 11,
+  NE: 11,
+  SEA: 11,
+
+  BAL: 13,
+  IND: 13,
+  LV: 13,
+  NYJ: 13,
+
+  ARI: 14,
+  DAL: 14,
+};
+
+/**
+ * Maps Sleeper player IDs to
+ * their NFL teams.
+ *
+ * Example:
+ * {
+ *   "4046": "KC",
+ *   "6794": "MIN"
+ * }
+ *
+ * The homepage will provide this
+ * from getPlayers().
+ */
+export type MVPPlayerTeams =
+  Record<string, string | null>;
+
 export type MVPPlayerWeek = {
   week: number;
   rosterId: number;
@@ -20,52 +88,26 @@ export type MVPPlayerWeek = {
 export type MVPCandidate = {
   playerId: string;
 
-  /**
-   * All completed regular-season
-   * points earned while started,
-   * regardless of franchise.
-   */
   totalPoints: number;
-
   gamesStarted: number;
 
-  /**
-   * The franchise attributed
-   * to this player's MVP campaign.
-   */
   mvpRosterId: number | null;
-
-  /**
-   * Most recent franchise to
-   * start the player.
-   */
   latestStartingRosterId: number | null;
-
-  /**
-   * True when the Week 9 franchise
-   * can be established from the
-   * available matchup history.
-   */
   franchiseConfirmed: boolean;
 
-  /**
-   * Whether the player's attributed
-   * franchise currently occupies
-   * a playoff position.
-   */
   inPlayoffPosition: boolean;
-
-  /**
-   * Current rank among all
-   * franchises in its conference.
-   */
   conferenceRank: number | null;
 
   /**
-   * Internal ranking score.
-   * Never displayed on the site.
+   * Internal calculations.
+   * Never shown in the UI.
    */
   mvpScore: number;
+  adjustedPoints: number;
+  byeWeeksCompleted: number;
+  eligibleWeeks: number;
+  participationRate: number;
+  meetsMinimumParticipation: boolean;
 
   rank: number;
   previousRank: number | null;
@@ -97,20 +139,6 @@ type TeamStanding = {
   rank: number;
 };
 
-function conferenceOf(
-  rosterId: number
-): "OBFC" | "GPFC" | null {
-  if (OBFC.includes(rosterId)) {
-    return "OBFC";
-  }
-
-  if (GPFC.includes(rosterId)) {
-    return "GPFC";
-  }
-
-  return null;
-}
-
 function collectGames(
   historicalData: HistoricalSeason[],
   season: string,
@@ -129,8 +157,8 @@ function collectGames(
             throughWeek,
             MVP_REGULAR_SEASON_WEEKS
           ) &&
-        game.scoreA > 0 &&
-        game.scoreB > 0
+        Number.isFinite(game.scoreA) &&
+        Number.isFinite(game.scoreB)
     );
 }
 
@@ -173,13 +201,11 @@ function collectPlayerStarts(
           });
         }
 
-        players
-          .get(playerId)!
-          .weeks.push({
-            week,
-            rosterId,
-            points: value,
-          });
+        players.get(playerId)!.weeks.push({
+          week,
+          rosterId,
+          points: value,
+        });
       }
     );
   }
@@ -232,13 +258,8 @@ function calculateStandings(
   }
 
   for (const game of games) {
-    const a = standings.get(
-      game.rosterA
-    );
-
-    const b = standings.get(
-      game.rosterB
-    );
+    const a = standings.get(game.rosterA);
+    const b = standings.get(game.rosterB);
 
     if (!a || !b) continue;
 
@@ -291,11 +312,9 @@ function calculateStandings(
         );
       });
 
-    teams.forEach(
-      (team, index) => {
-        team.rank = index + 1;
-      }
-    );
+    teams.forEach((team, index) => {
+      team.rank = index + 1;
+    });
   }
 
   return standings;
@@ -321,8 +340,7 @@ function findMVPFranchise(
   ) {
     return {
       rosterId:
-        weeks[weeks.length - 1]
-          .rosterId,
+        weeks[weeks.length - 1].rosterId,
       confirmed: false,
     };
   }
@@ -335,8 +353,7 @@ function findMVPFranchise(
 
   if (cutoffStart) {
     return {
-      rosterId:
-        cutoffStart.rosterId,
+      rosterId: cutoffStart.rosterId,
       confirmed: true,
     };
   }
@@ -351,8 +368,7 @@ function findMVPFranchise(
 
   return {
     rosterId:
-      beforeCutoff?.rosterId ??
-      null,
+      beforeCutoff?.rosterId ?? null,
     confirmed: false,
   };
 }
@@ -376,9 +392,99 @@ function playoffAdjustment(
   }
 }
 
+/**
+ * Returns the number of confirmed
+ * NFL bye weeks completed.
+ *
+ * Unknown NFL teams receive no
+ * bye protection rather than an
+ * invented bye.
+ */
+function completedByes(
+  playerId: string,
+  season: string,
+  throughWeek: number,
+  playerTeams: MVPPlayerTeams
+): number {
+  if (season !== "2026") {
+    return 0;
+  }
+
+  const nflTeam =
+    playerTeams[playerId]?.toUpperCase();
+
+  if (!nflTeam) return 0;
+
+  const byeWeek =
+    NFL_BYES_2026[nflTeam];
+
+  if (!byeWeek) return 0;
+
+  return byeWeek <= throughWeek
+    ? 1
+    : 0;
+}
+
+/**
+ * Bye adjustment:
+ *
+ * actual points *
+ * completed weeks /
+ * weeks excluding NFL byes
+ *
+ * Missed starts from injury or
+ * benching remain in the denominator.
+ *
+ * At the end of Week 14, the
+ * adjustment is removed entirely.
+ */
+function calculateAdjustedPoints(
+  totalPoints: number,
+  throughWeek: number,
+  byeWeeksCompleted: number
+): number {
+  if (
+    throughWeek >=
+    MVP_REGULAR_SEASON_WEEKS
+  ) {
+    return totalPoints;
+  }
+
+  const availableWeeks = Math.max(
+    1,
+    throughWeek - byeWeeksCompleted
+  );
+
+  return (
+    totalPoints *
+    (throughWeek / availableWeeks)
+  );
+}
+
+/**
+ * Minimum participation protects
+ * the ladder from players with only
+ * one or two exceptional starts.
+ *
+ * A player must start at least 60%
+ * of their available weeks.
+ *
+ * The threshold is rounded up.
+ */
+function minimumStarts(
+  availableWeeks: number
+): number {
+  return Math.max(
+    1,
+    Math.ceil(availableWeeks * 0.6)
+  );
+}
+
 function calculateCandidates(
   games: HistoricalMatchup[],
-  throughWeek: number
+  throughWeek: number,
+  season: string,
+  playerTeams: MVPPlayerTeams
 ): MVPCandidate[] {
   const players =
     collectPlayerStarts(games);
@@ -390,8 +496,7 @@ function calculateCandidates(
     [];
 
   for (const player of players.values()) {
-    const latest =
-      player.weeks.at(-1);
+    const latest = player.weeks.at(-1);
 
     const franchise =
       findMVPFranchise(
@@ -420,56 +525,144 @@ function calculateCandidates(
       conferenceRank !== null &&
       conferenceRank <= 3;
 
-    const mvpScore =
-      totalPoints *
-      playoffAdjustment(
-        conferenceRank
+    const byeWeeksCompleted =
+      completedByes(
+        player.playerId,
+        season,
+        throughWeek,
+        playerTeams
       );
+
+    const eligibleWeeks = Math.max(
+      1,
+      throughWeek - byeWeeksCompleted
+    );
+
+    const gamesStarted =
+      player.weeks.length;
+
+    const participationRate =
+      gamesStarted / eligibleWeeks;
+
+    const meetsMinimumParticipation =
+      gamesStarted >=
+      minimumStarts(eligibleWeeks);
+
+    const adjustedPoints =
+      calculateAdjustedPoints(
+        totalPoints,
+        throughWeek,
+        byeWeeksCompleted
+      );
+
+    /**
+     * The participation threshold
+     * is enforced for both live
+     * and final rankings.
+     *
+     * Ineligible players receive
+     * no ranking score.
+     */
+    const mvpScore =
+      meetsMinimumParticipation
+        ? adjustedPoints *
+          playoffAdjustment(
+            conferenceRank
+          )
+        : 0;
 
     candidates.push({
       playerId: player.playerId,
       totalPoints,
-      gamesStarted:
-        player.weeks.length,
+      gamesStarted,
+
       mvpRosterId:
         franchise.rosterId,
+
       latestStartingRosterId:
         latest?.rosterId ?? null,
+
       franchiseConfirmed:
         franchise.confirmed,
+
       inPlayoffPosition,
       conferenceRank,
+
       mvpScore,
+      adjustedPoints,
+      byeWeeksCompleted,
+      eligibleWeeks,
+      participationRate,
+      meetsMinimumParticipation,
+
       rank: 0,
       previousRank: null,
       rankChange: null,
+
       weeks: player.weeks,
     });
   }
 
-  candidates.sort(
+  /**
+   * Exclude candidates who haven't
+   * met the participation requirement.
+   *
+   * Once the season is complete,
+   * only playoff-position franchises
+   * remain MVP-eligible.
+   */
+  const eligibleCandidates =
+    candidates.filter((candidate) => {
+      if (
+        !candidate.meetsMinimumParticipation
+      ) {
+        return false;
+      }
+
+      if (
+        throughWeek >=
+          MVP_REGULAR_SEASON_WEEKS &&
+        !candidate.inPlayoffPosition
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+  eligibleCandidates.sort(
     (a, b) =>
       b.mvpScore - a.mvpScore ||
-      b.totalPoints -
-        a.totalPoints ||
+      b.totalPoints - a.totalPoints ||
       a.playerId.localeCompare(
         b.playerId
       )
   );
 
-  candidates.forEach(
+  eligibleCandidates.forEach(
     (candidate, index) => {
       candidate.rank = index + 1;
     }
   );
 
-  return candidates;
+  return eligibleCandidates;
 }
 
+/**
+ * Main MVP leaderboard calculation.
+ *
+ * playerTeams is optional to keep
+ * existing homepage calls working.
+ *
+ * Once supplied by the homepage,
+ * confirmed 2026 NFL bye weeks are
+ * applied automatically.
+ */
 export function calculateMVPLeaderboard(
   historicalData: HistoricalSeason[],
   season = MVP_SEASON,
-  throughWeek = MVP_REGULAR_SEASON_WEEKS
+  throughWeek = MVP_REGULAR_SEASON_WEEKS,
+  playerTeams: MVPPlayerTeams = {}
 ): MVPLeaderboard {
   const completedGames =
     collectGames(
@@ -491,7 +684,9 @@ export function calculateMVPLeaderboard(
   const candidates =
     calculateCandidates(
       completedGames,
-      latestWeek
+      latestWeek,
+      season,
+      playerTeams
     );
 
   if (latestWeek > 1) {
@@ -505,7 +700,9 @@ export function calculateMVPLeaderboard(
     const previousCandidates =
       calculateCandidates(
         previousGames,
-        latestWeek - 1
+        latestWeek - 1,
+        season,
+        playerTeams
       );
 
     const previousRanks =
@@ -514,8 +711,7 @@ export function calculateMVPLeaderboard(
           (player) => [
             player.playerId,
             player.rank,
-          ]
-        )
+          ])
       );
 
     for (const candidate of candidates) {
@@ -538,12 +734,16 @@ export function calculateMVPLeaderboard(
   return {
     season,
     throughWeek: latestWeek,
+
     cutoffWeek:
       MVP_TRADE_CUTOFF_WEEK,
+
     cutoffLocked:
       latestWeek >=
       MVP_TRADE_CUTOFF_WEEK,
+
     candidates,
+
     topTen:
       candidates.slice(0, 10),
   };
