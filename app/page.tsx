@@ -279,15 +279,6 @@ function ConferenceTable({
 }
 
 export default async function HomePage() {
-  /**
-   * Fetch SFL history, NFL player
-   * information and completed
-   * transaction history together.
-   *
-   * Sleeper transactions include
-   * trades, waiver acquisitions
-   * and free-agent moves.
-   */
   const [
     historicalData,
     players,
@@ -298,9 +289,6 @@ export default async function HomePage() {
     getMVPTransactions(),
   ]);
 
-  /**
-   * Existing homepage features.
-   */
   const home = calculateHomeStats(
     historicalData,
     "2026"
@@ -312,10 +300,6 @@ export default async function HomePage() {
       "2026"
     );
 
-  /**
-   * Build NFL team lookup for
-   * the bye-adjusted MVP system.
-   */
   const playerTeams: MVPPlayerTeams = {};
 
   for (const [
@@ -326,18 +310,6 @@ export default async function HomePage() {
       player.team ?? null;
   }
 
-  /**
-   * Transaction-aware MVP Ladder.
-   *
-   * The cutoff timestamp is
-   * provisional. The MVP engine
-   * keeps franchiseConfirmed
-   * false until ownership can
-   * be established definitively.
-   *
-   * All started points follow
-   * players across SFL trades.
-   */
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
@@ -348,10 +320,6 @@ export default async function HomePage() {
       MVP_CUTOFF_TIMESTAMP
     );
 
-  /**
-   * Collect players needed for
-   * weekly awards and MVP display.
-   */
   const homepagePlayerIds =
     new Set<string>();
 
@@ -416,7 +384,7 @@ export default async function HomePage() {
         color: "#f4f5f7",
       }}
     >
-      {/* Hero */}
+      {/* Homepage heading — matches other tabs */}
 
       <header
         style={{
@@ -425,39 +393,40 @@ export default async function HomePage() {
       >
         <p
           style={{
-            color: GOLD,
-            fontSize: 11,
+            color: "#737f91",
+            fontSize: 12,
             fontWeight: 800,
-            letterSpacing: 1.5,
-            margin: "0 0 10px",
+            letterSpacing: 2,
+            margin: "0 0 12px",
           }}
         >
-          SLOOTBOWL VAULT
+          SFL • 2026 SEASON
         </p>
 
         <h1
           style={{
             fontSize:
-              "clamp(29px, 7vw, 42px)",
+              "clamp(34px, 8vw, 48px)",
             fontWeight: 900,
             letterSpacing: -1.2,
             lineHeight: 1.1,
             margin: 0,
           }}
         >
-          2026 Season Tracker
+          League Central
         </h1>
 
         <p
           style={{
             color: MUTED,
-            fontSize: 13,
+            fontSize: 15,
             lineHeight: 1.7,
-            marginTop: 13,
+            margin: "16px 0 0",
           }}
         >
-          The season as it happens.
-          The history as it&apos;s made.
+          Your home for the latest SFL
+          action, standings and standout
+          performances.
         </p>
 
         <div
@@ -471,7 +440,7 @@ export default async function HomePage() {
             padding: "8px 12px",
             color: "#cbd5e1",
             fontSize: 11,
-            marginTop: 9,
+            marginTop: 14,
           }}
         >
           <span
@@ -497,7 +466,7 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* Transaction-aware MVP Ladder */}
+      {/* MVP Ladder */}
 
       <MVPLadder
         leaderboard={mvpLeaderboard}
