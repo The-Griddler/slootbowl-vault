@@ -10,7 +10,7 @@ import {
   calculateWeeklyRecaps,
 } from "../lib/weeklyRecap";
 import { FRANCHISES } from "../lib/franchises";
-import WeeklyRecapSection from "./WeeklyRecap";
+import WeeklyRecapSection from "./weeklyRecap";
 
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
@@ -389,7 +389,7 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* Weekly Recap replaces At a Glance */}
+      {/* Weekly Recap */}
 
       <WeeklyRecapSection
         data={weeklyRecaps}
