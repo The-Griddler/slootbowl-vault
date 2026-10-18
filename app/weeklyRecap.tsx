@@ -370,8 +370,16 @@ function PlayerAward({
         padding: 12,
         minWidth: 0,
         textAlign: "center",
+
+        // Both cards share identical row heights.
+        display: "grid",
+        gridTemplateRows:
+          "44px 78px 46px 22px 42px 32px",
+        justifyItems: "center",
+        alignContent: "start",
       }}
     >
+      {/* Fixed-height conference heading */}
       <div
         style={{
           color:
@@ -381,12 +389,19 @@ function PlayerAward({
           fontSize: 10,
           fontWeight: 900,
           letterSpacing: 0.6,
-          marginBottom: 10,
+          lineHeight: 1.35,
+          width: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "flex-start",
+          textAlign: "center",
+          overflowWrap: "break-word",
         }}
       >
         {conference} PLAYER OF THE WEEK
       </div>
 
+      {/* Player photo */}
       <div
         style={{
           width: 68,
@@ -394,7 +409,6 @@ function PlayerAward({
           borderRadius: "50%",
           background: "#263445",
           overflow: "hidden",
-          margin: "0 auto 10px",
         }}
       >
         {headshot ? (
@@ -422,39 +436,46 @@ function PlayerAward({
         )}
       </div>
 
+      {/* Fixed-height player name */}
       <div
         style={{
           color: "#ffffff",
           fontSize: 13,
           fontWeight: 900,
           lineHeight: 1.3,
-          minHeight: 34,
+          width: "100%",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "center",
+          overflowWrap: "break-word",
         }}
       >
         {name}
       </div>
 
+      {/* Position */}
       <div
         style={{
           color: MUTED,
           fontSize: 11,
-          marginTop: 5,
         }}
       >
         {player?.position ?? "—"}
       </div>
 
-      {award && (
-        <>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              marginTop: 11,
-            }}
-          >
+      {/* Franchise */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        {award && (
+          <>
             <Logo
               rosterId={award.rosterId}
               size={25}
@@ -465,20 +486,26 @@ function PlayerAward({
                 color: MUTED,
                 fontSize: 10,
                 lineHeight: 1.3,
+                overflowWrap: "break-word",
               }}
             >
               {SHORT_NAMES[award.rosterId]}
             </span>
-          </div>
+          </>
+        )}
+      </div>
 
-          <div
-            style={{
-              color: GOLD,
-              fontSize: 17,
-              fontWeight: 900,
-              marginTop: 11,
-            }}
-          >
+      {/* Fantasy points */}
+      <div
+        style={{
+          color: GOLD,
+          fontSize: 17,
+          fontWeight: 900,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {award ? (
+          <>
             {score(award.points)}
             <span
               style={{
@@ -489,9 +516,11 @@ function PlayerAward({
             >
               PTS
             </span>
-          </div>
-        </>
-      )}
+          </>
+        ) : (
+          "—"
+        )}
+      </div>
     </div>
   );
 }
