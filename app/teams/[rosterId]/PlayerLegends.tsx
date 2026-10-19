@@ -79,8 +79,6 @@ function formatFranchiseYears(
     }
   }
 
-  const latestYear = years[years.length - 1];
-
   return spells
     .map((spell, index) => {
       const isLatestSpell =
@@ -232,19 +230,23 @@ function FranchiseLegends({
   playerNames: Record<string, string>;
   currentRosterPlayerIds: string[];
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   const currentRoster = new Set(
     currentRosterPlayerIds
   );
 
-  const topFive = [...entries]
-    .sort(
-      (a, b) =>
-        b.totalFranchiseLegacyPoints -
-          a.totalFranchiseLegacyPoints ||
-        b.rosterWeeks - a.rosterWeeks ||
-        b.starts - a.starts
-    )
-    .slice(0, 5);
+  const rankedPlayers = [...entries].sort(
+    (a, b) =>
+      b.totalFranchiseLegacyPoints -
+        a.totalFranchiseLegacyPoints ||
+      b.rosterWeeks - a.rosterWeeks ||
+      b.starts - a.starts
+  );
+
+  const visiblePlayers = showAll
+    ? rankedPlayers
+    : rankedPlayers.slice(0, 5);
 
   return (
     <section style={{ marginTop: "24px" }}>
@@ -265,10 +267,10 @@ function FranchiseLegends({
           marginBottom: "14px",
         }}
       >
-        The five greatest players in franchise
-        history, ranked by loyalty, official
-        starts, fantasy production, individual
-        honours and Slootbowl championships.
+        The greatest players in franchise history,
+        ranked by loyalty, official starts,
+        fantasy production, individual honours
+        and Slootbowl championships.
       </p>
 
       <div
@@ -279,7 +281,7 @@ function FranchiseLegends({
           overflow: "hidden",
         }}
       >
-        {topFive.length === 0 ? (
+        {visiblePlayers.length === 0 ? (
           <p
             style={{
               padding: "18px",
@@ -289,7 +291,7 @@ function FranchiseLegends({
             Franchise rankings are being prepared.
           </p>
         ) : (
-          topFive.map((player, index) => (
+          visiblePlayers.map((player, index) => (
             <div
               key={player.playerId}
               style={{
@@ -302,7 +304,7 @@ function FranchiseLegends({
                     ? "rgba(234,179,8,0.07)"
                     : "transparent",
                 borderBottom:
-                  index === topFive.length - 1
+                  index === visiblePlayers.length - 1
                     ? "none"
                     : "1px solid #27303b",
               }}
@@ -411,6 +413,31 @@ function FranchiseLegends({
           ))
         )}
       </div>
+
+      {rankedPlayers.length > 5 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((previous) => !previous)}
+          aria-expanded={showAll}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: "12px",
+            padding: "14px",
+            background: "#151b23",
+            border: "1px solid #27303b",
+            borderRadius: "12px",
+            color: "#ffffff",
+            fontSize: "13px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {showAll
+            ? "Show top 5 ↑"
+            : `View full rankings (${rankedPlayers.length} players) ↓`}
+        </button>
+      )}
     </section>
   );
 }
