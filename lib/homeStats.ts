@@ -190,7 +190,7 @@ const PLAYER_TARGET_STARTS = 13;
 
 // Temporary testing mode.
 // Change this to 3 when selection is final.
-export const RECORD_WATCH_LIMIT = 15;
+export const RECORD_WATCH_LIMIT = 3;
 const TEST_AWARD_LIMIT = RECORD_WATCH_LIMIT;
 
 const MAX_RANK = 10;
