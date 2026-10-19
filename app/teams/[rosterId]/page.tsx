@@ -361,13 +361,13 @@ export default async function FranchisePage({
       franchiseChampionships
     );
 
+  // Pass the complete franchise rankings.
+  // PlayerLegends controls how many are visible.
   const franchiseLegends =
-    allFranchiseLegends
-      .filter(
-        (player) =>
-          player.rosterId === rosterId
-      )
-      .slice(0, 5);
+    allFranchiseLegends.filter(
+      (player) =>
+        player.rosterId === rosterId
+    );
 
   const startingPlayerIds =
     franchiseMatchups.flatMap(
