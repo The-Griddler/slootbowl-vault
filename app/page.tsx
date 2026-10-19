@@ -11,6 +11,7 @@ import {
 import {
   calculateHomeStats,
   type HomeStanding,
+  type RecordHighlight,
 } from "../lib/homeStats";
 import {
   calculateWeeklyRecaps,
@@ -270,6 +271,468 @@ function ConferenceTable({
   );
 }
 
+type RecordPlayerInfo = Record<
+  string,
+  {
+    name: string;
+    position: string;
+  }
+>;
+
+function recordAccent(
+  record: RecordHighlight
+): string {
+  if (record.tone === "negative") {
+    return "#f87171";
+  }
+
+  if (record.tone === "unusual") {
+    return "#60a5fa";
+  }
+
+  return GOLD;
+}
+
+function recordSubjectName(
+  record: RecordHighlight,
+  playerInfo: RecordPlayerInfo
+): string {
+  if (record.subject === "player") {
+    return record.playerId
+      ? playerInfo[record.playerId]?.name ??
+          `Player ${record.playerId}`
+      : "Unknown player";
+  }
+
+  return record.rosterId !== null
+    ? teamName(record.rosterId)
+    : "Unknown franchise";
+}
+
+function recordValueText(
+  record: RecordHighlight
+): string {
+  if (record.unit === "wins") {
+    return `${Math.round(record.value)} wins`;
+  }
+
+  return `${formatPoints(record.value)} pts`;
+}
+
+function RecordIdentity({
+  record,
+  playerInfo,
+  large = false,
+}: {
+  record: RecordHighlight;
+  playerInfo: RecordPlayerInfo;
+  large?: boolean;
+}) {
+  const name = recordSubjectName(
+    record,
+    playerInfo
+  );
+
+  const position =
+    record.playerId !== null
+      ? playerInfo[record.playerId]?.position
+      : null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: large ? 12 : 9,
+        minWidth: 0,
+      }}
+    >
+      {record.rosterId !== null && (
+        <TeamLogo
+          rosterId={record.rosterId}
+          size={large ? 46 : 34}
+        />
+      )}
+
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            color: "#ffffff",
+            fontSize: large ? 15 : 12,
+            fontWeight: 800,
+            lineHeight: 1.4,
+          }}
+        >
+          {name}
+        </div>
+
+        <div
+          style={{
+            color: MUTED,
+            fontSize: 10,
+            lineHeight: 1.6,
+            marginTop: 3,
+          }}
+        >
+          {record.subject === "player"
+            ? [
+                position,
+                record.rosterId !== null
+                  ? teamName(record.rosterId)
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : record.kind === "game"
+              ? `Week ${record.week}, ${record.season}`
+              : `${record.season} regular season`}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecordCard({
+  record,
+  playerInfo,
+  featured = false,
+}: {
+  record: RecordHighlight;
+  playerInfo: RecordPlayerInfo;
+  featured?: boolean;
+}) {
+  const accent = recordAccent(record);
+
+  const isSeason = record.kind === "season";
+
+  return (
+    <article
+      style={{
+        background: featured
+          ? "#19232e"
+          : CARD,
+        border: featured
+          ? "1px solid #394653"
+          : BORDER,
+        borderRadius: 15,
+        padding: featured ? 18 : 15,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          marginBottom: 13,
+        }}
+      >
+        <span
+          style={{
+            color: accent,
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 1.1,
+            lineHeight: 1.5,
+          }}
+        >
+          {isSeason
+            ? record.tone === "negative"
+              ? "INFAMOUS PACE"
+              : "RECORD PACE"
+            : record.allTimeRank === 1
+              ? "ALL-TIME RECORD"
+              : "HISTORIC PERFORMANCE"}
+        </span>
+
+        <span
+          style={{
+            color: accent,
+            fontSize: featured ? 22 : 18,
+            flexShrink: 0,
+          }}
+        >
+          {record.tone === "negative"
+            ? "📉"
+            : record.tone === "unusual"
+              ? "⚡"
+              : "🏆"}
+        </span>
+      </div>
+
+      <div
+        style={{
+          color: MUTED,
+          fontSize: 11,
+          fontWeight: 700,
+          lineHeight: 1.5,
+          marginBottom: 7,
+        }}
+      >
+        {record.label}
+      </div>
+
+      <h3
+        style={{
+          color: "#ffffff",
+          fontSize: featured ? 20 : 16,
+          lineHeight: 1.3,
+          fontWeight: 900,
+          margin: "0 0 15px",
+        }}
+      >
+        {record.headline}
+      </h3>
+
+      <RecordIdentity
+        record={record}
+        playerInfo={playerInfo}
+        large={featured}
+      />
+
+      <div
+        style={{
+          marginTop: 17,
+          paddingTop: 14,
+          borderTop: "1px solid #34404d",
+        }}
+      >
+        <div
+          style={{
+            color: accent,
+            fontSize: featured ? 30 : 24,
+            fontWeight: 900,
+            letterSpacing: -0.8,
+            lineHeight: 1.2,
+          }}
+        >
+          {recordValueText(record)}
+        </div>
+
+        <div
+          style={{
+            color: MUTED,
+            fontSize: 11,
+            lineHeight: 1.6,
+            marginTop: 6,
+          }}
+        >
+          {isSeason
+            ? "Current season total"
+            : "Weekly performance"}
+        </div>
+      </div>
+
+      {isSeason &&
+        record.projectedValue !== null && (
+          <div
+            style={{
+              background: "#253240",
+              borderRadius: 10,
+              padding: 12,
+              marginTop: 13,
+            }}
+          >
+            <div
+              style={{
+                color: accent,
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              Projected 14-week total
+            </div>
+
+            <div
+              style={{
+                color: "#ffffff",
+                fontSize: 20,
+                fontWeight: 900,
+                marginTop: 5,
+              }}
+            >
+              {record.unit === "wins"
+                ? record.projectedValue.toFixed(1)
+                : formatPoints(
+                    record.projectedValue
+                  )}
+              {record.unit === "wins"
+                ? " wins"
+                : " pts"}
+            </div>
+
+            {record.historicalRecord !== null && (
+              <div
+                style={{
+                  color: MUTED,
+                  fontSize: 11,
+                  lineHeight: 1.6,
+                  marginTop: 7,
+                }}
+              >
+                Historical record:{" "}
+                {record.unit === "wins"
+                  ? record.historicalRecord.toFixed(0)
+                  : formatPoints(
+                      record.historicalRecord
+                    )}
+                {record.unit === "wins"
+                  ? " wins"
+                  : " pts"}
+                {record.historicalSeason
+                  ? ` (${record.historicalSeason})`
+                  : ""}
+              </div>
+            )}
+          </div>
+        )}
+
+      {!isSeason &&
+        record.allTimeRank !== null && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              background: "#253240",
+              borderRadius: 10,
+              padding: 12,
+              marginTop: 13,
+            }}
+          >
+            <span
+              style={{
+                color: accent,
+                fontSize: 16,
+              }}
+            >
+              ★
+            </span>
+
+            <span
+              style={{
+                color: "#e5e7eb",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1.6,
+              }}
+            >
+              {record.detail}
+            </span>
+          </div>
+        )}
+    </article>
+  );
+}
+
+function RecordWatchSection({
+  highlights,
+  playerInfo,
+  week,
+}: {
+  highlights: RecordHighlight[];
+  playerInfo: RecordPlayerInfo;
+  week: number;
+}) {
+  const featured = highlights[0] ?? null;
+  const supporting = highlights.slice(1, 3);
+
+  return (
+    <section style={{ marginTop: 36 }}>
+      <SectionHeading
+        eyebrow="THE RECORD BOOK"
+        title="SFL Record Watch"
+        description="The performances making history, for better or worse."
+      />
+
+      {week > 0 && (
+        <div
+          style={{
+            display: "inline-flex",
+            color: "#cbd5e1",
+            background: "#1d2938",
+            border: BORDER,
+            borderRadius: 99,
+            padding: "7px 11px",
+            fontSize: 10,
+            fontWeight: 800,
+            marginBottom: 13,
+          }}
+        >
+          WEEK {week} · HISTORICAL WATCH
+        </div>
+      )}
+
+      {featured ? (
+        <div
+          style={{
+            display: "grid",
+            gap: 11,
+          }}
+        >
+          <RecordCard
+            record={featured}
+            playerInfo={playerInfo}
+            featured
+          />
+
+          {supporting.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+                gap: 11,
+              }}
+            >
+              {supporting.map((record) => (
+                <RecordCard
+                  key={record.id}
+                  record={record}
+                  playerInfo={playerInfo}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          style={{
+            background: CARD,
+            border: BORDER,
+            borderRadius: 14,
+            padding: 20,
+            color: MUTED,
+            fontSize: 13,
+            lineHeight: 1.7,
+          }}
+        >
+          No historically significant
+          performances or serious record
+          chases have qualified this week.
+          Record Watch will update as
+          completed results come in.
+        </div>
+      )}
+
+      <p
+        style={{
+          color: MUTED,
+          fontSize: 10,
+          lineHeight: 1.7,
+          marginTop: 12,
+        }}
+      >
+        Rankings use completed regular-season
+        games and started player performances.
+        Season projections are estimates,
+        not guaranteed outcomes.
+      </p>
+    </section>
+  );
+}
+
 export default async function HomePage() {
   const [
     historicalData,
@@ -333,13 +796,17 @@ export default async function HomePage() {
     homepagePlayerIds.add(candidate.playerId);
   }
 
-  const playerInfo: Record<
-    string,
-    {
-      name: string;
-      position: string;
+  /*
+   * Add Record Watch players so their
+   * names and positions display correctly.
+   */
+  for (const record of home.recordHighlights) {
+    if (record.playerId !== null) {
+      homepagePlayerIds.add(record.playerId);
     }
-  > = {};
+  }
+
+  const playerInfo: RecordPlayerInfo = {};
 
   for (const playerId of homepagePlayerIds) {
     const player = players[playerId] ?? null;
@@ -350,8 +817,6 @@ export default async function HomePage() {
     };
   }
 
-  const record = home.recordWatch[0];
-
   return (
     <main
       style={{
@@ -359,7 +824,7 @@ export default async function HomePage() {
         color: "#f4f5f7",
       }}
     >
-      {/* Hero: aligned with Franchises and History */}
+      {/* Hero */}
 
       <header
         style={{
@@ -445,182 +910,13 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* Record Watch */}
+      {/* New SFL Record Watch */}
 
-      <section style={{ marginTop: 36 }}>
-        <SectionHeading
-          eyebrow="THE RECORD BOOK"
-          title="SFL Record Watch"
-          description="Tracking how the current season compares with the greatest in league history."
-        />
-
-        {record ? (
-          <div
-            style={{
-              background: CARD,
-              border: BORDER,
-              borderRadius: 15,
-              padding: 17,
-            }}
-          >
-            <div
-              style={{
-                color: GOLD,
-                fontSize: 11,
-                fontWeight: 800,
-                marginBottom: 10,
-              }}
-            >
-              SINGLE-SEASON TEAM SCORING
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 11,
-                marginBottom: 16,
-              }}
-            >
-              {record.challengerRosterId !== null && (
-                <TeamLogo
-                  rosterId={record.challengerRosterId}
-                  size={48}
-                />
-              )}
-
-              <div>
-                <div
-                  style={{
-                    fontWeight: 800,
-                    fontSize: 15,
-                  }}
-                >
-                  {record.challengerRosterId !== null
-                    ? teamName(record.challengerRosterId)
-                    : "No challenger"}
-                </div>
-
-                <div
-                  style={{
-                    color: MUTED,
-                    fontSize: 11,
-                    marginTop: 5,
-                  }}
-                >
-                  Leading 2026 challenger
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                fontSize: 12,
-                marginBottom: 10,
-              }}
-            >
-              <span>
-                {formatPoints(record.challenger)}
-              </span>
-
-              <span
-                style={{
-                  color: GOLD,
-                  fontWeight: 800,
-                }}
-              >
-                {formatPoints(record.record)}
-              </span>
-            </div>
-
-            <div
-              style={{
-                background: "#303a46",
-                borderRadius: 99,
-                height: 10,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  background: GOLD,
-                  width: `${record.progressPercentage}%`,
-                  height: "100%",
-                  borderRadius: 99,
-                }}
-              />
-            </div>
-
-            <div
-              style={{
-                color: MUTED,
-                fontSize: 11,
-                lineHeight: 1.7,
-                marginTop: 12,
-              }}
-            >
-              Historical record:{" "}
-              {record.recordRosterId !== null
-                ? teamName(record.recordRosterId)
-                : "Unknown franchise"}{" "}
-              ({record.recordSeason})
-            </div>
-
-            {record.projectedTotal !== null && (
-              <div
-                style={{
-                  background: "#202b38",
-                  padding: 12,
-                  borderRadius: 10,
-                  marginTop: 13,
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                }}
-              >
-                <strong
-                  style={{
-                    color: record.onRecordPace
-                      ? "#86efac"
-                      : "#ffffff",
-                  }}
-                >
-                  {record.onRecordPace
-                    ? "🔥 On record pace"
-                    : "Season projection"}
-                </strong>
-
-                <div
-                  style={{
-                    color: MUTED,
-                    marginTop: 5,
-                  }}
-                >
-                  Projected 14-week total:{" "}
-                  {formatPoints(record.projectedTotal)}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              background: CARD,
-              border: BORDER,
-              borderRadius: 14,
-              padding: 20,
-              color: MUTED,
-              fontSize: 13,
-              lineHeight: 1.7,
-            }}
-          >
-            Record Watch will appear once completed
-            2026 results are available.
-          </div>
-        )}
-      </section>
+      <RecordWatchSection
+        highlights={home.recordHighlights}
+        playerInfo={playerInfo}
+        week={home.seasonStats.latestCompletedWeek}
+      />
 
       {/* Conference standings */}
 
