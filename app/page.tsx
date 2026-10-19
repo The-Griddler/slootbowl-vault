@@ -402,8 +402,12 @@ function RecordCard({
   featured?: boolean;
 }) {
   const accent = recordAccent(record);
-
   const isSeason = record.kind === "season";
+  const isPlayer = record.subject === "player";
+
+  const projectionLabel = isPlayer
+    ? "Projected player season total"
+    : "Projected 14-week total";
 
   return (
     <article
@@ -422,8 +426,8 @@ function RecordCard({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
+          alignItems: "center",
           gap: 10,
           marginBottom: 13,
         }}
@@ -519,8 +523,12 @@ function RecordCard({
           }}
         >
           {isSeason
-            ? "Current season total"
-            : "Weekly performance"}
+            ? isPlayer
+              ? "Points from SFL starts this season"
+              : "Current franchise season total"
+            : isPlayer
+              ? `Week ${record.week} starter performance`
+              : `Week ${record.week} franchise performance`}
         </div>
       </div>
 
@@ -541,7 +549,7 @@ function RecordCard({
                 fontWeight: 800,
               }}
             >
-              Projected 14-week total
+              {projectionLabel}
             </div>
 
             <div
@@ -562,13 +570,29 @@ function RecordCard({
                 : " pts"}
             </div>
 
+            {isPlayer && (
+              <div
+                style={{
+                  color: MUTED,
+                  fontSize: 10,
+                  lineHeight: 1.6,
+                  marginTop: 5,
+                }}
+              >
+                Based on scoring per start,
+                capped at 13 projected starts
+                and the remaining regular-season
+                weeks.
+              </div>
+            )}
+
             {record.historicalRecord !== null && (
               <div
                 style={{
                   color: MUTED,
                   fontSize: 11,
                   lineHeight: 1.6,
-                  marginTop: 7,
+                  marginTop: 9,
                 }}
               >
                 Historical record:{" "}
@@ -588,40 +612,73 @@ function RecordCard({
           </div>
         )}
 
-      {!isSeason &&
-        record.allTimeRank !== null && (
-          <div
+      {record.detail && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            background: "#253240",
+            borderRadius: 10,
+            padding: 12,
+            marginTop: 13,
+          }}
+        >
+          <span
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-              background: "#253240",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 13,
+              color: accent,
+              fontSize: 16,
+              flexShrink: 0,
             }}
           >
-            <span
+            ★
+          </span>
+
+          <div
+            style={{
+              minWidth: 0,
+            }}
+          >
+            <div
               style={{
                 color: accent,
-                fontSize: 16,
+                fontSize: 10,
+                fontWeight: 900,
+                letterSpacing: 0.6,
+                marginBottom: 5,
               }}
             >
-              ★
-            </span>
+              {isSeason
+                ? "RECORDS IN CONTENTION"
+                : "HISTORICAL RANKINGS"}
+            </div>
 
-            <span
+            <div
               style={{
                 color: "#e5e7eb",
                 fontSize: 11,
                 fontWeight: 700,
-                lineHeight: 1.6,
+                lineHeight: 1.7,
+                overflowWrap: "anywhere",
               }}
             >
-              {record.detail}
-            </span>
+              {record.detail
+                .split(" · ")
+                .map((achievement, index) => (
+                  <div
+                    key={`${index}-${achievement}`}
+                    style={{
+                      marginTop:
+                        index === 0 ? 0 : 5,
+                    }}
+                  >
+                    {achievement}
+                  </div>
+                ))}
+            </div>
           </div>
-        )}
+        </div>
+      )}
     </article>
   );
 }
@@ -643,7 +700,7 @@ function RecordWatchSection({
       <SectionHeading
         eyebrow="THE RECORD BOOK"
         title="SFL Record Watch"
-        description="The performances making history, for better or worse."
+        description="The performances making history across the SFL, OBFC, GPFC and individual franchises."
       />
 
       {week > 0 && (
@@ -724,8 +781,10 @@ function RecordWatchSection({
           marginTop: 12,
         }}
       >
-        Rankings use completed regular-season
-        games and started player performances.
+        Records cover completed regular-season
+        matchups and started QB, RB, WR and TE
+        performances. Conference membership
+        is consistent across SFL history.
         Season projections are estimates,
         not guaranteed outcomes.
       </p>
@@ -744,9 +803,21 @@ export default async function HomePage() {
     getMVPTransactions(),
   ]);
 
+  /*
+   * Pass the full player directory into
+   * the expanded SFL record engine.
+   *
+   * This activates:
+   * - Overall player records
+   * - Positional records
+   * - OBFC and GPFC records
+   * - Franchise-specific records
+   * - Player season record chases
+   */
   const home = calculateHomeStats(
     historicalData,
-    "2026"
+    "2026",
+    players
   );
 
   const weeklyRecaps =
@@ -793,16 +864,16 @@ export default async function HomePage() {
   }
 
   for (const candidate of mvpLeaderboard.topTen) {
-    homepagePlayerIds.add(candidate.playerId);
+    homepagePlayerIds.add(
+      candidate.playerId
+    );
   }
 
-  /*
-   * Add Record Watch players so their
-   * names and positions display correctly.
-   */
   for (const record of home.recordHighlights) {
     if (record.playerId !== null) {
-      homepagePlayerIds.add(record.playerId);
+      homepagePlayerIds.add(
+        record.playerId
+      );
     }
   }
 
@@ -910,12 +981,14 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* New SFL Record Watch */}
+      {/* SFL Record Watch */}
 
       <RecordWatchSection
         highlights={home.recordHighlights}
         playerInfo={playerInfo}
-        week={home.seasonStats.latestCompletedWeek}
+        week={
+          home.seasonStats.latestCompletedWeek
+        }
       />
 
       {/* Conference standings */}
