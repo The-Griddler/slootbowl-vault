@@ -10,6 +10,7 @@ import {
 } from "../lib/players";
 import {
   calculateHomeStats,
+  RECORD_WATCH_LIMIT,
   type HomeStanding,
   type RecordHighlight,
 } from "../lib/homeStats";
@@ -50,11 +51,11 @@ const NAMES = new Map(
   ])
 );
 
-function teamName(rosterId: number) {
+function teamName(rosterId: number): string {
   return NAMES.get(rosterId) ?? `Team ${rosterId}`;
 }
 
-function formatPoints(value: number) {
+function formatPoints(value: number): string {
   return value.toFixed(2);
 }
 
@@ -319,6 +320,46 @@ function recordValueText(
   return `${formatPoints(record.value)} pts`;
 }
 
+function recordScope(
+  record: RecordHighlight
+): "SFL" | "OBFC" | "GPFC" | "FRANCHISE" {
+  const label = record.label.toUpperCase();
+
+  if (label.includes("FRANCHISE")) {
+    return "FRANCHISE";
+  }
+
+  if (label.includes("OBFC")) {
+    return "OBFC";
+  }
+
+  if (label.includes("GPFC")) {
+    return "GPFC";
+  }
+
+  return "SFL";
+}
+
+function recordScopeText(
+  record: RecordHighlight
+): string {
+  const scope = recordScope(record);
+
+  if (record.kind === "season") {
+    if (scope === "FRANCHISE") {
+      return "FRANCHISE RECORD CHASE";
+    }
+
+    return `${scope} RECORD CHASE`;
+  }
+
+  if (scope === "FRANCHISE") {
+    return "FRANCHISE HISTORY";
+  }
+
+  return `${scope} HISTORY`;
+}
+
 function RecordIdentity({
   record,
   playerInfo,
@@ -350,7 +391,7 @@ function RecordIdentity({
       {record.rosterId !== null && (
         <TeamLogo
           rosterId={record.rosterId}
-          size={large ? 46 : 34}
+          size={large ? 44 : 31}
         />
       )}
 
@@ -392,14 +433,97 @@ function RecordIdentity({
   );
 }
 
+function AchievementSummary({
+  record,
+  accent,
+}: {
+  record: RecordHighlight;
+  accent: string;
+}) {
+  const achievements = record.detail
+    .split(" · ")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (achievements.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 13,
+        paddingTop: 12,
+        borderTop: "1px solid #34404d",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            color: accent,
+            fontSize: 15,
+            flexShrink: 0,
+            lineHeight: 1.5,
+          }}
+        >
+          ★
+        </span>
+
+        <div
+          style={{
+            display: "grid",
+            gap: 5,
+            minWidth: 0,
+          }}
+        >
+          {achievements.map(
+            (achievement, index) => (
+              <p
+                key={`${index}-${achievement}`}
+                style={{
+                  color:
+                    index === 0
+                      ? "#f4f5f7"
+                      : MUTED,
+                  fontSize: index === 0
+                    ? 12
+                    : 11,
+                  fontWeight:
+                    index === 0
+                      ? 800
+                      : 500,
+                  lineHeight: 1.6,
+                  margin: 0,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {achievement}
+              </p>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RecordCard({
   record,
   playerInfo,
   featured = false,
+  index,
 }: {
   record: RecordHighlight;
   playerInfo: RecordPlayerInfo;
   featured?: boolean;
+  index: number;
 }) {
   const accent = recordAccent(record);
   const isSeason = record.kind === "season";
@@ -419,17 +543,19 @@ function RecordCard({
           ? "1px solid #394653"
           : BORDER,
         borderRadius: 15,
-        padding: featured ? 18 : 15,
+        padding: featured ? 18 : 14,
         minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
+          justifyContent: "space-between",
           gap: 10,
-          marginBottom: 13,
+          marginBottom: 12,
         }}
       >
         <span
@@ -437,53 +563,54 @@ function RecordCard({
             color: accent,
             fontSize: 10,
             fontWeight: 900,
-            letterSpacing: 1.1,
+            letterSpacing: 1,
             lineHeight: 1.5,
           }}
         >
-          {isSeason
-            ? record.tone === "negative"
-              ? "INFAMOUS PACE"
-              : "RECORD PACE"
-            : record.allTimeRank === 1
-              ? "ALL-TIME RECORD"
-              : "HISTORIC PERFORMANCE"}
+          {recordScopeText(record)}
         </span>
 
         <span
           style={{
-            color: accent,
-            fontSize: featured ? 22 : 18,
-            flexShrink: 0,
+            color: MUTED,
+            fontSize: 10,
+            fontWeight: 800,
+            whiteSpace: "nowrap",
           }}
         >
-          {record.tone === "negative"
-            ? "📉"
-            : record.tone === "unusual"
-              ? "⚡"
-              : "🏆"}
+          #{index + 1}
         </span>
       </div>
 
       <div
         style={{
           color: MUTED,
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: 700,
           lineHeight: 1.5,
           marginBottom: 7,
         }}
       >
-        {record.label}
+        {isSeason
+          ? record.tone === "negative"
+            ? "Unwanted season record pace"
+            : "Season record pace"
+          : record.tone === "negative"
+            ? "Historic scoring low"
+            : record.tone === "unusual"
+              ? "Unusual historical performance"
+              : record.allTimeRank === 1
+                ? "Record-book performance"
+                : "Historic performance"}
       </div>
 
       <h3
         style={{
           color: "#ffffff",
-          fontSize: featured ? 20 : 16,
-          lineHeight: 1.3,
+          fontSize: featured ? 20 : 15,
+          lineHeight: 1.35,
           fontWeight: 900,
-          margin: "0 0 15px",
+          margin: "0 0 14px",
         }}
       >
         {record.headline}
@@ -497,17 +624,17 @@ function RecordCard({
 
       <div
         style={{
-          marginTop: 17,
-          paddingTop: 14,
+          marginTop: 14,
+          paddingTop: 13,
           borderTop: "1px solid #34404d",
         }}
       >
         <div
           style={{
             color: accent,
-            fontSize: featured ? 30 : 24,
+            fontSize: featured ? 29 : 23,
             fontWeight: 900,
-            letterSpacing: -0.8,
+            letterSpacing: -0.6,
             lineHeight: 1.2,
           }}
         >
@@ -517,9 +644,9 @@ function RecordCard({
         <div
           style={{
             color: MUTED,
-            fontSize: 11,
+            fontSize: 10,
             lineHeight: 1.6,
-            marginTop: 6,
+            marginTop: 5,
           }}
         >
           {isSeason
@@ -527,7 +654,7 @@ function RecordCard({
               ? "Points from SFL starts this season"
               : "Current franchise season total"
             : isPlayer
-              ? `Week ${record.week} starter performance`
+              ? `Week ${record.week} starter score`
               : `Week ${record.week} franchise performance`}
         </div>
       </div>
@@ -537,15 +664,15 @@ function RecordCard({
           <div
             style={{
               background: "#253240",
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 13,
+              borderRadius: 9,
+              padding: 11,
+              marginTop: 12,
             }}
           >
             <div
               style={{
                 color: accent,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 800,
               }}
             >
@@ -555,7 +682,7 @@ function RecordCard({
             <div
               style={{
                 color: "#ffffff",
-                fontSize: 20,
+                fontSize: featured ? 20 : 17,
                 fontWeight: 900,
                 marginTop: 5,
               }}
@@ -570,32 +697,16 @@ function RecordCard({
                 : " pts"}
             </div>
 
-            {isPlayer && (
+            {record.historicalRecord !== null && (
               <div
                 style={{
                   color: MUTED,
                   fontSize: 10,
                   lineHeight: 1.6,
-                  marginTop: 5,
+                  marginTop: 7,
                 }}
               >
-                Based on scoring per start,
-                capped at 13 projected starts
-                and the remaining regular-season
-                weeks.
-              </div>
-            )}
-
-            {record.historicalRecord !== null && (
-              <div
-                style={{
-                  color: MUTED,
-                  fontSize: 11,
-                  lineHeight: 1.6,
-                  marginTop: 9,
-                }}
-              >
-                Historical record:{" "}
+                Record to beat:{" "}
                 {record.unit === "wins"
                   ? record.historicalRecord.toFixed(0)
                   : formatPoints(
@@ -612,73 +723,10 @@ function RecordCard({
           </div>
         )}
 
-      {record.detail && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            background: "#253240",
-            borderRadius: 10,
-            padding: 12,
-            marginTop: 13,
-          }}
-        >
-          <span
-            style={{
-              color: accent,
-              fontSize: 16,
-              flexShrink: 0,
-            }}
-          >
-            ★
-          </span>
-
-          <div
-            style={{
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                color: accent,
-                fontSize: 10,
-                fontWeight: 900,
-                letterSpacing: 0.6,
-                marginBottom: 5,
-              }}
-            >
-              {isSeason
-                ? "RECORDS IN CONTENTION"
-                : "HISTORICAL RANKINGS"}
-            </div>
-
-            <div
-              style={{
-                color: "#e5e7eb",
-                fontSize: 11,
-                fontWeight: 700,
-                lineHeight: 1.7,
-                overflowWrap: "anywhere",
-              }}
-            >
-              {record.detail
-                .split(" · ")
-                .map((achievement, index) => (
-                  <div
-                    key={`${index}-${achievement}`}
-                    style={{
-                      marginTop:
-                        index === 0 ? 0 : 5,
-                    }}
-                  >
-                    {achievement}
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <AchievementSummary
+        record={record}
+        accent={accent}
+      />
     </article>
   );
 }
@@ -692,34 +740,73 @@ function RecordWatchSection({
   playerInfo: RecordPlayerInfo;
   week: number;
 }) {
-  const featured = highlights[0] ?? null;
-  const supporting = highlights.slice(1, 3);
+  const visible = highlights.slice(
+    0,
+    RECORD_WATCH_LIMIT
+  );
+
+  const featured = visible[0] ?? null;
+  const supporting = visible.slice(1);
 
   return (
     <section style={{ marginTop: 36 }}>
       <SectionHeading
         eyebrow="THE RECORD BOOK"
         title="SFL Record Watch"
-        description="The performances making history across the SFL, OBFC, GPFC and individual franchises."
+        description="Historic performances and season-record chases across the SFL, OBFC, GPFC and individual franchises."
       />
 
-      {week > 0 && (
-        <div
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 14,
+        }}
+      >
+        {week > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              color: "#cbd5e1",
+              background: "#1d2938",
+              border: BORDER,
+              borderRadius: 99,
+              padding: "7px 11px",
+              fontSize: 10,
+              fontWeight: 800,
+            }}
+          >
+            WEEK {week}
+          </span>
+        )}
+
+        <span
           style={{
             display: "inline-flex",
-            color: "#cbd5e1",
-            background: "#1d2938",
-            border: BORDER,
+            color: "#facc15",
+            background: "#332b13",
+            border: "1px solid #5c4a19",
             borderRadius: 99,
             padding: "7px 11px",
             fontSize: 10,
             fontWeight: 800,
-            marginBottom: 13,
           }}
         >
-          WEEK {week} · HISTORICAL WATCH
-        </div>
-      )}
+          TEST MODE · TOP {RECORD_WATCH_LIMIT}
+        </span>
+
+        <span
+          style={{
+            color: MUTED,
+            fontSize: 10,
+            fontWeight: 700,
+          }}
+        >
+          {visible.length} qualifying awards
+        </span>
+      </div>
 
       {featured ? (
         <div
@@ -732,6 +819,7 @@ function RecordWatchSection({
             record={featured}
             playerInfo={playerInfo}
             featured
+            index={0}
           />
 
           {supporting.length > 0 && (
@@ -739,17 +827,21 @@ function RecordWatchSection({
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+                  "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
                 gap: 11,
+                alignItems: "stretch",
               }}
             >
-              {supporting.map((record) => (
-                <RecordCard
-                  key={record.id}
-                  record={record}
-                  playerInfo={playerInfo}
-                />
-              ))}
+              {supporting.map(
+                (record, index) => (
+                  <RecordCard
+                    key={record.id}
+                    record={record}
+                    playerInfo={playerInfo}
+                    index={index + 1}
+                  />
+                )
+              )}
             </div>
           )}
         </div>
@@ -781,12 +873,15 @@ function RecordWatchSection({
           marginTop: 12,
         }}
       >
-        Records cover completed regular-season
-        matchups and started QB, RB, WR and TE
-        performances. Conference membership
-        is consistent across SFL history.
-        Season projections are estimates,
-        not guaranteed outcomes.
+        Awards are ranked by the record
+        engine&apos;s editorial priority,
+        not by raw fantasy points.
+        Only regular-season results and
+        started QB, RB, WR and TE
+        performances count. Season
+        projections are estimates.
+        The expanded list is temporary
+        while we fine-tune selection.
       </p>
     </section>
   );
@@ -803,17 +898,6 @@ export default async function HomePage() {
     getMVPTransactions(),
   ]);
 
-  /*
-   * Pass the full player directory into
-   * the expanded SFL record engine.
-   *
-   * This activates:
-   * - Overall player records
-   * - Positional records
-   * - OBFC and GPFC records
-   * - Franchise-specific records
-   * - Player season record chases
-   */
   const home = calculateHomeStats(
     historicalData,
     "2026",
@@ -1150,3 +1234,4 @@ export default async function HomePage() {
     </main>
   );
 }
+ 
