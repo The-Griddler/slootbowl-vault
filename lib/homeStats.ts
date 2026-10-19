@@ -140,6 +140,33 @@ type SeasonTotal = {
 
 const REGULAR_SEASON_WEEKS = 14;
 
+/*
+ * Record Watch editorial thresholds.
+ *
+ * Weekly top-10 historical performances
+ * are eligible immediately.
+ *
+ * Season scoring chases need at least
+ * four completed games.
+ *
+ * Wins/losses chases normally need
+ * seven completed games, except for
+ * an unbeaten or winless 6-game start.
+ */
+const MIN_SCORING_CHASE_GAMES = 4;
+const MIN_RECORD_CHASE_GAMES = 7;
+const EARLY_STREAK_GAMES = 6;
+
+/*
+ * A points projection must be at least
+ * 98% of the historical record.
+ *
+ * This allows an exceptionally close
+ * scoring chase without letting
+ * ordinary projections become stories.
+ */
+const POINTS_CHASE_RATIO = 0.98;
+
 function round2(value: number): number {
   return (
     Math.round(
@@ -410,7 +437,7 @@ function calculateSeasonStats(
  *
  * Only started players are included.
  * Only completed regular-season games
- * are used for this first version.
+ * are used.
  */
 function buildRecordData(
   historicalData: HistoricalSeason[],
@@ -490,10 +517,6 @@ function buildRecordData(
 
         totals.set(side.rosterId, total);
 
-        /*
-         * Sleeper starters and starter points
-         * use matching array positions.
-         */
         side.starters.forEach((playerId, index) => {
           const points = side.starterPoints[index];
 
@@ -532,7 +555,7 @@ function buildRecordData(
  *
  * 1st, 2nd, 2nd, 4th.
  *
- * An equal record receives equal rank.
+ * Equal performances share the same rank.
  */
 function historicalRank(
   value: number,
@@ -715,8 +738,6 @@ function buildGameHighlights(
   /*
    * Individual starter performances.
    * This is an overall player-game ranking.
-   * Position-specific rankings can be added
-   * once player metadata is passed in.
    */
   if (weeklyPlayers.length && players.length) {
     const bestPlayer = [...weeklyPlayers].sort(
@@ -775,18 +796,109 @@ function buildGameHighlights(
 }
 
 /*
- * Season chases compare projected 14-game
- * regular-season totals against previous
- * seasons with 14 completed games.
+ * Decide whether a projected season
+ * performance deserves coverage.
  *
- * Projections begin in Week 4.
+ * Points records can be considered from
+ * Week 4 if the projection is exceptional.
+ *
+ * Wins and losses require a stronger
+ * sample or an unbeaten/winless start.
+ */
+function qualifiesForSeasonWatch(
+  categoryId: string,
+  current: SeasonTotal,
+  projection: number,
+  historicalRecord: number
+): boolean {
+  if (categoryId === "season-points-high") {
+    if (
+      current.games < MIN_SCORING_CHASE_GAMES
+    ) {
+      return false;
+    }
+
+    return (
+      projection >=
+      historicalRecord * POINTS_CHASE_RATIO
+    );
+  }
+
+  if (categoryId === "season-points-low") {
+    if (
+      current.games < MIN_SCORING_CHASE_GAMES
+    ) {
+      return false;
+    }
+
+    return (
+      projection <=
+      historicalRecord *
+        (2 - POINTS_CHASE_RATIO)
+    );
+  }
+
+  if (categoryId === "season-wins-high") {
+    const unbeatenEarlyStart =
+      current.games >= EARLY_STREAK_GAMES &&
+      current.games <
+        MIN_RECORD_CHASE_GAMES &&
+      current.wins === current.games;
+
+    if (
+      current.games <
+        MIN_RECORD_CHASE_GAMES &&
+      !unbeatenEarlyStart
+    ) {
+      return false;
+    }
+
+    /*
+     * No "nearly 12 wins" stories.
+     * The projection must actually
+     * match or beat the record.
+     */
+    return projection >= historicalRecord;
+  }
+
+  if (categoryId === "season-wins-low") {
+    const winlessEarlyStart =
+      current.games >= EARLY_STREAK_GAMES &&
+      current.games <
+        MIN_RECORD_CHASE_GAMES &&
+      current.wins === 0;
+
+    if (
+      current.games <
+        MIN_RECORD_CHASE_GAMES &&
+      !winlessEarlyStart
+    ) {
+      return false;
+    }
+
+    return projection <= historicalRecord;
+  }
+
+  return false;
+}
+
+/*
+ * Season chases compare projected
+ * 14-week franchise totals against
+ * previous full 14-game seasons.
+ *
+ * Player season projections will use
+ * a separate 13-appearance baseline
+ * when introduced.
  */
 function buildSeasonHighlights(
   seasons: SeasonTotal[],
   season: string,
   week: number
 ): RecordHighlight[] {
-  if (week < 4) return [];
+  if (week < MIN_SCORING_CHASE_GAMES) {
+    return [];
+  }
 
   const historical = seasons.filter(
     (item) =>
@@ -797,7 +909,7 @@ function buildSeasonHighlights(
   const current = seasons.filter(
     (item) =>
       item.season === season &&
-      item.games >= 4
+      item.games >= MIN_SCORING_CHASE_GAMES
   );
 
   if (!historical.length || !current.length) {
@@ -859,39 +971,44 @@ function buildSeasonHighlights(
     const holder = sortedHistory[0];
     const record = category.value(holder);
 
-    const projected = current
+    /*
+     * Evaluate every franchise rather
+     * than only the best projection.
+     *
+     * This matters when an unbeaten
+     * or winless early start qualifies
+     * but a different franchise has
+     * the strongest raw projection.
+     */
+    const qualifying = current
       .map((item) => ({
         item,
         projection:
           (category.value(item) / item.games) *
           REGULAR_SEASON_WEEKS,
       }))
+      .filter(({ item, projection }) =>
+        qualifiesForSeasonWatch(
+          category.id,
+          item,
+          projection,
+          record
+        )
+      )
       .sort((a, b) =>
         category.direction === "high"
           ? b.projection - a.projection
           : a.projection - b.projection
-      )[0];
+      );
+
+    const projected = qualifying[0];
 
     if (!projected) continue;
 
-    const difference =
+    const onPace =
       category.direction === "high"
-        ? projected.projection - record
-        : record - projected.projection;
-
-    const tolerance =
-      category.unit === "wins"
-        ? 1.5
-        : Math.abs(record) * 0.05;
-
-    /*
-     * Only serious record chases qualify.
-     * This includes projected ties and
-     * performances close to record pace.
-     */
-    if (difference < -tolerance) continue;
-
-    const onPace = difference >= 0;
+        ? projected.projection >= record
+        : projected.projection <= record;
 
     candidates.push({
       id: `${season}-${week}-${category.id}`,
@@ -920,7 +1037,14 @@ function buildSeasonHighlights(
       projectedValue: round2(
         projected.projection
       ),
-      priority: onPace ? 65 : 40,
+      priority:
+        category.unit === "wins"
+          ? onPace
+            ? 60
+            : 0
+          : onPace
+            ? 65
+            : 38,
     });
   }
 
@@ -931,11 +1055,8 @@ function buildSeasonHighlights(
  * Select one headline and up to two
  * supporting stories.
  *
- * Game performances receive preference
- * over recurring season projections.
- *
- * A season chase is never repeated across
- * multiple cards in the same selection.
+ * Never manufacture a third story just
+ * to fill the layout.
  */
 function calculateRecordHighlights(
   historicalData: HistoricalSeason[],
@@ -975,9 +1096,6 @@ function calculateRecordHighlights(
   const usedLabels = new Set<string>();
   const usedSubjects = new Set<string>();
 
-  /*
-   * First select the strongest headline.
-   */
   if (candidates.length) {
     const first = candidates[0];
 
@@ -991,9 +1109,8 @@ function calculateRecordHighlights(
   }
 
   /*
-   * Then prefer variety, avoiding
-   * repeatedly featuring the same
-   * player or franchise.
+   * Prefer different franchises and
+   * different record categories.
    */
   for (const candidate of candidates.slice(1)) {
     if (selected.length >= 3) break;
@@ -1015,9 +1132,10 @@ function calculateRecordHighlights(
   }
 
   /*
-   * If fewer than three qualify, allow
-   * another category from an already
-   * featured franchise.
+   * Only allow another story from an
+   * already-featured franchise if it
+   * independently passed the same
+   * eligibility thresholds.
    */
   for (const candidate of candidates) {
     if (selected.length >= 3) break;
@@ -1039,8 +1157,8 @@ function calculateRecordHighlights(
 }
 
 /*
- * Existing record calculation retained
- * for compatibility with app/page.tsx.
+ * Original record calculation retained
+ * for backwards compatibility.
  */
 function calculateRecordWatch(
   historicalData: HistoricalSeason[],
