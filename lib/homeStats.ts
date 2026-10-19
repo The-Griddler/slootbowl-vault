@@ -69,6 +69,28 @@ export type HomeRecordWatch = {
   onRecordPace: boolean;
 };
 
+export type RecordHighlight = {
+  id: string;
+  kind: "game" | "season";
+  subject: "player" | "franchise";
+  tone: "positive" | "negative" | "unusual";
+  label: string;
+  headline: string;
+  detail: string;
+  value: number;
+  unit: "points" | "wins";
+  rosterId: number | null;
+  playerId: string | null;
+  week: number;
+  season: string;
+  allTimeRank: number | null;
+  historicalRecord: number | null;
+  historicalSeason: string | null;
+  historicalRosterId: number | null;
+  projectedValue: number | null;
+  priority: number;
+};
+
 export type HomeStats = {
   season: string;
   seasonStats: HomeSeasonStats;
@@ -80,6 +102,7 @@ export type HomeStats = {
   playoffContenders: number[];
   completedGames: HomeGame[];
   recordWatch: HomeRecordWatch[];
+  recordHighlights: RecordHighlight[];
 };
 
 type MutableStanding = Omit<
@@ -87,23 +110,51 @@ type MutableStanding = Omit<
   "rank" | "winPercentage" | "inPlayoffPosition"
 >;
 
+type TeamPerformance = {
+  season: string;
+  week: number;
+  rosterId: number;
+  points: number;
+  opponentPoints: number;
+  margin: number;
+  won: boolean;
+  lost: boolean;
+};
+
+type PlayerPerformance = {
+  season: string;
+  week: number;
+  rosterId: number;
+  playerId: string;
+  points: number;
+};
+
+type SeasonTotal = {
+  season: string;
+  rosterId: number;
+  points: number;
+  wins: number;
+  losses: number;
+  games: number;
+};
+
 const REGULAR_SEASON_WEEKS = 14;
 
 function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return (
+    Math.round(
+      (value + Number.EPSILON) * 100
+    ) / 100
+  );
 }
 
 function validScore(value: number): boolean {
-  return Number.isFinite(value) && value >= 0;
+  return (
+    Number.isFinite(value) &&
+    value >= 0
+  );
 }
 
-/**
- * Only completed regular-season matchups count
- * towards homepage standings and season stats.
- *
- * This also excludes the Toilet Bowl,
- * playoff placement games and future fixtures.
- */
 function isEligibleGame(
   game: HistoricalMatchup,
   season: string
@@ -152,31 +203,6 @@ function toHomeGame(
   };
 }
 
-function getConference(
-  rosterId: number
-): "OBFC" | "GPFC" | null {
-  for (const conference of HOME_CONFERENCES) {
-    if (
-      (conference.rosterIds as readonly number[])
-        .includes(rosterId)
-    ) {
-      return conference.id;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Sort by W-L record first, then Points For.
- *
- * Win percentage handles the same number
- * of games played with possible ties.
- * For equal win percentage, PF breaks ties.
- *
- * If both remain equal, roster ID gives
- * the display a deterministic order.
- */
 function compareStandings(
   a: MutableStanding,
   b: MutableStanding
@@ -224,13 +250,8 @@ export function calculateHomeStandings(
   }
 
   for (const game of games) {
-    const teamA = standings.get(
-      game.rosterA
-    );
-
-    const teamB = standings.get(
-      game.rosterB
-    );
+    const teamA = standings.get(game.rosterA);
+    const teamB = standings.get(game.rosterB);
 
     if (!teamA || !teamB) {
       continue;
@@ -273,8 +294,10 @@ export function calculateHomeStandings(
       (team, index) => {
         const winPercentage =
           team.gamesPlayed > 0
-            ? (team.wins + team.ties * 0.5) /
-              team.gamesPlayed
+            ? (
+                team.wins +
+                team.ties * 0.5
+              ) / team.gamesPlayed
             : 0;
 
         result.push({
@@ -363,9 +386,7 @@ function calculateSeasonStats(
     latestCompletedWeek:
       games.length > 0
         ? Math.max(
-            ...games.map(
-              (game) => game.week
-            )
+            ...games.map((game) => game.week)
           )
         : 0,
     gamesPlayed: games.length,
@@ -373,7 +394,8 @@ function calculateSeasonStats(
     averageTeamScore:
       games.length > 0
         ? round2(
-            totalPoints / (games.length * 2)
+            totalPoints /
+              (games.length * 2)
           )
         : 0,
     highestTeamScore,
@@ -383,13 +405,642 @@ function calculateSeasonStats(
   };
 }
 
-/**
- * Compare current-season team scoring
- * against the highest completed historical
- * regular-season team scoring total.
+/*
+ * Build historical performance lists.
  *
- * Historical records are calculated using
- * full completed seasons only.
+ * Only started players are included.
+ * Only completed regular-season games
+ * are used for this first version.
+ */
+function buildRecordData(
+  historicalData: HistoricalSeason[],
+  currentSeason: string
+): {
+  teams: TeamPerformance[];
+  players: PlayerPerformance[];
+  seasons: SeasonTotal[];
+} {
+  const teams: TeamPerformance[] = [];
+  const players: PlayerPerformance[] = [];
+  const seasons: SeasonTotal[] = [];
+
+  for (const historicalSeason of historicalData) {
+    const season = historicalSeason.league.season;
+
+    if (Number(season) > Number(currentSeason)) {
+      continue;
+    }
+
+    const games = historicalSeason.matchups.filter(
+      (game) => isEligibleGame(game, season)
+    );
+
+    const totals = new Map<number, SeasonTotal>();
+
+    for (const game of games) {
+      const sides = [
+        {
+          rosterId: game.rosterA,
+          points: game.scoreA,
+          opponentPoints: game.scoreB,
+          starters: game.startersA,
+          starterPoints: game.startersPointsA,
+        },
+        {
+          rosterId: game.rosterB,
+          points: game.scoreB,
+          opponentPoints: game.scoreA,
+          starters: game.startersB,
+          starterPoints: game.startersPointsB,
+        },
+      ];
+
+      for (const side of sides) {
+        const margin = round2(
+          side.points - side.opponentPoints
+        );
+
+        teams.push({
+          season,
+          week: game.week,
+          rosterId: side.rosterId,
+          points: round2(side.points),
+          opponentPoints: round2(
+            side.opponentPoints
+          ),
+          margin,
+          won: margin > 0,
+          lost: margin < 0,
+        });
+
+        const total = totals.get(side.rosterId) ?? {
+          season,
+          rosterId: side.rosterId,
+          points: 0,
+          wins: 0,
+          losses: 0,
+          games: 0,
+        };
+
+        total.points += side.points;
+        total.games++;
+
+        if (margin > 0) total.wins++;
+        if (margin < 0) total.losses++;
+
+        totals.set(side.rosterId, total);
+
+        /*
+         * Sleeper starters and starter points
+         * use matching array positions.
+         */
+        side.starters.forEach((playerId, index) => {
+          const points = side.starterPoints[index];
+
+          if (
+            !playerId ||
+            playerId === "0" ||
+            !validScore(points)
+          ) {
+            return;
+          }
+
+          players.push({
+            season,
+            week: game.week,
+            rosterId: side.rosterId,
+            playerId,
+            points: round2(points),
+          });
+        });
+      }
+    }
+
+    for (const total of totals.values()) {
+      seasons.push({
+        ...total,
+        points: round2(total.points),
+      });
+    }
+  }
+
+  return { teams, players, seasons };
+}
+
+/*
+ * Competition ranking:
+ *
+ * 1st, 2nd, 2nd, 4th.
+ *
+ * An equal record receives equal rank.
+ */
+function historicalRank(
+  value: number,
+  values: number[],
+  direction: "high" | "low"
+): number {
+  const better = values.filter((other) =>
+    direction === "high"
+      ? other > value
+      : other < value
+  ).length;
+
+  return better + 1;
+}
+
+function recordValue(
+  values: number[],
+  direction: "high" | "low"
+): number | null {
+  if (values.length === 0) return null;
+
+  return direction === "high"
+    ? Math.max(...values)
+    : Math.min(...values);
+}
+
+function ordinal(rank: number): string {
+  const suffix =
+    rank % 100 >= 11 && rank % 100 <= 13
+      ? "th"
+      : rank % 10 === 1
+        ? "st"
+        : rank % 10 === 2
+          ? "nd"
+          : rank % 10 === 3
+            ? "rd"
+            : "th";
+
+  return `${rank}${suffix}`;
+}
+
+/*
+ * Generate noteworthy weekly performances.
+ *
+ * The historical rank includes all eligible
+ * completed games, including the current
+ * season, but not future weeks.
+ */
+function buildGameHighlights(
+  teams: TeamPerformance[],
+  players: PlayerPerformance[],
+  season: string,
+  week: number
+): RecordHighlight[] {
+  const candidates: RecordHighlight[] = [];
+
+  const weeklyTeams = teams.filter(
+    (item) =>
+      item.season === season &&
+      item.week === week
+  );
+
+  const weeklyPlayers = players.filter(
+    (item) =>
+      item.season === season &&
+      item.week === week
+  );
+
+  const categories: {
+    id: string;
+    label: string;
+    direction: "high" | "low";
+    tone: RecordHighlight["tone"];
+    eligible: (item: TeamPerformance) => boolean;
+    value: (item: TeamPerformance) => number;
+  }[] = [
+    {
+      id: "highest-team-score",
+      label: "Highest weekly franchise score",
+      direction: "high",
+      tone: "positive",
+      eligible: () => true,
+      value: (item) => item.points,
+    },
+    {
+      id: "lowest-team-score",
+      label: "Lowest weekly franchise score",
+      direction: "low",
+      tone: "negative",
+      eligible: () => true,
+      value: (item) => item.points,
+    },
+    {
+      id: "biggest-win",
+      label: "Biggest winning margin",
+      direction: "high",
+      tone: "positive",
+      eligible: (item) => item.won,
+      value: (item) => item.margin,
+    },
+    {
+      id: "unluckiest-loss",
+      label: "Highest-scoring losing franchise",
+      direction: "high",
+      tone: "unusual",
+      eligible: (item) => item.lost,
+      value: (item) => item.points,
+    },
+    {
+      id: "lowest-winning-score",
+      label: "Lowest-scoring winning franchise",
+      direction: "low",
+      tone: "unusual",
+      eligible: (item) => item.won,
+      value: (item) => item.points,
+    },
+  ];
+
+  for (const category of categories) {
+    const all = teams.filter(category.eligible);
+    const recent = weeklyTeams.filter(
+      category.eligible
+    );
+
+    if (!all.length || !recent.length) continue;
+
+    const values = all.map(category.value);
+
+    const best = [...recent].sort((a, b) =>
+      category.direction === "high"
+        ? category.value(b) - category.value(a)
+        : category.value(a) - category.value(b)
+    )[0];
+
+    const value = category.value(best);
+    const rank = historicalRank(
+      value,
+      values,
+      category.direction
+    );
+
+    if (rank > 10) continue;
+
+    const record = recordValue(
+      values,
+      category.direction
+    );
+
+    candidates.push({
+      id: `${season}-${week}-${category.id}`,
+      kind: "game",
+      subject: "franchise",
+      tone: category.tone,
+      label: category.label,
+      headline:
+        rank === 1
+          ? "An all-time SFL performance"
+          : `${ordinal(rank)} in SFL history`,
+      detail:
+        `${ordinal(rank)} all-time in ` +
+        category.label.toLowerCase(),
+      value: round2(value),
+      unit: "points",
+      rosterId: best.rosterId,
+      playerId: null,
+      week,
+      season,
+      allTimeRank: rank,
+      historicalRecord: record,
+      historicalSeason: null,
+      historicalRosterId: null,
+      projectedValue: null,
+      priority:
+        rank === 1
+          ? 120
+          : Math.max(15, 100 - rank * 11),
+    });
+  }
+
+  /*
+   * Individual starter performances.
+   * This is an overall player-game ranking.
+   * Position-specific rankings can be added
+   * once player metadata is passed in.
+   */
+  if (weeklyPlayers.length && players.length) {
+    const bestPlayer = [...weeklyPlayers].sort(
+      (a, b) => b.points - a.points
+    )[0];
+
+    const allScores = players.map(
+      (item) => item.points
+    );
+
+    const rank = historicalRank(
+      bestPlayer.points,
+      allScores,
+      "high"
+    );
+
+    if (rank <= 10) {
+      candidates.push({
+        id:
+          `${season}-${week}-player-` +
+          bestPlayer.playerId,
+        kind: "game",
+        subject: "player",
+        tone: "positive",
+        label: "Individual player game score",
+        headline:
+          rank === 1
+            ? "The greatest player game in SFL history"
+            : `${ordinal(rank)} highest player score ever`,
+        detail:
+          `${ordinal(rank)} all-time among ` +
+          "started player performances",
+        value: bestPlayer.points,
+        unit: "points",
+        rosterId: bestPlayer.rosterId,
+        playerId: bestPlayer.playerId,
+        week,
+        season,
+        allTimeRank: rank,
+        historicalRecord: recordValue(
+          allScores,
+          "high"
+        ),
+        historicalSeason: null,
+        historicalRosterId: null,
+        projectedValue: null,
+        priority:
+          rank === 1
+            ? 125
+            : Math.max(15, 105 - rank * 11),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/*
+ * Season chases compare projected 14-game
+ * regular-season totals against previous
+ * seasons with 14 completed games.
+ *
+ * Projections begin in Week 4.
+ */
+function buildSeasonHighlights(
+  seasons: SeasonTotal[],
+  season: string,
+  week: number
+): RecordHighlight[] {
+  if (week < 4) return [];
+
+  const historical = seasons.filter(
+    (item) =>
+      Number(item.season) < Number(season) &&
+      item.games === REGULAR_SEASON_WEEKS
+  );
+
+  const current = seasons.filter(
+    (item) =>
+      item.season === season &&
+      item.games >= 4
+  );
+
+  if (!historical.length || !current.length) {
+    return [];
+  }
+
+  const categories: {
+    id: string;
+    label: string;
+    direction: "high" | "low";
+    tone: RecordHighlight["tone"];
+    unit: "points" | "wins";
+    value: (item: SeasonTotal) => number;
+  }[] = [
+    {
+      id: "season-points-high",
+      label: "Most franchise points in a season",
+      direction: "high",
+      tone: "positive",
+      unit: "points",
+      value: (item) => item.points,
+    },
+    {
+      id: "season-points-low",
+      label: "Fewest franchise points in a season",
+      direction: "low",
+      tone: "negative",
+      unit: "points",
+      value: (item) => item.points,
+    },
+    {
+      id: "season-wins-high",
+      label: "Most regular-season wins",
+      direction: "high",
+      tone: "positive",
+      unit: "wins",
+      value: (item) => item.wins,
+    },
+    {
+      id: "season-wins-low",
+      label: "Fewest regular-season wins",
+      direction: "low",
+      tone: "negative",
+      unit: "wins",
+      value: (item) => item.wins,
+    },
+  ];
+
+  const candidates: RecordHighlight[] = [];
+
+  for (const category of categories) {
+    const sortedHistory = [...historical].sort(
+      (a, b) =>
+        category.direction === "high"
+          ? category.value(b) - category.value(a)
+          : category.value(a) - category.value(b)
+    );
+
+    const holder = sortedHistory[0];
+    const record = category.value(holder);
+
+    const projected = current
+      .map((item) => ({
+        item,
+        projection:
+          (category.value(item) / item.games) *
+          REGULAR_SEASON_WEEKS,
+      }))
+      .sort((a, b) =>
+        category.direction === "high"
+          ? b.projection - a.projection
+          : a.projection - b.projection
+      )[0];
+
+    if (!projected) continue;
+
+    const difference =
+      category.direction === "high"
+        ? projected.projection - record
+        : record - projected.projection;
+
+    const tolerance =
+      category.unit === "wins"
+        ? 1.5
+        : Math.abs(record) * 0.05;
+
+    /*
+     * Only serious record chases qualify.
+     * This includes projected ties and
+     * performances close to record pace.
+     */
+    if (difference < -tolerance) continue;
+
+    const onPace = difference >= 0;
+
+    candidates.push({
+      id: `${season}-${week}-${category.id}`,
+      kind: "season",
+      subject: "franchise",
+      tone: category.tone,
+      label: category.label,
+      headline: onPace
+        ? "On historic season pace"
+        : "Closing in on a season record",
+      detail: onPace
+        ? "Projected to match or surpass the historical mark"
+        : "Projected to finish close to the historical mark",
+      value: round2(
+        category.value(projected.item)
+      ),
+      unit: category.unit,
+      rosterId: projected.item.rosterId,
+      playerId: null,
+      week,
+      season,
+      allTimeRank: null,
+      historicalRecord: round2(record),
+      historicalSeason: holder.season,
+      historicalRosterId: holder.rosterId,
+      projectedValue: round2(
+        projected.projection
+      ),
+      priority: onPace ? 65 : 40,
+    });
+  }
+
+  return candidates;
+}
+
+/*
+ * Select one headline and up to two
+ * supporting stories.
+ *
+ * Game performances receive preference
+ * over recurring season projections.
+ *
+ * A season chase is never repeated across
+ * multiple cards in the same selection.
+ */
+function calculateRecordHighlights(
+  historicalData: HistoricalSeason[],
+  season: string,
+  latestWeek: number
+): RecordHighlight[] {
+  if (latestWeek < 1) return [];
+
+  const data = buildRecordData(
+    historicalData,
+    season
+  );
+
+  const gameCandidates = buildGameHighlights(
+    data.teams,
+    data.players,
+    season,
+    latestWeek
+  );
+
+  const seasonCandidates = buildSeasonHighlights(
+    data.seasons,
+    season,
+    latestWeek
+  );
+
+  const candidates = [
+    ...gameCandidates,
+    ...seasonCandidates,
+  ].sort(
+    (a, b) =>
+      b.priority - a.priority ||
+      a.id.localeCompare(b.id)
+  );
+
+  const selected: RecordHighlight[] = [];
+  const usedLabels = new Set<string>();
+  const usedSubjects = new Set<string>();
+
+  /*
+   * First select the strongest headline.
+   */
+  if (candidates.length) {
+    const first = candidates[0];
+
+    selected.push(first);
+    usedLabels.add(first.label);
+
+    usedSubjects.add(
+      first.playerId ??
+        `franchise-${first.rosterId}`
+    );
+  }
+
+  /*
+   * Then prefer variety, avoiding
+   * repeatedly featuring the same
+   * player or franchise.
+   */
+  for (const candidate of candidates.slice(1)) {
+    if (selected.length >= 3) break;
+
+    const subjectKey =
+      candidate.playerId ??
+      `franchise-${candidate.rosterId}`;
+
+    if (
+      usedLabels.has(candidate.label) ||
+      usedSubjects.has(subjectKey)
+    ) {
+      continue;
+    }
+
+    selected.push(candidate);
+    usedLabels.add(candidate.label);
+    usedSubjects.add(subjectKey);
+  }
+
+  /*
+   * If fewer than three qualify, allow
+   * another category from an already
+   * featured franchise.
+   */
+  for (const candidate of candidates) {
+    if (selected.length >= 3) break;
+
+    if (
+      selected.some(
+        (item) => item.id === candidate.id
+      ) ||
+      usedLabels.has(candidate.label)
+    ) {
+      continue;
+    }
+
+    selected.push(candidate);
+    usedLabels.add(candidate.label);
+  }
+
+  return selected;
+}
+
+/*
+ * Existing record calculation retained
+ * for compatibility with app/page.tsx.
  */
 function calculateRecordWatch(
   historicalData: HistoricalSeason[],
@@ -424,10 +1075,7 @@ function calculateRecordWatch(
           )
       );
 
-    const totals = new Map<
-      number,
-      number
-    >();
+    const totals = new Map<number, number>();
 
     for (const game of seasonGames) {
       totals.set(
@@ -445,8 +1093,7 @@ function calculateRecordWatch(
 
     for (const [rosterId, points] of totals) {
       historicalTotals.push({
-        season:
-          historicalSeason.league.season,
+        season: historicalSeason.league.season,
         rosterId,
         points: round2(points),
       });
@@ -459,10 +1106,7 @@ function calculateRecordWatch(
 
   const record = historicalTotals[0];
 
-  const currentTotals = new Map<
-    number,
-    number
-  >();
+  const currentTotals = new Map<number, number>();
 
   for (const game of currentGames) {
     currentTotals.set(
@@ -480,9 +1124,7 @@ function calculateRecordWatch(
 
   const currentLeader = [
     ...currentTotals.entries(),
-  ].sort(
-    (a, b) => b[1] - a[1]
-  )[0];
+  ].sort((a, b) => b[1] - a[1])[0];
 
   if (!record || !currentLeader) {
     return [];
@@ -503,14 +1145,12 @@ function calculateRecordWatch(
 
   return [
     {
-      category:
-        "Single-season team scoring",
+      category: "Single-season team scoring",
       record: record.points,
       recordSeason: record.season,
       recordRosterId: record.rosterId,
       challenger: challengerPoints,
-      challengerRosterId:
-        currentLeader[0],
+      challengerRosterId: currentLeader[0],
       progressPercentage:
         record.points > 0
           ? Math.min(
@@ -530,15 +1170,6 @@ function calculateRecordWatch(
   ];
 }
 
-/**
- * Main homepage statistics calculator.
- *
- * All results are derived from the
- * historical data already loaded by
- * lib/sleeper.ts.
- *
- * No additional Sleeper API calls.
- */
 export function calculateHomeStats(
   historicalData: HistoricalSeason[],
   season: string = HOME_SEASON
@@ -585,20 +1216,24 @@ export function calculateHomeStats(
     ),
   };
 
-  const playoffContenders =
-    standings
-      .filter(
-        (team) =>
-          team.inPlayoffPosition
-      )
-      .map(
-        (team) => team.rosterId
-      );
+  const playoffContenders = standings
+    .filter(
+      (team) =>
+        team.inPlayoffPosition
+    )
+    .map((team) => team.rosterId);
 
   const recordWatch =
     calculateRecordWatch(
       historicalData,
       completedGames,
+      season,
+      seasonStats.latestCompletedWeek
+    );
+
+  const recordHighlights =
+    calculateRecordHighlights(
+      historicalData,
       season,
       seasonStats.latestCompletedWeek
     );
@@ -611,15 +1246,10 @@ export function calculateHomeStats(
     playoffContenders,
     completedGames,
     recordWatch,
+    recordHighlights,
   };
 }
 
-/**
- * Convenience helper for the MVP Ladder.
- *
- * Returns whether a franchise is currently
- * ranked inside its conference's top three.
- */
 export function isHomePlayoffContender(
   rosterId: number,
   standings: HomeStanding[]
