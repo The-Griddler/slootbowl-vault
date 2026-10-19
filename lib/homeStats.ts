@@ -20,6 +20,9 @@ export const HOME_CONFERENCES = [
   },
 ] as const;
 
+// Temporary testing limit. Return to 3 later.
+export const RECORD_WATCH_LIMIT = 15;
+
 export type HomeStanding = {
   rosterId: number;
   conference: "OBFC" | "GPFC";
@@ -108,13 +111,8 @@ export type HomeStats = {
 
 type Position = "QB" | "RB" | "WR" | "TE";
 type Conference = "OBFC" | "GPFC";
-type Direction = "high" | "low";
 type Scope = "SFL" | Conference | "franchise";
-
-type MutableStanding = Omit<
-  HomeStanding,
-  "rank" | "winPercentage" | "inPlayoffPosition"
->;
+type Direction = "high" | "low";
 
 type TeamPerformance = {
   season: string;
@@ -170,11 +168,14 @@ type RecordData = {
 type Achievement = {
   scope: Scope;
   rank: number;
-  label: string;
+  text: string;
+  priority: number;
   record: number;
+  previousRecord: number | null;
   holderSeason: string | null;
   holderRosterId: number | null;
-  priority: number;
+  isNew: boolean;
+  positional: boolean;
 };
 
 const WEEKS = 14;
@@ -188,16 +189,21 @@ const EARLY_STREAK = 6;
 const TOLERANCE = 0.02;
 
 const POSITIONS: Position[] = [
-  "QB",
-  "RB",
-  "WR",
-  "TE",
+  "QB", "RB", "WR", "TE",
 ];
 
-const CONFERENCES: Conference[] = [
-  "OBFC",
-  "GPFC",
-];
+const TEAM_NAMES: Record<number, string> = {
+  1: "Mt Isa",
+  2: "Cambridge",
+  3: "Grimsby",
+  4: "Isle of Wight",
+  5: "Grays Town",
+  6: "Lincoln",
+  7: "Kalamata",
+  8: "Weybiza",
+  9: "East Rutherford",
+  10: "Chad",
+};
 
 const ROSTER_CONFERENCE = new Map<
   number,
@@ -213,16 +219,31 @@ for (const conference of HOME_CONFERENCES) {
   }
 }
 
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+function round2(value: number): number {
+  return Math.round(
+    (value + Number.EPSILON) * 100
+  ) / 100;
 }
 
-function validTeamScore(n: number): boolean {
-  return Number.isFinite(n) && n >= 0;
+function teamName(rosterId: number): string {
+  return TEAM_NAMES[rosterId] ??
+    `Franchise ${rosterId}`;
 }
 
-function validPlayerScore(n: number): boolean {
-  return Number.isFinite(n);
+function playerName(
+  playerId: string,
+  directory: Record<string, SleeperPlayer>
+): string {
+  const player = directory[playerId];
+
+  return (
+    player?.full_name ||
+    [
+      player?.first_name,
+      player?.last_name,
+    ].filter(Boolean).join(" ") ||
+    `Player ${playerId}`
+  );
 }
 
 function getPosition(
@@ -230,13 +251,20 @@ function getPosition(
 ): Position | null {
   if (
     player?.position &&
-    POSITIONS.includes(player.position as Position)
+    POSITIONS.includes(
+      player.position as Position
+    )
   ) {
     return player.position as Position;
   }
 
-  for (const position of player?.fantasy_positions ?? []) {
-    if (POSITIONS.includes(position as Position)) {
+  for (const position of
+    player?.fantasy_positions ?? []) {
+    if (
+      POSITIONS.includes(
+        position as Position
+      )
+    ) {
       return position as Position;
     }
   }
@@ -251,12 +279,14 @@ function eligible(
   return (
     game.season === season &&
     game.phase === "Regular Season" &&
-    game.isComplete &&
+    game.isComplete === true &&
     game.week >= 1 &&
     game.week <= WEEKS &&
     game.rosterA !== game.rosterB &&
-    validTeamScore(game.scoreA) &&
-    validTeamScore(game.scoreB)
+    Number.isFinite(game.scoreA) &&
+    Number.isFinite(game.scoreB) &&
+    game.scoreA >= 0 &&
+    game.scoreB >= 0
   );
 }
 
@@ -293,7 +323,12 @@ export function calculateHomeStandings(
 ): HomeStanding[] {
   const totals = new Map<
     number,
-    MutableStanding
+    Omit<
+      HomeStanding,
+      "rank" |
+      "winPercentage" |
+      "inPlayoffPosition"
+    >
   >();
 
   for (const conference of HOME_CONFERENCES) {
@@ -346,17 +381,15 @@ export function calculateHomeStandings(
           team.conference === conference.id
       )
       .sort((a, b) => {
-        const pctA =
-          a.gamesPlayed > 0
-            ? (a.wins + a.ties * 0.5) /
-              a.gamesPlayed
-            : 0;
+        const pctA = a.gamesPlayed
+          ? (a.wins + a.ties * 0.5) /
+            a.gamesPlayed
+          : 0;
 
-        const pctB =
-          b.gamesPlayed > 0
-            ? (b.wins + b.ties * 0.5) /
-              b.gamesPlayed
-            : 0;
+        const pctB = b.gamesPlayed
+          ? (b.wins + b.ties * 0.5) /
+            b.gamesPlayed
+          : 0;
 
         return (
           pctB - pctA ||
@@ -373,11 +406,10 @@ export function calculateHomeStandings(
         pointsAgainst: round2(
           team.pointsAgainst
         ),
-        winPercentage:
-          team.gamesPlayed > 0
-            ? (team.wins + team.ties * 0.5) /
-              team.gamesPlayed
-            : 0,
+        winPercentage: team.gamesPlayed
+          ? (team.wins + team.ties * 0.5) /
+            team.gamesPlayed
+          : 0,
         inPlayoffPosition: index < 3,
       });
     });
@@ -391,11 +423,10 @@ function calculateSeasonStats(
   season: string
 ): HomeSeasonStats {
   const weeks = new Set<number>();
+  let totalPoints = 0;
 
   let highestTeamScore:
     HomeSeasonStats["highestTeamScore"] = null;
-
-  let totalPoints = 0;
 
   for (const game of games) {
     weeks.add(game.week);
@@ -423,62 +454,48 @@ function calculateSeasonStats(
     }
   }
 
-  const closestGame =
-    [...games].sort(
-      (a, b) =>
-        a.margin - b.margin ||
-        b.combinedScore - a.combinedScore
-    )[0] ?? null;
-
-  const biggestBlowout =
-    [...games].sort(
-      (a, b) =>
-        b.margin - a.margin ||
-        b.combinedScore - a.combinedScore
-    )[0] ?? null;
-
-  const highestScoringGame =
-    [...games].sort(
-      (a, b) =>
-        b.combinedScore - a.combinedScore
-    )[0] ?? null;
-
   return {
     season,
     completedWeeks: weeks.size,
     latestCompletedWeek:
-      weeks.size > 0
-        ? Math.max(...weeks)
-        : 0,
+      weeks.size ? Math.max(...weeks) : 0,
     gamesPlayed: games.length,
     totalPoints: round2(totalPoints),
-    averageTeamScore:
-      games.length > 0
-        ? round2(
-            totalPoints / (games.length * 2)
-          )
-        : 0,
+    averageTeamScore: games.length
+      ? round2(
+          totalPoints / (games.length * 2)
+        )
+      : 0,
     highestTeamScore,
-    closestGame,
-    biggestBlowout,
-    highestScoringGame,
+    closestGame:
+      [...games].sort(
+        (a, b) =>
+          a.margin - b.margin ||
+          b.combinedScore - a.combinedScore
+      )[0] ?? null,
+    biggestBlowout:
+      [...games].sort(
+        (a, b) =>
+          b.margin - a.margin ||
+          b.combinedScore - a.combinedScore
+      )[0] ?? null,
+    highestScoringGame:
+      [...games].sort(
+        (a, b) =>
+          b.combinedScore - a.combinedScore
+      )[0] ?? null,
   };
 }
 
 /*
- * Build historical data once.
+ * All player statistics come from
+ * starters, never bench players.
  *
- * Conference memberships are permanent.
+ * Overall season totals follow players
+ * across trades.
  *
- * Player weekly performances belong
- * to the franchise that started them.
- *
- * Player season totals are built at
- * three levels:
- *
- * SFL: all starts across all franchises
- * Conference: starts in that conference
- * Franchise: starts for that franchise
+ * Conference and franchise season totals
+ * count only starts at that level.
  */
 function buildRecordData(
   historicalData: HistoricalSeason[],
@@ -493,13 +510,20 @@ function buildRecordData(
   for (const historical of historicalData) {
     const season = historical.league.season;
 
-    if (Number(season) > Number(currentSeason)) {
+    if (
+      Number(season) >
+      Number(currentSeason)
+    ) {
       continue;
     }
 
     const games = historical.matchups
-      .filter((game) => eligible(game, season))
-      .sort((a, b) => a.week - b.week);
+      .filter(
+        (game) => eligible(game, season)
+      )
+      .sort(
+        (a, b) => a.week - b.week
+      );
 
     const teamTotals = new Map<
       number,
@@ -531,12 +555,15 @@ function buildRecordData(
 
       for (const side of sides) {
         const conference =
-          ROSTER_CONFERENCE.get(side.rosterId);
+          ROSTER_CONFERENCE.get(
+            side.rosterId
+          );
 
         if (!conference) continue;
 
         const margin = round2(
-          side.points - side.opponentPoints
+          side.points -
+          side.opponentPoints
         );
 
         teams.push({
@@ -583,7 +610,7 @@ function buildRecordData(
             if (
               !playerId ||
               playerId === "0" ||
-              !validPlayerScore(points)
+              !Number.isFinite(points)
             ) {
               return;
             }
@@ -617,7 +644,9 @@ function buildRecordData(
                 conference: null,
               },
               {
-                key: `${playerId}:${conference}`,
+                key:
+                  `${playerId}:` +
+                  conference,
                 scope: conference,
                 rosterId: null,
                 conference,
@@ -634,7 +663,9 @@ function buildRecordData(
 
             for (const entry of scopes) {
               const total =
-                playerTotals.get(entry.key) ?? {
+                playerTotals.get(
+                  entry.key
+                ) ?? {
                   season,
                   playerId,
                   position,
@@ -685,23 +716,10 @@ function buildRecordData(
   };
 }
 
-function rankOf(
-  value: number,
-  values: number[],
-  direction: Direction
-): number {
-  return (
-    values.filter((other) =>
-      direction === "high"
-        ? other > value
-        : other < value
-    ).length + 1
-  );
-}
-
 function ordinal(rank: number): string {
   const suffix =
-    rank % 100 >= 11 && rank % 100 <= 13
+    rank % 100 >= 11 &&
+    rank % 100 <= 13
       ? "th"
       : rank % 10 === 1
         ? "st"
@@ -714,38 +732,53 @@ function ordinal(rank: number): string {
   return `${rank}${suffix}`;
 }
 
-function scopeName(
-  scope: Scope
+function rankingPhrase(
+  rank: number,
+  direction: Direction,
+  noun: string
 ): string {
-  if (scope === "SFL") return "SFL";
-  if (scope === "franchise") {
-    return "franchise";
-  }
-  return scope;
+  const adjective =
+    direction === "high"
+      ? "highest"
+      : "lowest";
+
+  return rank === 1
+    ? `${adjective} ${noun}`
+    : `${ordinal(rank)}-${adjective} ${noun}`;
 }
 
-function scopePriority(
-  scope: Scope,
-  rank: number,
-  positional: boolean
+function rankOf(
+  value: number,
+  values: number[],
+  direction: Direction
 ): number {
-  const base =
-    scope === "SFL"
-      ? 130
-      : scope === "franchise"
-        ? 105
-        : 116;
-
-  const rankPenalty =
-    rank === 1
-      ? 0
-      : (rank - 1) * 13 + 9;
-
   return (
-    base -
-    rankPenalty -
-    (positional ? 5 : 0)
+    values.filter(
+      (other) =>
+        direction === "high"
+          ? other > value
+          : other < value
+    ).length + 1
   );
+}
+
+function recordValue(
+  values: number[],
+  direction: Direction
+): number {
+  return direction === "high"
+    ? Math.max(...values)
+    : Math.min(...values);
+}
+
+function isBetter(
+  value: number,
+  previous: number,
+  direction: Direction
+): boolean {
+  return direction === "high"
+    ? value > previous
+    : value < previous;
 }
 
 function scopeMatches(
@@ -765,7 +798,7 @@ function scopeMatches(
   return item.conference === scope;
 }
 
-function scopeList(
+function scopesFor(
   conference: Conference
 ): Scope[] {
   return [
@@ -773,6 +806,50 @@ function scopeList(
     conference,
     "franchise",
   ];
+}
+
+function scopeDescription(
+  scope: Scope,
+  rosterId: number
+): string {
+  return scope === "franchise"
+    ? teamName(rosterId)
+    : scope;
+}
+
+function scopeCategory(
+  scope: Scope
+): string {
+  if (scope === "SFL") {
+    return "SFL HISTORY";
+  }
+
+  if (scope === "franchise") {
+    return "FRANCHISE HISTORY";
+  }
+
+  return `${scope} HISTORY`;
+}
+
+function scopePriority(
+  scope: Scope,
+  rank: number,
+  positional: boolean
+): number {
+  const base =
+    scope === "SFL"
+      ? 130
+      : scope === "franchise"
+        ? 105
+        : 116;
+
+  return (
+    base -
+    (rank === 1
+      ? 0
+      : (rank - 1) * 13 + 9) -
+    (positional ? 5 : 0)
+  );
 }
 
 function bestAchievement(
@@ -787,28 +864,69 @@ function bestAchievement(
   );
 }
 
+/*
+ * The second achievement must add
+ * something meaningful:
+ *
+ * - A different scope
+ * - A genuine record or top-three mark
+ * - Not a near-duplicate of the first
+ *
+ * Maximum two achievements per story.
+ */
 function achievementDetail(
   achievements: Achievement[]
 ): string {
-  return [...achievements]
-    .sort(
-      (a, b) =>
-        b.priority - a.priority
-    )
-    .slice(0, 4)
-    .map((item) => item.label)
-    .join(" · ");
+  const sorted = [...achievements].sort(
+    (a, b) =>
+      b.priority - a.priority ||
+      a.rank - b.rank
+  );
+
+  const primary = sorted[0];
+  if (!primary) return "";
+
+  const secondary = sorted.find(
+    (item) =>
+      item !== primary &&
+      item.scope !== primary.scope &&
+      item.rank <= 3 &&
+      item.text !== primary.text
+  );
+
+  return [
+    primary.text,
+    ...(secondary ? [secondary.text] : []),
+  ].join(" · ");
 }
 
-/*
- * Franchise weekly records.
- *
- * Five categories at SFL, conference
- * and franchise level.
- *
- * Multiple records achieved by one
- * performance become one story.
- */
+function previousGameRecord<T extends {
+  season: string;
+  week: number;
+}>(
+  history: T[],
+  performance: T,
+  direction: Direction,
+  getValue: (item: T) => number
+): number | null {
+  const previous = history.filter(
+    (item) =>
+      Number(item.season) <
+        Number(performance.season) ||
+      (
+        item.season === performance.season &&
+        item.week < performance.week
+      )
+  );
+
+  return previous.length
+    ? recordValue(
+        previous.map(getValue),
+        direction
+      )
+    : null;
+}
+
 function buildTeamGameHighlights(
   performances: TeamPerformance[],
   season: string,
@@ -822,15 +940,19 @@ function buildTeamGameHighlights(
 
   const categories: {
     id: string;
-    title: string;
+    noun: string;
     direction: Direction;
     tone: RecordHighlight["tone"];
-    eligible: (p: TeamPerformance) => boolean;
-    value: (p: TeamPerformance) => number;
+    eligible: (
+      item: TeamPerformance
+    ) => boolean;
+    value: (
+      item: TeamPerformance
+    ) => number;
   }[] = [
     {
       id: "score-high",
-      title: "highest weekly team score",
+      noun: "weekly score",
       direction: "high",
       tone: "positive",
       eligible: () => true,
@@ -838,7 +960,7 @@ function buildTeamGameHighlights(
     },
     {
       id: "score-low",
-      title: "lowest weekly team score",
+      noun: "weekly score",
       direction: "low",
       tone: "negative",
       eligible: () => true,
@@ -846,7 +968,7 @@ function buildTeamGameHighlights(
     },
     {
       id: "winning-margin",
-      title: "biggest winning margin",
+      noun: "winning margin",
       direction: "high",
       tone: "positive",
       eligible: (p) => p.won,
@@ -854,7 +976,7 @@ function buildTeamGameHighlights(
     },
     {
       id: "losing-score",
-      title: "highest score in a loss",
+      noun: "losing score",
       direction: "high",
       tone: "unusual",
       eligible: (p) => p.lost,
@@ -862,7 +984,7 @@ function buildTeamGameHighlights(
     },
     {
       id: "winning-score-low",
-      title: "lowest score in a win",
+      noun: "winning score",
       direction: "low",
       tone: "unusual",
       eligible: (p) => p.won,
@@ -878,13 +1000,12 @@ function buildTeamGameHighlights(
         continue;
       }
 
-      const value = category.value(
-        performance
-      );
+      const value =
+        category.value(performance);
 
       const achievements: Achievement[] = [];
 
-      for (const scope of scopeList(
+      for (const scope of scopesFor(
         performance.conference
       )) {
         const history = performances.filter(
@@ -905,41 +1026,50 @@ function buildTeamGameHighlights(
           category.direction
         );
 
-        /*
-         * SFL and conference top tens
-         * are meaningful.
-         *
-         * Franchise results need to
-         * reach the top three.
-         */
-        const limit =
-          scope === "franchise"
+        if (
+          rank >
+          (scope === "franchise"
             ? 3
-            : MAX_RANK;
+            : MAX_RANK)
+        ) {
+          continue;
+        }
 
-        if (rank > limit) continue;
+        const previous = previousGameRecord(
+          history,
+          performance,
+          category.direction,
+          category.value
+        );
 
-        const record =
-          category.direction === "high"
-            ? Math.max(
-                ...history.map(
-                  category.value
-                )
-              )
-            : Math.min(
-                ...history.map(
-                  category.value
-                )
-              );
+        const isNew =
+          previous !== null &&
+          isBetter(
+            value,
+            previous,
+            category.direction
+          );
+
+        const description =
+          scopeDescription(
+            scope,
+            performance.rosterId
+          );
 
         achievements.push({
           scope,
           rank,
-          label:
-            `${ordinal(rank)} ` +
-            `${category.title} in ` +
-            `${scopeName(scope)} history`,
-          record,
+          text:
+            `${rankingPhrase(
+              rank,
+              category.direction,
+              category.noun
+            )} in ${description} history`,
+          record: recordValue(
+            history.map(category.value),
+            category.direction
+          ),
+          previousRecord: previous,
           holderSeason: null,
           holderRosterId: null,
           priority: scopePriority(
@@ -947,14 +1077,47 @@ function buildTeamGameHighlights(
             rank,
             false
           ),
+          isNew,
+          positional: false,
         });
       }
 
-      const primary = bestAchievement(
-        achievements
-      );
+      const primary =
+        bestAchievement(achievements);
 
       if (!primary) continue;
+
+      const name = teamName(
+        performance.rosterId
+      );
+
+      let headline: string;
+
+      if (category.id === "losing-score") {
+        headline = primary.rank === 1
+          ? `${name} sets an unwanted scoring record`
+          : `${name} suffers a historic high-scoring defeat`;
+      } else if (
+        category.id === "winning-score-low"
+      ) {
+        headline =
+          `${name} wins despite a historically low score`;
+      } else if (
+        category.id === "winning-margin"
+      ) {
+        headline = primary.rank === 1
+          ? `${name} delivers a record-breaking victory`
+          : `${name} delivers one of the biggest wins in history`;
+      } else if (
+        category.id === "score-low"
+      ) {
+        headline =
+          `${name} endures a historically poor scoring week`;
+      } else {
+        headline = primary.isNew
+          ? `${name} sets a new scoring record`
+          : `${name} delivers a historic scoring performance`;
+      }
 
       candidates.push({
         id:
@@ -964,14 +1127,10 @@ function buildTeamGameHighlights(
         kind: "game",
         subject: "franchise",
         tone: category.tone,
-        label:
-          primary.scope === "franchise"
-            ? "Franchise record watch"
-            : `${primary.scope} record watch`,
-        headline:
-          primary.rank === 1
-            ? `New ${scopeName(primary.scope)} record: ${category.title}`
-            : `${ordinal(primary.rank)} in ${scopeName(primary.scope)} history`,
+        label: scopeCategory(
+          primary.scope
+        ),
+        headline,
         detail: achievementDetail(
           achievements
         ),
@@ -999,24 +1158,11 @@ function buildTeamGameHighlights(
   return candidates;
 }
 
-/*
- * Player weekly records.
- *
- * Each game is compared with:
- *
- * Overall SFL players
- * SFL players at same position
- * Conference players
- * Conference players at position
- * Franchise players
- * Franchise players at position
- *
- * Low scores include negatives.
- */
 function buildPlayerGameHighlights(
   performances: PlayerPerformance[],
   season: string,
-  week: number
+  week: number,
+  directory: Record<string, SleeperPlayer>
 ): RecordHighlight[] {
   const weekly = performances.filter(
     (item) =>
@@ -1034,24 +1180,25 @@ function buildPlayerGameHighlights(
       const isLow = direction === "low";
       const achievements: Achievement[] = [];
 
-      for (const scope of scopeList(
+      for (const scope of scopesFor(
         performance.conference
       )) {
         for (const positional of [
           false,
           true,
         ]) {
-          const history = performances.filter(
-            (item) =>
-              scopeMatches(
-                item,
-                scope,
-                performance.rosterId
-              ) &&
-              (!positional ||
-                item.position ===
-                  performance.position)
-          );
+          const history =
+            performances.filter(
+              (item) =>
+                scopeMatches(
+                  item,
+                  scope,
+                  performance.rosterId
+                ) &&
+                (!positional ||
+                  item.position ===
+                    performance.position)
+            );
 
           if (!history.length) continue;
 
@@ -1065,30 +1212,53 @@ function buildPlayerGameHighlights(
             direction
           );
 
-          const limit =
-            scope === "franchise"
+          if (
+            rank >
+            (scope === "franchise"
               ? 3
-              : MAX_RANK;
+              : MAX_RANK)
+          ) {
+            continue;
+          }
 
-          if (rank > limit) continue;
+          const previous =
+            previousGameRecord(
+              history,
+              performance,
+              direction,
+              (item) => item.points
+            );
 
-          const record = isLow
-            ? Math.min(...values)
-            : Math.max(...values);
+          const isNew =
+            previous !== null &&
+            isBetter(
+              performance.points,
+              previous,
+              direction
+            );
 
-          const category = positional
-            ? `${performance.position} games`
-            : "all player games";
+          const noun = positional
+            ? `${performance.position} score`
+            : "individual score";
 
           achievements.push({
             scope,
             rank,
-            label:
-              `${ordinal(rank)} ` +
-              `${isLow ? "lowest" : "highest"} ` +
-              `${category} in ` +
-              `${scopeName(scope)} history`,
-            record,
+            text:
+              `${rankingPhrase(
+                rank,
+                direction,
+                noun
+              )} in ` +
+              `${scopeDescription(
+                scope,
+                performance.rosterId
+              )} history`,
+            record: recordValue(
+              values,
+              direction
+            ),
+            previousRecord: previous,
             holderSeason: null,
             holderRosterId: null,
             priority: scopePriority(
@@ -1096,17 +1266,52 @@ function buildPlayerGameHighlights(
               rank,
               positional
             ),
+            isNew,
+            positional,
           });
         }
       }
 
-      const primary = bestAchievement(
-        achievements
-      );
+      const primary =
+        bestAchievement(achievements);
 
       if (!primary) continue;
 
-      const position = performance.position;
+      const name = playerName(
+        performance.playerId,
+        directory
+      );
+
+      const location = scopeDescription(
+        primary.scope,
+        performance.rosterId
+      );
+
+      let headline: string;
+
+      if (isLow) {
+        headline = primary.isNew
+          ? `${name} sets an unwanted scoring record`
+          : `${name} records a historically low score`;
+      } else if (
+        primary.isNew &&
+        primary.positional
+      ) {
+        headline =
+          `${name} sets ${location} ` +
+          `${performance.position} scoring record`;
+      } else if (primary.isNew) {
+        headline =
+          `${name} sets a new ` +
+          `${location} scoring record`;
+      } else if (primary.rank === 1) {
+        headline =
+          `${name} delivers a record-equalling performance`;
+      } else {
+        headline =
+          `${name} produces a historic ` +
+          `${performance.position} performance`;
+      }
 
       candidates.push({
         id:
@@ -1118,15 +1323,10 @@ function buildPlayerGameHighlights(
         tone: isLow
           ? "negative"
           : "positive",
-        label:
-          `${scopeName(primary.scope)} ` +
-          `${position} performance`,
-        headline:
-          primary.rank === 1
-            ? isLow
-              ? `A new ${scopeName(primary.scope)} scoring low`
-              : `A new ${scopeName(primary.scope)} player scoring record`
-            : `${ordinal(primary.rank)} ${isLow ? "lowest" : "highest"} ${scopeName(primary.scope)} performance`,
+        label: scopeCategory(
+          primary.scope
+        ),
+        headline,
         detail: achievementDetail(
           achievements
         ),
@@ -1143,8 +1343,8 @@ function buildPlayerGameHighlights(
         historicalRosterId: null,
         projectedValue: null,
         priority:
-          primary.priority +
-          (isLow ? -4 : 0),
+          primary.priority -
+          (isLow ? 4 : 0),
       });
     }
   }
@@ -1154,51 +1354,29 @@ function buildPlayerGameHighlights(
 
 function projectedPlayerPoints(
   item: PlayerSeason,
-  currentWeek: number
+  week: number
 ): number {
-  /*
-   * A player cannot add more starts
-   * than the remaining SFL weeks.
-   *
-   * This matters for traded players:
-   * a franchise cannot project 13
-   * starts if it only has five weeks
-   * remaining to use that player.
-   */
   const remainingWeeks = Math.max(
     0,
-    WEEKS - currentWeek
+    WEEKS - week
   );
 
-  const possibleStarts = Math.min(
+  const projectedStarts = Math.min(
     PLAYER_TARGET_STARTS,
     item.starts + remainingWeeks
   );
 
   return round2(
     (item.points / item.starts) *
-      possibleStarts
+      projectedStarts
   );
 }
 
-/*
- * Player season record chases.
- *
- * Actual historical totals are used.
- *
- * Overall SFL points follow the player
- * across franchises.
- *
- * Conference and franchise points
- * count only relevant starts.
- *
- * Position-specific and all-position
- * records are both checked.
- */
 function buildPlayerSeasonHighlights(
   seasons: PlayerSeason[],
   season: string,
-  week: number
+  week: number,
+  directory: Record<string, SleeperPlayer>
 ): RecordHighlight[] {
   if (week < MIN_PLAYER_STARTS) {
     return [];
@@ -1219,6 +1397,17 @@ function buildPlayerSeasonHighlights(
   const candidates: RecordHighlight[] = [];
 
   for (const player of current) {
+    if (player.scope !== "SFL") {
+      continue;
+    }
+
+    const samePlayerScopes =
+      current.filter(
+        (item) =>
+          item.playerId ===
+          player.playerId
+      );
+
     for (const direction of [
       "high",
       "low",
@@ -1233,42 +1422,9 @@ function buildPlayerSeasonHighlights(
         continue;
       }
 
-      const projection =
-        projectedPlayerPoints(
-          player,
-          week
-        );
-
       const achievements: Achievement[] = [];
 
-      /*
-       * The playerSeasons array contains
-       * three separately scoped totals.
-       *
-       * Each total is evaluated only
-       * against the same scope.
-       */
-      const samePlayerScopes = current.filter(
-        (item) =>
-          item.playerId === player.playerId
-      );
-
-      /*
-       * Process only once per player,
-       * using the SFL aggregate entry.
-       */
-      if (player.scope !== "SFL") {
-        continue;
-      }
-
       for (const scoped of samePlayerScopes) {
-        if (
-          scoped.starts <
-          MIN_PLAYER_STARTS
-        ) {
-          continue;
-        }
-
         if (
           isLow &&
           scoped.starts <
@@ -1277,101 +1433,118 @@ function buildPlayerSeasonHighlights(
           continue;
         }
 
-        const scopedProjection =
-          scoped.scope === "SFL"
-            ? projection
-            : projectedPlayerPoints(
-                scoped,
-                week
-              );
+        const projection =
+          projectedPlayerPoints(
+            scoped,
+            week
+          );
 
         for (const positional of [
           false,
           true,
         ]) {
-          const history = historical.filter(
-            (item) =>
-              item.scope === scoped.scope &&
-              (
-                scoped.scope !==
-                  "franchise" ||
-                item.rosterId ===
-                  scoped.rosterId
-              ) &&
-              (!(
-                scoped.scope === "OBFC" ||
-                scoped.scope === "GPFC"
-              ) ||
-                item.conference ===
-                  scoped.conference) &&
-              (!positional ||
-                item.position ===
-                  scoped.position) &&
-              (!isLow ||
-                item.starts >=
-                  MIN_LOW_SEASON_STARTS)
-          );
+          const history =
+            historical.filter(
+              (item) =>
+                item.scope ===
+                  scoped.scope &&
+                (
+                  scoped.scope !==
+                    "franchise" ||
+                  item.rosterId ===
+                    scoped.rosterId
+                ) &&
+                (
+                  scoped.scope === "SFL" ||
+                  scoped.scope ===
+                    "franchise" ||
+                  item.conference ===
+                    scoped.conference
+                ) &&
+                (!positional ||
+                  item.position ===
+                    scoped.position) &&
+                (!isLow ||
+                  item.starts >=
+                    MIN_LOW_SEASON_STARTS)
+            );
 
           if (!history.length) continue;
 
-          const holder = [...history].sort(
-            (a, b) =>
-              isLow
-                ? a.points - b.points
-                : b.points - a.points
-          )[0];
+          const holder = [...history]
+            .sort(
+              (a, b) =>
+                isLow
+                  ? a.points - b.points
+                  : b.points - a.points
+            )[0];
 
           const record = holder.points;
 
           const qualifies = isLow
-            ? scopedProjection <=
+            ? projection <=
               record * (1 + TOLERANCE)
-            : scopedProjection >=
+            : projection >=
               record * (1 - TOLERANCE);
 
           if (!qualifies) continue;
 
           const onPace = isLow
-            ? scopedProjection <= record
-            : scopedProjection >= record;
+            ? projection <= record
+            : projection >= record;
 
-          const category = positional
-            ? `${scoped.position} season`
-            : "player season";
-
-          const scope = scoped.scope;
+          const location =
+            scopeDescription(
+              scoped.scope,
+              scoped.rosterId ??
+                scoped.latestRosterId
+            );
 
           achievements.push({
-            scope,
+            scope: scoped.scope,
             rank: onPace ? 1 : 2,
-            label:
-              `${scopeName(scope)} ` +
-              `${category} record: ` +
+            text:
+              `Chasing ${location}'s ` +
+              `${positional
+                ? `${scoped.position} `
+                : ""}` +
+              `season record of ` +
               `${record.toFixed(2)} pts`,
-            record,
-            holderSeason: holder.season,
-            holderRosterId:
-              holder.latestRosterId,
             priority:
-              (scope === "SFL"
+              (scoped.scope === "SFL"
                 ? 88
-                : scope === "franchise"
+                : scoped.scope ===
+                    "franchise"
                   ? 64
                   : 76) -
               (positional ? 4 : 0) -
               (onPace ? 0 : 18),
+            record,
+            previousRecord: record,
+            holderSeason: holder.season,
+            holderRosterId:
+              holder.latestRosterId,
+            isNew: false,
+            positional,
           });
         }
       }
 
-      const primary = bestAchievement(
-        achievements
-      );
+      const primary =
+        bestAchievement(achievements);
 
       if (!primary) continue;
 
-      const primaryOnPace =
-        primary.rank === 1;
+      const name = playerName(
+        player.playerId,
+        directory
+      );
+
+      const location =
+        scopeDescription(
+          primary.scope,
+          player.latestRosterId
+        );
 
       candidates.push({
         id:
@@ -1382,20 +1555,21 @@ function buildPlayerSeasonHighlights(
         tone: isLow
           ? "negative"
           : "positive",
-        label:
-          `${scopeName(primary.scope)} ` +
-          `${player.position} season record watch`,
-        headline: primaryOnPace
-          ? isLow
-            ? "An infamous player season is brewing"
-            : `A ${scopeName(primary.scope)} season record is under threat`
-          : "Closing in on a historic player season",
+        label: scopeCategory(
+          primary.scope
+        ),
+        headline: isLow
+          ? `${name} is on pace for an unwanted season record`
+          : primary.rank === 1
+            ? `${name} threatens the ${location} season scoring record`
+            : `${name} is closing in on a historic season`,
         detail: achievementDetail(
           achievements
         ),
         value: player.points,
         unit: "points",
-        rosterId: player.latestRosterId,
+        rosterId:
+          player.latestRosterId,
         playerId: player.playerId,
         week,
         season,
@@ -1406,7 +1580,11 @@ function buildPlayerSeasonHighlights(
           primary.holderSeason,
         historicalRosterId:
           primary.holderRosterId,
-        projectedValue: projection,
+        projectedValue:
+          projectedPlayerPoints(
+            player,
+            week
+          ),
         priority:
           primary.priority -
           (isLow ? 5 : 0),
@@ -1417,16 +1595,6 @@ function buildPlayerSeasonHighlights(
   return candidates;
 }
 
-/*
- * Franchise season record chases.
- *
- * Compare every franchise against:
- * - All SFL franchises
- * - Its own conference
- * - Its own historical seasons
- *
- * Team scoring uses 14 weeks.
- */
 function buildTeamSeasonHighlights(
   seasons: TeamSeason[],
   season: string,
@@ -1451,38 +1619,40 @@ function buildTeamSeasonHighlights(
 
   const categories: {
     id: string;
-    title: string;
+    noun: string;
     direction: Direction;
     unit: "points" | "wins";
-    value: (item: TeamSeason) => number;
+    value: (
+      item: TeamSeason
+    ) => number;
   }[] = [
     {
       id: "points-high",
-      title: "most season points",
+      noun: "season points",
       direction: "high",
       unit: "points",
-      value: (item) => item.points,
+      value: (p) => p.points,
     },
     {
       id: "points-low",
-      title: "fewest season points",
+      noun: "season points",
       direction: "low",
       unit: "points",
-      value: (item) => item.points,
+      value: (p) => p.points,
     },
     {
       id: "wins-high",
-      title: "most season wins",
+      noun: "season wins",
       direction: "high",
       unit: "wins",
-      value: (item) => item.wins,
+      value: (p) => p.wins,
     },
     {
       id: "wins-low",
-      title: "fewest season wins",
+      noun: "season wins",
       direction: "low",
       unit: "wins",
-      value: (item) => item.wins,
+      value: (p) => p.wins,
     },
   ];
 
@@ -1521,7 +1691,7 @@ function buildTeamSeasonHighlights(
 
       const achievements: Achievement[] = [];
 
-      for (const scope of scopeList(
+      for (const scope of scopesFor(
         team.conference
       )) {
         const history = historical.filter(
@@ -1563,14 +1733,21 @@ function buildTeamSeasonHighlights(
           ? projection <= record
           : projection >= record;
 
+        const location =
+          scopeDescription(
+            scope,
+            team.rosterId
+          );
+
         achievements.push({
           scope,
           rank: onPace ? 1 : 2,
-          label:
-            `${scopeName(scope)} ` +
-            `${category.title}: ` +
+          text:
+            `Chasing ${location}'s ` +
+            `${category.noun} record of ` +
             `${round2(record)}`,
           record,
+          previousRecord: record,
           holderSeason: holder.season,
           holderRosterId:
             holder.rosterId,
@@ -1582,31 +1759,37 @@ function buildTeamSeasonHighlights(
                 : 70) -
             (onPace ? 0 : 19) -
             (isWins ? 4 : 0),
+          isNew: false,
+          positional: false,
         });
       }
 
-      const primary = bestAchievement(
-        achievements
-      );
+      const primary =
+        bestAchievement(achievements);
 
       if (!primary) continue;
+
+      const name = teamName(
+        team.rosterId
+      );
 
       candidates.push({
         id:
           `${season}-${week}-team-season-` +
-          `${team.rosterId}-${category.id}`,
+          `${team.rosterId}-` +
+          category.id,
         kind: "season",
         subject: "franchise",
         tone: isLow
           ? "negative"
           : "positive",
-        label:
-          `${scopeName(primary.scope)} ` +
-          category.title,
+        label: scopeCategory(
+          primary.scope
+        ),
         headline:
           primary.rank === 1
-            ? `On pace for a ${scopeName(primary.scope)} season record`
-            : "Closing in on a season record",
+            ? `${name} is on pace for a season record`
+            : `${name} is closing in on a season record`,
         detail: achievementDetail(
           achievements
         ),
@@ -1634,18 +1817,14 @@ function buildTeamSeasonHighlights(
 }
 
 /*
- * Editorial selection.
+ * Debug mode:
  *
- * Only three stories at most.
+ * Show up to 15 meaningful stories.
+ * Never invent filler.
  *
- * Prefer exceptional all-time records,
- * then conference records, then
- * franchise records.
- *
- * Avoid repeating the same player.
- *
- * Avoid filling slots with weak
- * achievements.
+ * Prefer different performances.
+ * The same player or team may feature
+ * again only for a distinct achievement.
  */
 function selectHighlights(
   candidates: RecordHighlight[]
@@ -1662,8 +1841,25 @@ function selectHighlights(
     );
 
   const selected: RecordHighlight[] = [];
-  const subjects = new Set<string>();
-  const labels = new Set<string>();
+  const usedStories = new Set<string>();
+  const usedSubjects = new Set<string>();
+
+  function storyKey(
+    item: RecordHighlight
+  ): string {
+    const identity =
+      item.subject === "player"
+        ? `player:${item.playerId}`
+        : `team:${item.rosterId}`;
+
+    return [
+      identity,
+      item.kind,
+      item.week,
+      item.season,
+      item.value,
+    ].join(":");
+  }
 
   function subjectKey(
     item: RecordHighlight
@@ -1673,51 +1869,47 @@ function selectHighlights(
       : `team:${item.rosterId}`;
   }
 
+  // First pass: one story per subject.
   for (const item of sorted) {
-    if (selected.length >= 3) break;
+    if (
+      selected.length >=
+      RECORD_WATCH_LIMIT
+    ) {
+      break;
+    }
 
     const subject = subjectKey(item);
+    const story = storyKey(item);
 
     if (
-      subjects.has(subject) ||
-      labels.has(item.label)
+      usedSubjects.has(subject) ||
+      usedStories.has(story)
     ) {
       continue;
     }
 
     selected.push(item);
-    subjects.add(subject);
-    labels.add(item.label);
+    usedSubjects.add(subject);
+    usedStories.add(story);
   }
 
-  /*
-   * A franchise can feature twice
-   * only if another significant,
-   * distinct achievement qualifies.
-   */
+  // Second pass: allow distinct stories.
   for (const item of sorted) {
-    if (selected.length >= 3) break;
-
     if (
-      selected.some(
-        (existing) =>
-          existing.id === item.id
-      ) ||
-      labels.has(item.label)
+      selected.length >=
+      RECORD_WATCH_LIMIT
     ) {
-      continue;
+      break;
     }
 
-    if (
-      item.subject === "player" &&
-      subjects.has(subjectKey(item))
-    ) {
+    const story = storyKey(item);
+
+    if (usedStories.has(story)) {
       continue;
     }
 
     selected.push(item);
-    labels.add(item.label);
-    subjects.add(subjectKey(item));
+    usedStories.add(story);
   }
 
   return selected;
@@ -1746,7 +1938,8 @@ function calculateRecordHighlights(
     ...buildPlayerGameHighlights(
       data.players,
       season,
-      week
+      week,
+      directory
     ),
     ...buildTeamSeasonHighlights(
       data.teamSeasons,
@@ -1756,16 +1949,15 @@ function calculateRecordHighlights(
     ...buildPlayerSeasonHighlights(
       data.playerSeasons,
       season,
-      week
+      week,
+      directory
     ),
   ]);
 }
 
 /*
- * Legacy recordWatch output.
- *
- * Kept for compatibility with
- * existing app components.
+ * Legacy recordWatch output retained
+ * for compatibility.
  */
 function calculateRecordWatch(
   historicalData: HistoricalSeason[],
@@ -1782,14 +1974,19 @@ function calculateRecordWatch(
   for (const historical of historicalData) {
     const year = historical.league.season;
 
-    if (Number(year) >= Number(season)) {
+    if (
+      Number(year) >= Number(season)
+    ) {
       continue;
     }
 
-    const totals = new Map<number, {
-      points: number;
-      games: number;
-    }>();
+    const totals = new Map<
+      number,
+      {
+        points: number;
+        games: number;
+      }
+    >();
 
     for (const game of historical.matchups) {
       if (!eligible(game, year)) continue;
@@ -1820,22 +2017,31 @@ function calculateRecordWatch(
       }
     }
 
-    for (const [rosterId, total] of totals) {
-      if (total.games !== WEEKS) continue;
+    for (const [
+      rosterId,
+      total,
+    ] of totals) {
+      if (total.games !== WEEKS) {
+        continue;
+      }
 
       historicalTotals.push({
         season: year,
         rosterId,
-        points: round2(total.points),
+        points: round2(
+          total.points
+        ),
       });
     }
   }
 
   historicalTotals.sort(
-    (a, b) => b.points - a.points
+    (a, b) =>
+      b.points - a.points
   );
 
-  const record = historicalTotals[0];
+  const record =
+    historicalTotals[0];
 
   const currentTotals = new Map<
     number,
@@ -1864,23 +2070,29 @@ function calculateRecordWatch(
 
   const leader = [
     ...currentTotals.entries(),
-  ].sort((a, b) => b[1] - a[1])[0];
+  ].sort(
+    (a, b) => b[1] - a[1]
+  )[0];
 
-  if (!record || !leader) return [];
+  if (!record || !leader) {
+    return [];
+  }
 
-  const challenger = round2(leader[1]);
+  const challenger =
+    round2(leader[1]);
 
   const projectedTotal =
     latestWeek > 0
       ? round2(
           (challenger / latestWeek) *
-            WEEKS
+          WEEKS
         )
       : null;
 
   return [
     {
-      category: "Single-season team scoring",
+      category:
+        "Single-season team scoring",
       record: record.points,
       recordSeason: record.season,
       recordRosterId: record.rosterId,
@@ -1900,7 +2112,8 @@ function calculateRecordWatch(
       projectedTotal,
       onRecordPace:
         projectedTotal !== null &&
-        projectedTotal > record.points,
+        projectedTotal >
+          record.points,
     },
   ];
 }
@@ -1923,7 +2136,8 @@ export function calculateHomeStats(
     currentSeason?.matchups ?? []
   )
     .filter(
-      (game) => eligible(game, season)
+      (game) =>
+        eligible(game, season)
     )
     .map(toHomeGame)
     .sort(
@@ -1959,7 +2173,9 @@ export function calculateHomeStats(
       (team) =>
         team.inPlayoffPosition
     )
-    .map((team) => team.rosterId);
+    .map(
+      (team) => team.rosterId
+    );
 
   return {
     season,
@@ -1968,12 +2184,13 @@ export function calculateHomeStats(
     conferences,
     playoffContenders,
     completedGames,
-    recordWatch: calculateRecordWatch(
-      historicalData,
-      completedGames,
-      season,
-      seasonStats.latestCompletedWeek
-    ),
+    recordWatch:
+      calculateRecordWatch(
+        historicalData,
+        completedGames,
+        season,
+        seasonStats.latestCompletedWeek
+      ),
     recordHighlights:
       calculateRecordHighlights(
         historicalData,
