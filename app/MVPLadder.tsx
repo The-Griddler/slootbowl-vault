@@ -56,10 +56,7 @@ function TeamLogo({
   rosterId: number | null;
   size?: number;
 }) {
-  if (
-    rosterId === null ||
-    !LOGOS[rosterId]
-  ) {
+  if (rosterId === null || !LOGOS[rosterId]) {
     return null;
   }
 
@@ -133,8 +130,7 @@ function Movement({
     );
   }
 
-  const change =
-    candidate.rankChange ?? 0;
+  const change = candidate.rankChange ?? 0;
 
   if (change > 0) {
     return (
@@ -182,8 +178,7 @@ function FranchiseLine({
 }: {
   candidate: MVPCandidate;
 }) {
-  const rosterId =
-    candidate.mvpRosterId;
+  const rosterId = candidate.mvpRosterId;
 
   if (rosterId === null) {
     return (
@@ -207,10 +202,7 @@ function FranchiseLine({
         minWidth: 0,
       }}
     >
-      <TeamLogo
-        rosterId={rosterId}
-        size={25}
-      />
+      <TeamLogo rosterId={rosterId} size={25} />
 
       <span
         style={{
@@ -232,12 +224,10 @@ function Frontrunner({
   candidate: MVPCandidate;
   playerInfo: Record<string, PlayerInfo>;
 }) {
-  const player =
-    playerInfo[candidate.playerId];
+  const player = playerInfo[candidate.playerId];
 
   const name =
-    player?.name ??
-    `Player ${candidate.playerId}`;
+    player?.name ?? `Player ${candidate.playerId}`;
 
   return (
     <div
@@ -316,9 +306,7 @@ function Frontrunner({
           </div>
 
           <div style={{ marginTop: 10 }}>
-            <Movement
-              candidate={candidate}
-            />
+            <Movement candidate={candidate} />
           </div>
         </div>
       </div>
@@ -334,9 +322,7 @@ function Frontrunner({
           gap: 10,
         }}
       >
-        <FranchiseLine
-          candidate={candidate}
-        />
+        <FranchiseLine candidate={candidate} />
 
         <span
           style={{
@@ -364,12 +350,10 @@ function Challenger({
   candidate: MVPCandidate;
   playerInfo: Record<string, PlayerInfo>;
 }) {
-  const player =
-    playerInfo[candidate.playerId];
+  const player = playerInfo[candidate.playerId];
 
   const name =
-    player?.name ??
-    `Player ${candidate.playerId}`;
+    player?.name ?? `Player ${candidate.playerId}`;
 
   return (
     <div
@@ -399,9 +383,7 @@ function Challenger({
           #{candidate.rank}
         </span>
 
-        <Movement
-          candidate={candidate}
-        />
+        <Movement candidate={candidate} />
       </div>
 
       <div
@@ -454,9 +436,7 @@ function Challenger({
         }}
       >
         <TeamLogo
-          rosterId={
-            candidate.mvpRosterId
-          }
+          rosterId={candidate.mvpRosterId}
           size={24}
         />
 
@@ -468,9 +448,7 @@ function Challenger({
           }}
         >
           {candidate.mvpRosterId !== null
-            ? SHORT_NAMES[
-                candidate.mvpRosterId
-              ]
+            ? SHORT_NAMES[candidate.mvpRosterId]
             : "Unconfirmed"}
         </span>
       </div>
@@ -485,12 +463,12 @@ function ChasingPlayer({
   candidate: MVPCandidate;
   playerInfo: Record<string, PlayerInfo>;
 }) {
-  const player =
-    playerInfo[candidate.playerId];
+  const player = playerInfo[candidate.playerId];
 
   const name =
-    player?.name ??
-    `Player ${candidate.playerId}`;
+    player?.name ?? `Player ${candidate.playerId}`;
+
+  const rosterId = candidate.mvpRosterId;
 
   return (
     <div
@@ -522,11 +500,7 @@ function ChasingPlayer({
         size={43}
       />
 
-      <div
-        style={{
-          minWidth: 0,
-        }}
-      >
+      <div style={{ minWidth: 0 }}>
         <div
           style={{
             color: "#ffffff",
@@ -547,6 +521,36 @@ function ChasingPlayer({
         >
           {player?.position ?? "—"}
         </div>
+
+        {/* Franchise name and logo for ranks 4–10 */}
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            marginTop: 6,
+            minWidth: 0,
+          }}
+        >
+          <TeamLogo
+            rosterId={rosterId}
+            size={17}
+          />
+
+          <span
+            style={{
+              color: MUTED,
+              fontSize: 10,
+              lineHeight: 1.35,
+              overflowWrap: "anywhere",
+            }}
+          >
+            {rosterId !== null
+              ? SHORT_NAMES[rosterId] ?? "Unknown franchise"
+              : "Franchise unconfirmed"}
+          </span>
+        </div>
       </div>
 
       <div
@@ -557,16 +561,7 @@ function ChasingPlayer({
           gap: 7,
         }}
       >
-        <Movement
-          candidate={candidate}
-        />
-
-        <TeamLogo
-          rosterId={
-            candidate.mvpRosterId
-          }
-          size={24}
-        />
+        <Movement candidate={candidate} />
       </div>
     </div>
   );
@@ -576,17 +571,13 @@ export default function MVPLadder({
   leaderboard,
   playerInfo,
 }: Props) {
-  const candidates =
-    leaderboard.topTen;
+  const candidates = leaderboard.topTen;
 
-  const leader =
-    candidates[0] ?? null;
+  const leader = candidates[0] ?? null;
 
-  const challengers =
-    candidates.slice(1, 3);
+  const challengers = candidates.slice(1, 3);
 
-  const chasing =
-    candidates.slice(3, 10);
+  const chasing = candidates.slice(3, 10);
 
   return (
     <section style={{ marginTop: 36 }}>
@@ -660,17 +651,13 @@ export default function MVPLadder({
                 marginTop: 11,
               }}
             >
-              {challengers.map(
-                (candidate) => (
-                  <Challenger
-                    key={
-                      candidate.playerId
-                    }
-                    candidate={candidate}
-                    playerInfo={playerInfo}
-                  />
-                )
-              )}
+              {challengers.map((candidate) => (
+                <Challenger
+                  key={candidate.playerId}
+                  candidate={candidate}
+                  playerInfo={playerInfo}
+                />
+              ))}
             </div>
           )}
 
@@ -694,21 +681,13 @@ export default function MVPLadder({
                   gap: 7,
                 }}
               >
-                {chasing.map(
-                  (candidate) => (
-                    <ChasingPlayer
-                      key={
-                        candidate.playerId
-                      }
-                      candidate={
-                        candidate
-                      }
-                      playerInfo={
-                        playerInfo
-                      }
-                    />
-                  )
-                )}
+                {chasing.map((candidate) => (
+                  <ChasingPlayer
+                    key={candidate.playerId}
+                    candidate={candidate}
+                    playerInfo={playerInfo}
+                  />
+                ))}
               </div>
             </div>
           )}
