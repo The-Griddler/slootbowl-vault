@@ -24,6 +24,7 @@ import type {
   PlayerRecords,
   PlayerWeeklyPerformance,
   PlayerRecordIdentity,
+  PlayerChampionshipRecord,
 } from "../../lib/playerRecords";
 
 import {
@@ -63,6 +64,13 @@ type PlayerEntry = {
   franchisesRepresented: number;
   weeks: PlayerWeeklyPerformance[];
 };
+
+type ChampionshipEntry =
+  PlayerChampionshipRecord & {
+    name: string;
+    position: string;
+    rosterId: number;
+  };
 
 const POSITIONS = ["QB", "RB", "WR", "TE"];
 const LIMIT = 10;
@@ -191,8 +199,6 @@ function FranchiseLogos({
 
   const large = size === "large";
 
-  // One logo keeps the original dimensions.
-  // Multiple logos form a fixed two-column grid.
   const dimension = large ? 76 : 24;
   const gap = large ? 10 : 4;
   const multiple = franchises.length > 1;
@@ -426,7 +432,7 @@ function seasonCategories(
       key: "fewestPointsAgainst",
       title: "Fewest Points Conceded",
       description:
-        "The lowest points-against totals.",
+        "The lowest season scoring totals conceded.",
       metric: r => r.pointsAgainst,
       direction: "low",
       suffix: "pts",
@@ -1129,6 +1135,155 @@ function playerCategories(
 }
 
 // --------------------------------------------------
+// PLAYER CHAMPIONSHIP CATEGORIES
+// --------------------------------------------------
+
+function championshipEntries(
+  records: PlayerChampionshipRecord[],
+  directory: Record<
+    string,
+    PlayerRecordIdentity
+  >,
+  positions: string[]
+): ChampionshipEntry[] {
+  const allowed = new Set(positions);
+
+  return records
+    .filter(record =>
+      allowed.has(
+        directory[record.playerId]
+          ?.position ?? "UNKNOWN"
+      )
+    )
+    .map(record => ({
+      ...record,
+      name:
+        directory[record.playerId]?.name ??
+        `Player ${record.playerId}`,
+      position:
+        directory[record.playerId]?.position ??
+        "UNKNOWN",
+      rosterId:
+        record.rosterIds[0] ?? 0,
+    }));
+}
+
+function championshipCategories(
+  entries: ChampionshipEntry[]
+): Category<ChampionshipEntry>[] {
+  const earliestSeason = (
+    seasons: string[]
+  ) =>
+    Math.min(
+      ...seasons.map(Number)
+    );
+
+  const tieBreak = (
+    seasons: (
+      entry: ChampionshipEntry
+    ) => string[]
+  ) => (
+    a: ChampionshipEntry,
+    b: ChampionshipEntry
+  ) =>
+    earliestSeason(seasons(a)) -
+      earliestSeason(seasons(b)) ||
+    a.playerId.localeCompare(b.playerId);
+
+  return [
+    category(
+      "playerSlootbowlRings",
+      "Most Slootbowl Rings",
+      "Championships won while on the winning team's roster, including starters and bench players.",
+      topTen(
+        entries,
+        r => r.slootbowlRings,
+        "high",
+        tieBreak(r => r.ringSeasons),
+        true
+      ),
+      r => r.slootbowlRings,
+      r => String(r.slootbowlRings),
+      "rings",
+      r =>
+        `${r.starterRings} starter · ${r.benchRings} bench` +
+        (r.ringSeasons.length
+          ? ` · ${r.ringSeasons.join(", ")}`
+          : "")
+    ),
+    category(
+      "playerSlootbowlAppearances",
+      "Most Slootbowl Appearances",
+      "Championship-game appearances as a starting player.",
+      topTen(
+        entries,
+        r => r.slootbowlAppearances,
+        "high",
+        tieBreak(r => r.slootbowlSeasons),
+        true
+      ),
+      r => r.slootbowlAppearances,
+      r => String(r.slootbowlAppearances),
+      "starts",
+      r =>
+        `${r.position} · ${r.slootbowlSeasons.join(", ")}`
+    ),
+    category(
+      "playerConferenceChampionshipAppearances",
+      "Most Conference Championship Appearances",
+      "Conference championship appearances as a starting player.",
+      topTen(
+        entries,
+        r => r.conferenceChampionshipAppearances,
+        "high",
+        tieBreak(
+          r => r.conferenceChampionshipSeasons
+        ),
+        true
+      ),
+      r => r.conferenceChampionshipAppearances,
+      r =>
+        String(
+          r.conferenceChampionshipAppearances
+        ),
+      "starts",
+      r =>
+        `${r.position} · ${r.conferenceChampionshipSeasons.join(", ")}`
+    ),
+  ];
+}
+
+function championshipRosterIds(
+  entry: ChampionshipEntry,
+  categoryKey: string
+): number[] {
+  if (categoryKey === "playerSlootbowlRings") {
+    return uniqueRosterIds(
+      entry.ringAppearances.map(
+        appearance => appearance.rosterId
+      )
+    );
+  }
+
+  if (
+    categoryKey ===
+    "playerSlootbowlAppearances"
+  ) {
+    return uniqueRosterIds(
+      entry.slootbowlGames.map(
+        appearance => appearance.rosterId
+      )
+    );
+  }
+
+  return uniqueRosterIds(
+    entry.conferenceChampionshipGames.map(
+      appearance => appearance.rosterId
+    )
+  );
+}
+
+// --------------------------------------------------
 // PLAYER FRANCHISE HISTORY
 // --------------------------------------------------
 
@@ -1171,8 +1326,6 @@ function playerTeams(
     return Array.from(names).join(", ");
   }
 
-  // Career uses current franchise names.
-  // Perth and Mt Isa share roster ID 1.
   const names = new Set(
     entry.weeks.map(week =>
       currentName(week.rosterId)
@@ -1277,6 +1430,13 @@ export default function RecordsTabs({
     period,
     playerRecords.players
   );
+
+  const championshipLeaders =
+    championshipEntries(
+      playerRecords.championshipRecords,
+      playerRecords.players,
+      positions
+    );
 
   const togglePosition = (
     position: string
@@ -1632,43 +1792,54 @@ export default function RecordsTabs({
 
       {scope === "players" &&
         positions.length > 0 && (
-          <RecordSection
-            key={`p-${period}-${competition}-${selectedSeason}-${positions.join("-")}`}
-            title={
-              period === "games"
-                ? "Player Game Records"
-                : period === "season"
-                ? "Player Season Records"
-                : "Player Career Records"
-            }
-            subtitle={
-              "Started players only. " +
-              (competition === "regularSeason"
-                ? "Regular-season performances."
-                : "Main winners-bracket performances only.")
-            }
-            categories={playerCategories(
-              entries,
-              period
-            )}
-            primaryLabel={r => r.name}
-            detailLabel={r =>
-              `${r.position} · ${playerTeams(
-                r,
+          <>
+            {competition === "mainPlayoffs" &&
+              period === "career" && (
+                <ChampionshipRecordSection
+                  categories={championshipCategories(
+                    championshipLeaders
+                  )}
+                />
+              )}
+
+            <RecordSection
+              key={`p-${period}-${competition}-${selectedSeason}-${positions.join("-")}`}
+              title={
+                period === "games"
+                  ? "Player Game Records"
+                  : period === "season"
+                  ? "Player Season Records"
+                  : "Player Career Records"
+              }
+              subtitle={
+                "Started players only. " +
+                (competition === "regularSeason"
+                  ? "Regular-season performances."
+                  : "Main winners-bracket performances only.")
+              }
+              categories={playerCategories(
+                entries,
                 period
-              )}`
-            }
-            metaLabel={r =>
-              period === "games"
-                ? `${r.season} · Week ${r.week}`
-                : period === "season"
-                ? `${r.season} · ${r.starts} starts`
-                : `${r.starts} career starts`
-            }
-            logoIds={r =>
-              playerRosterIds(r, period)
-            }
-          />
+              )}
+              primaryLabel={r => r.name}
+              detailLabel={r =>
+                `${r.position} · ${playerTeams(
+                  r,
+                  period
+                )}`
+              }
+              metaLabel={r =>
+                period === "games"
+                  ? `${r.season} · Week ${r.week}`
+                  : period === "season"
+                  ? `${r.season} · ${r.starts} starts`
+                  : `${r.starts} career starts`
+              }
+              logoIds={r =>
+                playerRosterIds(r, period)
+              }
+            />
+          </>
         )}
 
       {scope === "players" &&
@@ -1679,6 +1850,60 @@ export default function RecordsTabs({
           </p>
         )}
     </div>
+  );
+}
+
+// --------------------------------------------------
+// CHAMPIONSHIP RECORD DISPLAY
+// --------------------------------------------------
+
+function ChampionshipRecordSection({
+  categories,
+}: {
+  categories: Category<ChampionshipEntry>[];
+}) {
+  return (
+    <section style={{ marginBottom: 32 }}>
+      <div style={sectionHeadingRow}>
+        <div style={headingAccent} />
+
+        <h2 style={sectionHeading}>
+          Player Championship Honours
+        </h2>
+      </div>
+
+      <p style={sectionSubtitle}>
+        Slootbowl rings include starters and
+        bench players. Championship and
+        conference appearances count starts
+        only.
+      </p>
+
+      {categories.map(item => (
+        <RecordCard
+          key={item.key}
+          item={item}
+          primaryLabel={r => r.name}
+          detailLabel={item.detail}
+          metaLabel={r => {
+            if (
+              item.key ===
+              "playerSlootbowlRings"
+            ) {
+              return r.position;
+            }
+
+            return r.position;
+          }}
+          logoIds={r =>
+            championshipRosterIds(
+              r,
+              item.key
+            )
+          }
+        />
+      ))}
+    </section>
   );
 }
 
@@ -1816,9 +2041,6 @@ function RecordCard<
       rounded(item.metric(leader))
   ).length;
 
-  // Preserve ranks across the full top ten,
-  // then omit the first entry from the
-  // expandable list.
   let previousValue: number | null = null;
   let previousRank = 0;
 
@@ -1870,8 +2092,6 @@ function RecordCard<
           </span>
         )}
       </div>
-
-      {/* LARGE RECORD HOLDER LOGOS */}
 
       <div style={holderLayout}>
         <FranchiseLogos
@@ -1969,8 +2189,6 @@ function RecordCard<
                     <div style={rankText}>
                       {rank}
                     </div>
-
-                    {/* TWO-COLUMN SMALL LOGO GRID */}
 
                     <FranchiseLogos
                       rosterIds={logoIds(entry)}
