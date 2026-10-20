@@ -1,5 +1,9 @@
 
-import { getHistoricalData } from "../../lib/sleeper";
+import {
+  getHistoricalData,
+  getNFLState,
+  isNFLWeekComplete,
+} from "../../lib/sleeper";
 import { getAllSlootPlayerDirectory } from "../../lib/players";
 import { FRANCHISES } from "../../lib/franchises";
 import {
@@ -313,13 +317,43 @@ export default async function AllSlootPage({
 }: PageProps) {
   const params = await searchParams;
 
-  const [historicalData, playerDirectory] =
-    await Promise.all([
-      getHistoricalData(),
-      getAllSlootPlayerDirectory(),
-    ]);
+  const [
+    historicalData,
+    playerDirectory,
+    nflState,
+  ] = await Promise.all([
+    getHistoricalData(),
+    getAllSlootPlayerDirectory(),
+    getNFLState(),
+  ]);
 
+  // A season's All-Sloot honours are only
+  // available after fantasy Week 17 is complete.
+  //
+  // This uses Sleeper's existing week-completion
+  // logic rather than the calendar year.
+  const completedSeasonIds = new Set(
+    historicalData
+      .filter((season) =>
+        isNFLWeekComplete(
+          season.league.season,
+          17,
+          nflState
+        )
+      )
+      .map((season) => season.league.season)
+  );
+
+  // Only calculate publicly available
+  // annual selections for completed seasons.
+  // This also keeps unfinished seasons out
+  // of the career honours calculations.
   const seasons = historicalData
+    .filter((season) =>
+      completedSeasonIds.has(
+        season.league.season
+      )
+    )
     .map((season) =>
       calculateAllSloot(season, playerDirectory)
     )
@@ -328,23 +362,34 @@ export default async function AllSlootPage({
         Number(b.season) - Number(a.season)
     );
 
-  const currentYear = new Date().getUTCFullYear();
-
-  // Only completed seasons count towards
-  // official career honours.
-  const completedSeasons = seasons.filter(
-    (season) =>
-      Number(season.season) < currentYear
-  );
+  // Keep all seasons in the navigation,
+  // including seasons whose teams are locked.
+  const availableSeasonIds = historicalData
+    .map((season) => season.league.season)
+    .sort(
+      (a, b) => Number(b) - Number(a)
+    );
 
   const careers =
-    calculateAllSlootCareers(completedSeasons);
+    calculateAllSlootCareers(seasons);
+
+  const selectedSeasonId =
+    availableSeasonIds.includes(
+      params.season ?? ""
+    )
+      ? (params.season as string)
+      : availableSeasonIds[0] ?? "";
 
   const selectedSeason =
     seasons.find(
       (season) =>
-        season.season === params.season
-    ) ?? seasons[0];
+        season.season === selectedSeasonId
+    );
+
+  const isSeasonUnlocked =
+    completedSeasonIds.has(
+      selectedSeasonId
+    );
 
   const selectedTeam = TEAM_OPTIONS.some(
     (option) => option.id === params.team
@@ -363,10 +408,6 @@ export default async function AllSlootPage({
       : selectedTeam === "rookie"
         ? selectedSeason?.rookieTeam ?? []
         : selectedSeason?.firstTeam ?? [];
-
-  const isCurrentSeason =
-    Number(selectedSeason?.season) ===
-    currentYear;
 
   return (
     <main>
@@ -403,9 +444,7 @@ export default async function AllSlootPage({
         }}
       >
         <NavLink
-          href={`/all-sloot?view=annual&season=${
-            selectedSeason?.season ?? ""
-          }&team=${selectedTeam}`}
+          href={`/all-sloot?view=annual&season=${selectedSeasonId}&team=${selectedTeam}`}
           active={view === "annual"}
         >
           Annual Teams
@@ -429,90 +468,133 @@ export default async function AllSlootPage({
               marginBottom: "20px",
             }}
           >
-            {seasons.map((season) => (
+            {availableSeasonIds.map((season) => (
               <NavLink
-                key={season.season}
-                href={`/all-sloot?view=annual&season=${season.season}&team=${selectedTeam}`}
+                key={season}
+                href={`/all-sloot?view=annual&season=${season}&team=${selectedTeam}`}
                 active={
-                  selectedSeason?.season ===
-                  season.season
+                  selectedSeasonId === season
                 }
               >
-                {season.season}
+                {season}
               </NavLink>
             ))}
           </div>
 
-          {isCurrentSeason && (
-            <p
+          {!isSeasonUnlocked ? (
+            <div
               style={{
-                padding: "12px",
-                borderRadius: "10px",
-                background: "#263244",
-                marginBottom: "20px",
-                fontSize: "13px",
-              }}
-            >
-              Current season: selections are
-              provisional until the regular
-              season finishes.
-            </p>
-          )}
-
-          {selectedTeam === "rookie" && (
-            <p
-              style={{
-                padding: "12px",
-                borderRadius: "10px",
+                padding: "28px 20px",
                 border: BORDER,
-                marginBottom: "20px",
-                fontSize: "13px",
+                borderRadius: "14px",
+                textAlign: "center",
+                marginBottom: "24px",
               }}
             >
-              Rookie eligibility is estimated
-              from Sleeper experience data and
-              should be independently verified.
-            </p>
-          )}
-
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
-              marginBottom: "20px",
-            }}
-          >
-            {TEAM_OPTIONS.map((option) => (
-              <NavLink
-                key={option.id}
-                href={`/all-sloot?view=annual&season=${
-                  selectedSeason?.season ?? ""
-                }&team=${option.id}`}
-                active={
-                  selectedTeam === option.id
-                }
+              <div
+                style={{
+                  fontSize: "34px",
+                  marginBottom: "14px",
+                }}
               >
-                {option.label}
-              </NavLink>
-            ))}
-          </div>
+                🏆
+              </div>
 
-          <h2
-            style={{
-              marginBottom: "16px",
-            }}
-          >
-            {selectedSeason?.season}{" "}
-            {
-              TEAM_OPTIONS.find(
-                (option) =>
-                  option.id === selectedTeam
-              )?.label
-            }
-          </h2>
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: "12px",
+                  fontSize: "21px",
+                }}
+              >
+                {selectedSeasonId} All-Sloot Honours
+              </h2>
 
-          <TeamTable selections={selections} />
+              <p
+                style={{
+                  color: MUTED,
+                  fontSize: "14px",
+                  lineHeight: 1.7,
+                  margin: 0,
+                }}
+              >
+                The {selectedSeasonId} All-Sloot
+                Teams will be revealed following
+                the conclusion of the SFL fantasy
+                season.
+              </p>
+
+              <p
+                style={{
+                  color: MUTED,
+                  fontSize: "12px",
+                  lineHeight: 1.6,
+                  marginTop: "14px",
+                  marginBottom: 0,
+                }}
+              >
+                First Team, Second Team and Rookie
+                Team selections will become
+                available automatically once
+                Week 17 is complete.
+              </p>
+            </div>
+          ) : (
+            <>
+              {selectedTeam === "rookie" && (
+                <p
+                  style={{
+                    padding: "12px",
+                    borderRadius: "10px",
+                    border: BORDER,
+                    marginBottom: "20px",
+                    fontSize: "13px",
+                  }}
+                >
+                  Rookie eligibility is estimated
+                  from Sleeper experience data and
+                  should be independently verified.
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  marginBottom: "20px",
+                }}
+              >
+                {TEAM_OPTIONS.map((option) => (
+                  <NavLink
+                    key={option.id}
+                    href={`/all-sloot?view=annual&season=${selectedSeasonId}&team=${option.id}`}
+                    active={
+                      selectedTeam === option.id
+                    }
+                  >
+                    {option.label}
+                  </NavLink>
+                ))}
+              </div>
+
+              <h2
+                style={{
+                  marginBottom: "16px",
+                }}
+              >
+                {selectedSeasonId}{" "}
+                {
+                  TEAM_OPTIONS.find(
+                    (option) =>
+                      option.id === selectedTeam
+                  )?.label
+                }
+              </h2>
+
+              <TeamTable selections={selections} />
+            </>
+          )}
         </>
       ) : (
         <CareerHonours careers={careers} />
