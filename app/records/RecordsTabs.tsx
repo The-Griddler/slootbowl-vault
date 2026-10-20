@@ -198,7 +198,6 @@ function FranchiseLogos({
   }
 
   const large = size === "large";
-
   const dimension = large ? 76 : 24;
   const gap = large ? 10 : 4;
   const multiple = franchises.length > 1;
@@ -1190,16 +1189,34 @@ function championshipCategories(
       earliestSeason(seasons(b)) ||
     a.playerId.localeCompare(b.playerId);
 
+  // Slootbowl rings are ranked by total rings.
+  // When totals match, more Slootbowl starts
+  // take priority. The earliest championship
+  // is used only if both values match.
+  //
+  // Shared official ranks are still determined
+  // by ring totals in RecordCard.
+
+  const ringTieBreak = (
+    a: ChampionshipEntry,
+    b: ChampionshipEntry
+  ) =>
+    b.slootbowlAppearances -
+      a.slootbowlAppearances ||
+    earliestSeason(a.ringSeasons) -
+      earliestSeason(b.ringSeasons) ||
+    a.playerId.localeCompare(b.playerId);
+
   return [
     category(
       "playerSlootbowlRings",
       "Most Slootbowl Rings",
-      "Championships won while on the winning team's roster, including starters and bench players.",
+      "Championships won while on the winning team's roster, including starters and bench players. Ties are ordered by Slootbowl starts.",
       topTen(
         entries,
         r => r.slootbowlRings,
         "high",
-        tieBreak(r => r.ringSeasons),
+        ringTieBreak,
         true
       ),
       r => r.slootbowlRings,
@@ -1207,6 +1224,7 @@ function championshipCategories(
       "rings",
       r =>
         `${r.starterRings} starter · ${r.benchRings} bench` +
+        ` · ${r.slootbowlAppearances} Slootbowl starts` +
         (r.ringSeasons.length
           ? ` · ${r.ringSeasons.join(", ")}`
           : "")
@@ -1885,16 +1903,7 @@ function ChampionshipRecordSection({
           item={item}
           primaryLabel={r => r.name}
           detailLabel={item.detail}
-          metaLabel={r => {
-            if (
-              item.key ===
-              "playerSlootbowlRings"
-            ) {
-              return r.position;
-            }
-
-            return r.position;
-          }}
+          metaLabel={r => r.position}
           logoIds={r =>
             championshipRosterIds(
               r,
