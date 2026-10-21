@@ -16,6 +16,10 @@ import type {
   PlayerRecords,
 } from "./playerRecords";
 
+import type {
+  HistoricalSeason,
+} from "./sleeper";
+
 import {
   calculateLegacyMilestones,
   type LegacyMilestone,
@@ -27,6 +31,11 @@ import {
   type SlootbowlResult,
 } from "./legacyPlayoffs";
 
+import {
+  calculateConferencePlayerOfTheWeek,
+  type WeeklyPlayerAward,
+} from "./weeklyRecap";
+
 // SFL Legacy Points
 //
 // Points accumulate through career achievements.
@@ -37,6 +46,7 @@ import {
 // 2. All-Sloot honours
 // 3. Career scoring milestones
 // 4. Playoff achievements
+// 5. Conference Player of the Week
 
 export const LEGACY_POINTS = {
   seasonalGrades: {
@@ -52,7 +62,14 @@ export const LEGACY_POINTS = {
     secondTeam: 200,
     rookieTeam: 100,
   },
+  weeklyAwards: {
+    conferencePlayerOfTheWeek: 25,
+  },
 } as const;
+
+export type LegacyWeeklyAward = WeeklyPlayerAward & {
+  season: string;
+};
 
 export type LegacyScore = {
   playerId: string;
@@ -64,6 +81,7 @@ export type LegacyScore = {
   allSlootHonoursPoints: number;
   careerMilestonePoints: number;
   playoffLegacyPoints: number;
+  weeklyAwardPoints: number;
 
   totalLegacyPoints: number;
 
@@ -80,6 +98,12 @@ export type LegacyScore = {
   firstTeamSelections: number;
   secondTeamSelections: number;
   rookieTeamSelections: number;
+
+  // Weekly honours
+  conferencePlayerOfTheWeekAwards: number;
+  obfcPlayerOfTheWeekAwards: number;
+  gpfcPlayerOfTheWeekAwards: number;
+  weeklyAwards: LegacyWeeklyAward[];
 
   // Career production
   regularSeasonPoints: number;
@@ -98,13 +122,84 @@ export type LegacyScore = {
   }[];
 };
 
+/**
+ * Calculate all Conference Player of the Week
+ * awards across historical SFL seasons.
+ *
+ * Each season uses the existing Weekly Recap
+ * calculation, preserving the same winner
+ * selection and completed-week validation.
+ */
+function calculateHistoricalWeeklyAwards(
+  historicalData: HistoricalSeason[],
+  completedThroughSeason?: number
+): Map<string, LegacyWeeklyAward[]> {
+  const awardsByPlayer = new Map<
+    string,
+    LegacyWeeklyAward[]
+  >();
+
+  for (const seasonData of historicalData) {
+    const season = seasonData.league.season;
+
+    // Exclude seasons beyond the selected cutoff.
+    if (
+      completedThroughSeason !== undefined &&
+      Number(season) > completedThroughSeason
+    ) {
+      continue;
+    }
+
+    const weeklyResults =
+      calculateConferencePlayerOfTheWeek(
+        historicalData,
+        season
+      );
+
+    for (const result of weeklyResults) {
+      const winners = [
+        result.obfcPlayerOfTheWeek,
+        result.gpfcPlayerOfTheWeek,
+      ];
+
+      for (const winner of winners) {
+        if (!winner) continue;
+
+        const existing =
+          awardsByPlayer.get(winner.playerId) ?? [];
+
+        existing.push({
+          ...winner,
+          season,
+        });
+
+        awardsByPlayer.set(
+          winner.playerId,
+          existing
+        );
+      }
+    }
+  }
+
+  for (const awards of awardsByPlayer.values()) {
+    awards.sort(
+      (a, b) =>
+        Number(a.season) - Number(b.season) ||
+        a.week - b.week
+    );
+  }
+
+  return awardsByPlayer;
+}
+
 export function calculateLegacyScores(
   gradeCareers: SFLPlayerGradeCareer[],
   allSlootCareers: AllSlootCareerPlayer[],
   records?: PlayerRecords,
   directory?: AllSlootPlayerDirectory,
   completedThroughSeason?: number,
-  championshipResults: SlootbowlResult[] = []
+  championshipResults: SlootbowlResult[] = [],
+  historicalData: HistoricalSeason[] = []
 ): LegacyScore[] {
   const honoursByPlayer = new Map(
     allSlootCareers.map((player) => [
@@ -156,12 +251,19 @@ export function calculateLegacyScores(
     ])
   );
 
+  const weeklyAwardsByPlayer =
+    calculateHistoricalWeeklyAwards(
+      historicalData,
+      completedThroughSeason
+    );
+
   // Include players with at least one SFL record.
   const playerIds = new Set<string>([
     ...gradesByPlayer.keys(),
     ...honoursByPlayer.keys(),
     ...milestonesByPlayer.keys(),
     ...playoffsByPlayer.keys(),
+    ...weeklyAwardsByPlayer.keys(),
   ]);
 
   const results: LegacyScore[] = [];
@@ -173,6 +275,9 @@ export function calculateLegacyScores(
       milestonesByPlayer.get(playerId);
     const playoffCareer =
       playoffsByPlayer.get(playerId);
+
+    const weeklyAwards =
+      weeklyAwardsByPlayer.get(playerId) ?? [];
 
     const seasonalGrades =
       grades?.seasons.map((season) => ({
@@ -213,11 +318,30 @@ export function calculateLegacyScores(
     const playoffLegacyPoints =
       playoffCareer?.totalPlayoffLegacyPoints ?? 0;
 
+    const conferencePlayerOfTheWeekAwards =
+      weeklyAwards.length;
+
+    const obfcPlayerOfTheWeekAwards =
+      weeklyAwards.filter(
+        (award) => award.conference === "OBFC"
+      ).length;
+
+    const gpfcPlayerOfTheWeekAwards =
+      weeklyAwards.filter(
+        (award) => award.conference === "GPFC"
+      ).length;
+
+    const weeklyAwardPoints =
+      conferencePlayerOfTheWeekAwards *
+      LEGACY_POINTS.weeklyAwards
+        .conferencePlayerOfTheWeek;
+
     const totalLegacyPoints =
       seasonalGradePoints +
       allSlootHonoursPoints +
       careerMilestonePoints +
-      playoffLegacyPoints;
+      playoffLegacyPoints +
+      weeklyAwardPoints;
 
     results.push({
       playerId,
@@ -240,6 +364,7 @@ export function calculateLegacyScores(
       allSlootHonoursPoints,
       careerMilestonePoints,
       playoffLegacyPoints,
+      weeklyAwardPoints,
       totalLegacyPoints,
 
       legendarySeasons: grades?.legendary ?? 0,
@@ -254,6 +379,11 @@ export function calculateLegacyScores(
       firstTeamSelections,
       secondTeamSelections,
       rookieTeamSelections,
+
+      conferencePlayerOfTheWeekAwards,
+      obfcPlayerOfTheWeekAwards,
+      gpfcPlayerOfTheWeekAwards,
+      weeklyAwards,
 
       regularSeasonPoints:
         milestoneCareer?.regularSeasonPoints ?? 0,
