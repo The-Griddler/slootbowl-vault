@@ -11,6 +11,11 @@ import {
   type SleeperPlayer,
 } from "./players";
 
+import {
+  calculatePlayerOfTheWeekRecords,
+  type PlayerOfTheWeekRecords,
+} from "./playerOfTheWeekRecords";
+
 export type PlayerCompetition =
   | "regularSeason"
   | "mainPlayoffs";
@@ -116,6 +121,11 @@ export type PlayerRecords =
     };
 
     championshipRecords: PlayerChampionshipRecord[];
+
+    // Conference Player of the Week
+    // records for individual seasons
+    // and entire SFL careers.
+    playerOfTheWeekRecords: PlayerOfTheWeekRecords;
 
     players: Record<
       string,
@@ -855,6 +865,11 @@ export async function getPlayerRecords():
       historicalData
     );
 
+  const playerOfTheWeekRecords =
+    calculatePlayerOfTheWeekRecords(
+      historicalData
+    );
+
   const regularWeekly = weekly.filter(
     performance =>
       performance.phase ===
@@ -913,6 +928,8 @@ export async function getPlayerRecords():
     },
 
     championshipRecords,
+
+    playerOfTheWeekRecords,
 
     players: buildPlayerDirectory(
       weekly,
