@@ -264,6 +264,12 @@ export default function LegacyLeaderboard({
                     player.totalLegacyPoints
                   )}
 
+                  {categoryBar(
+                    "Weekly Conference Honours",
+                    player.weeklyAwardPoints,
+                    player.totalLegacyPoints
+                  )}
+
                   <div
                     style={{
                       borderTop: BORDER,
@@ -389,6 +395,141 @@ export default function LegacyLeaderboard({
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: BORDER,
+                      marginTop: "18px",
+                      paddingTop: "15px",
+                    }}
+                  >
+                    <h3
+                      style={{
+                        fontSize: "14px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      Conference Player of the Week
+                    </h3>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(3, minmax(0, 1fr))",
+                        gap: "8px",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      {[
+                        {
+                          label: "Total Awards",
+                          value:
+                            player.conferencePlayerOfTheWeekAwards,
+                        },
+                        {
+                          label: "OBFC",
+                          value:
+                            player.obfcPlayerOfTheWeekAwards,
+                        },
+                        {
+                          label: "GPFC",
+                          value:
+                            player.gpfcPlayerOfTheWeekAwards,
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          style={{
+                            background: "#202833",
+                            borderRadius: "8px",
+                            padding: "10px 6px",
+                            textAlign: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "20px",
+                              fontWeight: 800,
+                            }}
+                          >
+                            {item.value}
+                          </div>
+
+                          <div
+                            style={{
+                              color: MUTED,
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      style={{
+                        color: MUTED,
+                        fontSize: "12px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      25 Legacy Points per award ·{" "}
+                      {formatNumber(
+                        player.weeklyAwardPoints
+                      )}{" "}
+                      total points
+                    </div>
+
+                    {player.weeklyAwards.length > 0 ? (
+                      player.weeklyAwards.map((award) => (
+                        <div
+                          key={`${award.season}-${award.week}-${award.conference}-${award.playerId}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "minmax(0, 1fr) auto",
+                            gap: "10px",
+                            alignItems: "center",
+                            padding: "9px 0",
+                            borderBottom: BORDER,
+                            fontSize: "12px",
+                          }}
+                        >
+                          <div>
+                            <strong>
+                              {award.season} · Week{" "}
+                              {award.week}
+                            </strong>
+
+                            <div
+                              style={{
+                                color: MUTED,
+                                marginTop: "3px",
+                              }}
+                            >
+                              {award.conference} ·{" "}
+                              {award.points.toFixed(2)}{" "}
+                              fantasy pts
+                            </div>
+                          </div>
+
+                          <strong>+25</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <p
+                        style={{
+                          color: MUTED,
+                          fontSize: "12px",
+                        }}
+                      >
+                        No Conference Player of the
+                        Week awards recorded.
+                      </p>
+                    )}
                   </div>
 
                   {player.milestones.length > 0 && (
