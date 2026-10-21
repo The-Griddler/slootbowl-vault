@@ -756,16 +756,14 @@ function RecordWatchSection({
         description="Historic performances and season-record chases across the SFL, OBFC, GPFC and individual franchises."
       />
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 14,
-        }}
-      >
-        {week > 0 && (
+      {week > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            marginBottom: 14,
+          }}
+        >
           <span
             style={{
               display: "inline-flex",
@@ -780,18 +778,8 @@ function RecordWatchSection({
           >
             WEEK {week}
           </span>
-        )}
-
-        <span
-          style={{
-            color: MUTED,
-            fontSize: 10,
-            fontWeight: 700,
-          }}
-        >
-          {visible.length} qualifying awards
-        </span>
-      </div>
+        </div>
+      )}
 
       {featured ? (
         <div
