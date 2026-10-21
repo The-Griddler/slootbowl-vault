@@ -22,7 +22,6 @@ import { calculateLegacyScores } from "../../lib/legacyScore";
 import { getSlootbowlResults } from "../../lib/slootbowlResults";
 
 // Reuse the existing leaderboard component.
-// We are only moving the page, not rebuilding it.
 import LegacyLeaderboard from "../hall-of-fame/LegacyLeaderboard";
 
 export default async function LeagueLegacyPage() {
@@ -90,14 +89,17 @@ export default async function LeagueLegacyPage() {
       completedThroughSeason
     );
 
-  // Calculate cumulative SFL Legacy Points.
+  // Calculate cumulative SFL Legacy Points,
+  // including historical Conference Player
+  // of the Week awards worth 25 points each.
   const legacyScores = calculateLegacyScores(
     gradeCareers,
     honours,
     records,
     directory,
     completedThroughSeason,
-    championshipResults
+    championshipResults,
+    completedSeasons
   );
 
   return (
@@ -142,7 +144,8 @@ export default async function LeagueLegacyPage() {
         Tracking the greatest players in Sluts
         Football League history through seasonal
         dominance, All-Sloot honours, career
-        milestones and playoff achievements.
+        milestones, playoff achievements and
+        Conference Player of the Week awards.
       </p>
 
       <div
@@ -173,9 +176,9 @@ export default async function LeagueLegacyPage() {
         >
           Legacy Points accumulate throughout a
           player's SFL career. Rankings reflect
-          their achievements in the league and
-          will continue to evolve as new seasons
-          are completed.
+          seasonal grades, All-Sloot selections,
+          career milestones, postseason success
+          and weekly conference honours.
         </div>
       </div>
 
