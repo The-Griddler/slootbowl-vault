@@ -13,7 +13,7 @@ const conferences = [
   {
     abbreviation: "GPFC",
     name: "Gloucester-Plymouth Football Conference",
-    rosterIds: [1, 2, 10, 3, 5],
+    rosterIds: [10, 2, 1, 5, 3],
     primary: "#C83E2F",
     secondary: "#25834B",
   },
@@ -67,6 +67,38 @@ const teamIdentity: Record<
     logo: "/logos/chad-moist-discharge.PNG",
   },
 };
+
+function getTeamAccent(
+  conference: (typeof conferences)[number],
+  rosterId: number,
+  index: number
+): string {
+  // Keep OBFC's original alternating colours.
+  if (conference.abbreviation === "OBFC") {
+    return index % 2 === 0
+      ? conference.primary
+      : conference.secondary;
+  }
+
+  // GPFC: Gloucester history.
+  if (rosterId === 10 || rosterId === 2) {
+    return conference.primary;
+  }
+
+  // GPFC: both Gloucester and Plymouth.
+  if (rosterId === 1) {
+    return `linear-gradient(
+      180deg,
+      ${conference.primary} 0%,
+      ${conference.primary} 50%,
+      ${conference.secondary} 50%,
+      ${conference.secondary} 100%
+    )`;
+  }
+
+  // GPFC: Plymouth history.
+  return conference.secondary;
+}
 
 export default function TeamsPage() {
   return (
@@ -174,10 +206,19 @@ export default function TeamsPage() {
 
                 if (!franchise || !identity) return null;
 
-                const accent =
-                  index % 2 === 0
-                    ? conference.primary
-                    : conference.secondary;
+                const accent = getTeamAccent(
+                  conference,
+                  rosterId,
+                  index
+                );
+
+                const isSplitAccent =
+                  conference.abbreviation === "GPFC" &&
+                  rosterId === 1;
+
+                const arrowColour = isSplitAccent
+                  ? conference.primary
+                  : accent;
 
                 return (
                   <Link
@@ -198,7 +239,7 @@ export default function TeamsPage() {
                       overflow: "hidden",
                     }}
                   >
-                    {/* Alternating conference border */}
+                    {/* Conference/history colour strip */}
                     <div
                       style={{
                         position: "absolute",
@@ -272,14 +313,28 @@ export default function TeamsPage() {
                       </div>
                     </div>
 
-                    {/* Slightly larger conference-coloured arrow */}
+                    {/* Conference/history-coloured arrow */}
                     <span
                       style={{
-                        color: accent,
+                        color: arrowColour,
                         fontSize: "27px",
                         lineHeight: 1,
                         flexShrink: 0,
                         paddingRight: "4px",
+                        ...(isSplitAccent
+                          ? {
+                              background: `linear-gradient(
+                                180deg,
+                                ${conference.primary} 0%,
+                                ${conference.primary} 50%,
+                                ${conference.secondary} 50%,
+                                ${conference.secondary} 100%
+                              )`,
+                              backgroundClip: "text",
+                              WebkitBackgroundClip: "text",
+                              WebkitTextFillColor: "transparent",
+                            }
+                          : {}),
                       }}
                     >
                       ›
