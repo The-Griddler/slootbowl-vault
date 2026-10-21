@@ -2,38 +2,156 @@
 "use client";
 
 import { useState } from "react";
-import type { AllSlootCareerPlayer } from "../../lib/allSlootCareer";
+
+import type {
+  AllSlootCareerPlayer,
+} from "../../lib/allSlootCareer";
+
+import {
+  FRANCHISES,
+  getHistoricalFranchiseName,
+} from "../../lib/franchises";
 
 type Props = {
   careers: AllSlootCareerPlayer[];
 };
 
-export default function CareerHonours({ careers }: Props) {
-  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(
-    null
+const BORDER = "1px solid #263244";
+const MUTED = "#9da7b3";
+
+const FRANCHISE_MAP = new Map(
+  FRANCHISES.map((franchise) => [
+    franchise.rosterId,
+    franchise,
+  ])
+);
+
+function AwardBadge({
+  award,
+}: {
+  award: AllSlootCareerPlayer["awards"][number];
+}) {
+  const franchise =
+    award.rosterId !== null
+      ? FRANCHISE_MAP.get(award.rosterId)
+      : undefined;
+
+  const primaryColour =
+    franchise?.primaryColour ?? "#526174";
+
+  const secondaryColour =
+    franchise?.secondaryColour ?? "#9da7b3";
+
+  const franchiseName =
+    award.rosterId !== null
+      ? getHistoricalFranchiseName(
+          award.rosterId,
+          award.season
+        )
+      : "Franchise unknown";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        background: "#263244",
+        borderRadius: "7px",
+        overflow: "hidden",
+        maxWidth: "100%",
+      }}
+    >
+      {/* Franchise colour stripe:
+          75% primary, 25% secondary. */}
+      <div
+        style={{
+          width: "5px",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
+            flex: 3,
+            background: primaryColour,
+          }}
+        />
+
+        <div
+          style={{
+            flex: 1,
+            background: secondaryColour,
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          padding: "8px 10px",
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 700,
+            lineHeight: 1.4,
+          }}
+        >
+          {award.season} · {award.team}
+        </div>
+
+        <div
+          style={{
+            fontSize: "10px",
+            color: MUTED,
+            marginTop: "4px",
+            lineHeight: 1.4,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {franchiseName}
+        </div>
+      </div>
+    </div>
   );
+}
+
+export default function CareerHonours({
+  careers,
+}: Props) {
+  const [
+    expandedPlayer,
+    setExpandedPlayer,
+  ] = useState<string | null>(null);
+
   const [showAll, setShowAll] = useState(false);
 
-  const visibleCareers = showAll ? careers : careers.slice(0, 20);
+  const visibleCareers = showAll
+    ? careers
+    : careers.slice(0, 20);
 
   return (
     <section>
-      <h2 style={{ marginBottom: "8px" }}>SFL Career Honours</h2>
+      <h2 style={{ marginBottom: "8px" }}>
+        SFL Career Honours
+      </h2>
 
       <p
         style={{
           fontSize: "13px",
-          color: "#9da7b3",
+          color: MUTED,
           marginBottom: "20px",
         }}
       >
-        Ranked by First Team selections, followed by Second Team
-        selections. Tap a player to view their complete award history.
+        Ranked by First Team selections, followed
+        by Second Team selections. Tap a player
+        to view their complete award history.
       </p>
 
       <div
         style={{
-          border: "1px solid #263244",
+          border: BORDER,
           borderRadius: "12px",
           overflow: "hidden",
         }}
@@ -41,37 +159,47 @@ export default function CareerHonours({ careers }: Props) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) 42px 42px 42px 20px",
+            gridTemplateColumns:
+              "minmax(0, 1fr) 42px 42px 42px 20px",
             gap: "6px",
             padding: "12px",
             background: "#202833",
-            color: "#9da7b3",
+            color: MUTED,
             fontSize: "10px",
             fontWeight: "700",
           }}
         >
           <span>PLAYER</span>
-          <span style={{ textAlign: "center" }}>1ST</span>
-          <span style={{ textAlign: "center" }}>2ND</span>
-          <span style={{ textAlign: "center" }}>R</span>
+          <span style={{ textAlign: "center" }}>
+            1ST
+          </span>
+          <span style={{ textAlign: "center" }}>
+            2ND
+          </span>
+          <span style={{ textAlign: "center" }}>
+            R
+          </span>
           <span />
         </div>
 
         {visibleCareers.map((player, index) => {
-          const expanded = expandedPlayer === player.playerId;
+          const expanded =
+            expandedPlayer === player.playerId;
 
           return (
             <div
               key={player.playerId}
               style={{
-                borderTop: "1px solid #263244",
+                borderTop: BORDER,
               }}
             >
               <button
                 type="button"
                 onClick={() =>
                   setExpandedPlayer(
-                    expanded ? null : player.playerId
+                    expanded
+                      ? null
+                      : player.playerId
                   )
                 }
                 aria-expanded={expanded}
@@ -103,7 +231,7 @@ export default function CareerHonours({ careers }: Props) {
                   <span
                     style={{
                       fontSize: "11px",
-                      color: "#9da7b3",
+                      color: MUTED,
                       minWidth: "18px",
                     }}
                   >
@@ -124,7 +252,7 @@ export default function CareerHonours({ careers }: Props) {
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "#9da7b3",
+                        color: MUTED,
                         marginTop: "3px",
                       }}
                     >
@@ -133,22 +261,35 @@ export default function CareerHonours({ careers }: Props) {
                   </div>
                 </div>
 
-                <span style={{ textAlign: "center", fontWeight: "700" }}>
+                <span
+                  style={{
+                    textAlign: "center",
+                    fontWeight: "700",
+                  }}
+                >
                   {player.firstTeamSelections}
                 </span>
 
-                <span style={{ textAlign: "center" }}>
+                <span
+                  style={{
+                    textAlign: "center",
+                  }}
+                >
                   {player.secondTeamSelections}
                 </span>
 
-                <span style={{ textAlign: "center" }}>
+                <span
+                  style={{
+                    textAlign: "center",
+                  }}
+                >
                   {player.rookieTeamSelections}
                 </span>
 
                 <span
                   style={{
                     fontSize: "12px",
-                    color: "#9da7b3",
+                    color: MUTED,
                     textAlign: "center",
                   }}
                 >
@@ -161,7 +302,7 @@ export default function CareerHonours({ careers }: Props) {
                   style={{
                     padding: "14px",
                     background: "#151b23",
-                    borderTop: "1px solid #263244",
+                    borderTop: BORDER,
                   }}
                 >
                   <p
@@ -171,8 +312,10 @@ export default function CareerHonours({ careers }: Props) {
                       marginBottom: "12px",
                     }}
                   >
-                    {player.totalHonours} total honours ·{" "}
-                    {player.seasonsHonoured} seasons honoured
+                    {player.totalHonours} total
+                    honours ·{" "}
+                    {player.seasonsHonoured} seasons
+                    honoured
                   </p>
 
                   <div
@@ -183,17 +326,10 @@ export default function CareerHonours({ careers }: Props) {
                     }}
                   >
                     {player.awards.map((award) => (
-                      <span
+                      <AwardBadge
                         key={`${award.season}-${award.team}`}
-                        style={{
-                          padding: "7px 9px",
-                          background: "#263244",
-                          borderRadius: "7px",
-                          fontSize: "11px",
-                        }}
-                      >
-                        {award.season} · {award.team}
-                      </span>
+                        award={award}
+                      />
                     ))}
                   </div>
                 </div>
@@ -206,17 +342,21 @@ export default function CareerHonours({ careers }: Props) {
       {careers.length > 20 && (
         <button
           type="button"
-          onClick={() => setShowAll((previous) => !previous)}
+          onClick={() =>
+            setShowAll(
+              (previous) => !previous
+            )
+          }
           style={{
             display: "block",
             width: "100%",
             marginTop: "16px",
             padding: "14px",
-            border: "1px solid #263244",
+            border: BORDER,
             borderRadius: "10px",
             background: "#202833",
             color: "#ffffff",
-            fontWeight: "700",
+            fontWeight: 700,
             fontSize: "13px",
             cursor: "pointer",
           }}
@@ -228,7 +368,11 @@ export default function CareerHonours({ careers }: Props) {
       )}
 
       {careers.length === 0 && (
-        <p style={{ marginTop: "16px" }}>
+        <p
+          style={{
+            marginTop: "16px",
+          }}
+        >
           No completed-season honours found.
         </p>
       )}
