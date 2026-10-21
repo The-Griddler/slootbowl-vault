@@ -4,6 +4,11 @@ import type { AllSlootSeason } from "./allSloot";
 export type AllSlootCareerAward = {
   season: string;
   team: "First Team" | "Second Team" | "Rookie Team";
+
+  // Franchise credited with this honour.
+  // Uses the player's primary franchise
+  // during the award-winning season.
+  rosterId: number | null;
 };
 
 export type AllSlootCareerPlayer = {
@@ -74,9 +79,16 @@ export function calculateAllSlootCareers(
 
         if (alreadyAwarded) continue;
 
+        const rosterId =
+          typeof player.primaryRosterId === "number" &&
+          Number.isFinite(player.primaryRosterId)
+            ? player.primaryRosterId
+            : null;
+
         career.awards.push({
           season: season.season,
           team: team.name,
+          rosterId,
         });
 
         if (team.name === "First Team") {
