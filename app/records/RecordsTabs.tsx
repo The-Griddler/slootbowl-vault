@@ -62,6 +62,7 @@ type PlayerEntry = {
   over30: number;
   over40: number;
   franchisesRepresented: number;
+  playerOfTheWeekAwards: number;
   weeks: PlayerWeeklyPerformance[];
 };
 
@@ -871,6 +872,7 @@ function makePlayerEntry(
       w => w.points >= 40
     ).length,
     franchisesRepresented,
+    playerOfTheWeekAwards: 0,
     weeks: sorted,
   };
 }
@@ -1056,6 +1058,17 @@ function playerCategories(
         true,
         r => String(r.over40)
       ),
+      build(
+        "seasonPlayerOfTheWeek",
+        "Most Player of the Week Awards",
+        "The most Conference Player of the Week awards won by a player in one SFL season.",
+        r => r.playerOfTheWeekAwards,
+        "high",
+        "awards",
+        0,
+        true,
+        r => String(r.playerOfTheWeekAwards)
+      ),
     ];
   }
 
@@ -1129,6 +1142,17 @@ function playerCategories(
       0,
       true,
       r => String(r.over40)
+    ),
+    build(
+      "careerPlayerOfTheWeek",
+      "Most Player of the Week Awards",
+      "The most Conference Player of the Week awards accumulated across an SFL career.",
+      r => r.playerOfTheWeekAwards,
+      "high",
+      "awards",
+      0,
+      true,
+      r => String(r.playerOfTheWeekAwards)
     ),
   ];
 }
@@ -1448,6 +1472,77 @@ export default function RecordsTabs({
     period,
     playerRecords.players
   );
+
+  // --------------------------------------------------
+  // CONFERENCE PLAYER OF THE WEEK RECORD TOTALS
+  // --------------------------------------------------
+  //
+  // The official award totals come from
+  // lib/playerOfTheWeekRecords.ts.
+  //
+  // That helper reuses the same OBFC and GPFC
+  // weekly winners as the Weekly Recap and
+  // League Legacy systems.
+  //
+  // Only completed regular-season weeks count.
+  // No playoff weeks are included.
+  //
+  // For all-season season records, exclude
+  // incomplete seasons, matching the existing
+  // player season record behaviour.
+
+  if (
+    competition === "regularSeason" &&
+    period !== "games"
+  ) {
+    const awardRecords =
+      period === "season"
+        ? playerRecords.playerOfTheWeekRecords.season
+        : playerRecords.playerOfTheWeekRecords.career;
+
+    const awardsByPlayer = new Map<
+      string,
+      number
+    >();
+
+    for (const award of awardRecords) {
+      if (
+        period === "season" &&
+        selectedSeason === "all" &&
+        !completed.has(award.season)
+      ) {
+        continue;
+      }
+
+      if (
+        period === "season" &&
+        selectedSeason !== "all" &&
+        award.season !== selectedSeason
+      ) {
+        continue;
+      }
+
+      const key =
+        period === "season"
+          ? `${award.season}|${award.playerId}`
+          : award.playerId;
+
+      awardsByPlayer.set(
+        key,
+        award.awards
+      );
+    }
+
+    for (const entry of entries) {
+      const key =
+        period === "season"
+          ? `${entry.season}|${entry.playerId}`
+          : entry.playerId;
+
+      entry.playerOfTheWeekAwards =
+        awardsByPlayer.get(key) ?? 0;
+    }
+  }
 
   const championshipLeaders =
     championshipEntries(
@@ -1838,6 +1933,13 @@ export default function RecordsTabs({
               categories={playerCategories(
                 entries,
                 period
+              ).filter(
+                item =>
+                  competition === "regularSeason" ||
+                  (
+                    item.key !== "seasonPlayerOfTheWeek" &&
+                    item.key !== "careerPlayerOfTheWeek"
+                  )
               )}
               primaryLabel={r => r.name}
               detailLabel={r =>
