@@ -45,6 +45,19 @@ export type WeeklyRecapData = {
   recaps: WeeklyRecap[];
 };
 
+/**
+ * Conference Player of the Week results.
+ *
+ * This type is shared by the homepage
+ * and the League Legacy system.
+ */
+export type ConferencePlayerOfTheWeek = {
+  season: string;
+  week: number;
+  obfcPlayerOfTheWeek: WeeklyPlayerAward | null;
+  gpfcPlayerOfTheWeek: WeeklyPlayerAward | null;
+};
+
 function getConference(
   rosterId: number
 ): "OBFC" | "GPFC" | null {
@@ -100,6 +113,17 @@ function gameKey(
   ].join(":");
 }
 
+/**
+ * Existing Player of the Week calculation.
+ *
+ * The highest-scoring starter in each
+ * conference wins the award.
+ *
+ * Exact ties are resolved using the
+ * lowest player ID alphabetically.
+ *
+ * This logic is deliberately unchanged.
+ */
 function calculatePlayerAwards(
   games: HistoricalMatchup[],
   week: number
@@ -179,6 +203,132 @@ function calculatePlayerAwards(
 }
 
 /**
+ * Shared completed-week validation.
+ *
+ * A regular-season week qualifies only
+ * when all five games are completed and
+ * all ten franchises participate once.
+ *
+ * This preserves the homepage's
+ * existing eligibility requirements.
+ */
+function getCompletedRegularWeeks(
+  seasonData: HistoricalSeason
+): Map<number, HistoricalMatchup[]> {
+  const season = seasonData.league.season;
+
+  const gamesByWeek = new Map<
+    number,
+    HistoricalMatchup[]
+  >();
+
+  for (const game of seasonData.matchups) {
+    if (
+      !isCompletedRegularGame(game, season)
+    ) {
+      continue;
+    }
+
+    const existing =
+      gamesByWeek.get(game.week) ?? [];
+
+    existing.push(game);
+
+    gamesByWeek.set(
+      game.week,
+      existing
+    );
+  }
+
+  const completedWeeks = new Map<
+    number,
+    HistoricalMatchup[]
+  >();
+
+  for (const [week, games] of gamesByWeek) {
+    // Ten franchises play five games
+    // each regular-season week.
+    if (games.length !== 5) {
+      continue;
+    }
+
+    // Ensure each franchise appears once.
+    const participatingTeams = new Set(
+      games.flatMap(
+        (game) => [
+          game.rosterA,
+          game.rosterB,
+        ]
+      )
+    );
+
+    if (participatingTeams.size !== 10) {
+      continue;
+    }
+
+    completedWeeks.set(week, games);
+  }
+
+  return completedWeeks;
+}
+
+/**
+ * NEW: Reusable Conference Player
+ * of the Week calculation.
+ *
+ * This function can be used by the
+ * League Legacy system to retrieve
+ * historical OBFC and GPFC winners.
+ *
+ * It uses exactly the same player
+ * selection and completed-week rules
+ * as the homepage.
+ *
+ * No Greatest Games calculations are
+ * required when retrieving awards.
+ *
+ * Only completed regular-season
+ * weeks 1-14 are included.
+ */
+export function calculateConferencePlayerOfTheWeek(
+  historicalData: HistoricalSeason[],
+  season: string = RECAP_SEASON
+): ConferencePlayerOfTheWeek[] {
+  const currentSeason =
+    historicalData.find(
+      (item) => item.league.season === season
+    );
+
+  if (!currentSeason) {
+    return [];
+  }
+
+  const completedWeeks =
+    getCompletedRegularWeeks(currentSeason);
+
+  const results: ConferencePlayerOfTheWeek[] =
+    [];
+
+  for (const [week, games] of completedWeeks) {
+    const awards = calculatePlayerAwards(
+      games,
+      week
+    );
+
+    results.push({
+      season,
+      week,
+      obfcPlayerOfTheWeek: awards.OBFC,
+      gpfcPlayerOfTheWeek: awards.GPFC,
+    });
+  }
+
+  return results.sort(
+    (a, b) => a.week - b.week
+  );
+}
+
+/**
  * Builds the 2026 Weekly Recap archive.
  *
  * Uses the existing Greatest Games
@@ -187,6 +337,10 @@ function calculatePlayerAwards(
  *
  * A week is available only when all
  * five scheduled matchups are complete.
+ *
+ * Player of the Week selections now
+ * reuse the same shared calculation
+ * available to League Legacy.
  */
 export function calculateWeeklyRecaps(
   historicalData: HistoricalSeason[],
@@ -231,52 +385,12 @@ export function calculateWeeklyRecaps(
     );
   }
 
-  const gamesByWeek = new Map<
-    number,
-    HistoricalMatchup[]
-  >();
-
-  for (const game of currentSeason.matchups) {
-    if (
-      !isCompletedRegularGame(game, season)
-    ) {
-      continue;
-    }
-
-    const existing =
-      gamesByWeek.get(game.week) ?? [];
-
-    existing.push(game);
-
-    gamesByWeek.set(
-      game.week,
-      existing
-    );
-  }
+  const completedWeeks =
+    getCompletedRegularWeeks(currentSeason);
 
   const recaps: WeeklyRecap[] = [];
 
-  for (const [week, games] of gamesByWeek) {
-    // Ten franchises play five games
-    // each regular-season week.
-    if (games.length !== 5) {
-      continue;
-    }
-
-    // Ensure each franchise appears once.
-    const participatingTeams = new Set(
-      games.flatMap(
-        (game) => [
-          game.rosterA,
-          game.rosterB,
-        ]
-      )
-    );
-
-    if (participatingTeams.size !== 10) {
-      continue;
-    }
-
+  for (const [week, games] of completedWeeks) {
     const rankedGames: WeeklyRecapGame[] =
       [];
 
