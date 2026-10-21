@@ -784,21 +784,6 @@ function RecordWatchSection({
 
         <span
           style={{
-            display: "inline-flex",
-            color: "#facc15",
-            background: "#332b13",
-            border: "1px solid #5c4a19",
-            borderRadius: 99,
-            padding: "7px 11px",
-            fontSize: 10,
-            fontWeight: 800,
-          }}
-        >
-          TEST MODE · TOP {RECORD_WATCH_LIMIT}
-        </span>
-
-        <span
-          style={{
             color: MUTED,
             fontSize: 10,
             fontWeight: 700,
@@ -880,8 +865,6 @@ function RecordWatchSection({
         started QB, RB, WR and TE
         performances count. Season
         projections are estimates.
-        The expanded list is temporary
-        while we fine-tune selection.
       </p>
     </section>
   );
@@ -1234,4 +1217,3 @@ export default async function HomePage() {
     </main>
   );
 }
- 
