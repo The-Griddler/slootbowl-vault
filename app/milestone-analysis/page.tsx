@@ -6,6 +6,13 @@ import {
 
 type Position = "QB" | "RB" | "WR" | "TE";
 
+const RANKINGS: Record<Position, number[]> = {
+  QB: [1, 3, 6, 9, 12, 15, 18],
+  RB: [1, 3, 6, 12, 18, 24, 30, 36],
+  WR: [1, 3, 6, 12, 18, 24, 30, 36],
+  TE: [1, 3, 6, 9, 12, 15, 18],
+};
+
 const POSITIONS: Position[] = [
   "QB",
   "RB",
@@ -13,33 +20,8 @@ const POSITIONS: Position[] = [
   "TE",
 ];
 
-const EXISTING_THRESHOLDS: Record<
-  Position,
-  number[]
-> = {
-  QB: [400, 800, 1200, 1600, 2200],
-  RB: [250, 500, 750, 1000, 1400],
-  WR: [250, 500, 750, 1000, 1400],
-  TE: [175, 350, 525, 700, 1000],
-};
-
-const MIN_STRONG_SEASON_STARTS = 8;
-
-type SeasonTotal = {
-  playerId: string;
-  name: string;
-  position: Position;
+type SeasonScore = {
   season: string;
-  regularPoints: number;
-  playoffPoints: number;
-  totalPoints: number;
-  regularStarts: number;
-  playoffStarts: number;
-  totalStarts: number;
-  regularPointsPerStart: number;
-};
-
-type CareerTotal = {
   playerId: string;
   name: string;
   position: Position;
@@ -49,7 +31,22 @@ type CareerTotal = {
   regularStarts: number;
   playoffStarts: number;
   totalStarts: number;
+};
+
+type RankedSeason = SeasonScore & {
+  rank: number;
+};
+
+type RankingAverage = {
+  position: Position;
+  rank: number;
   seasons: number;
+  avgRegularPoints: number;
+  avgPlayoffPoints: number;
+  avgTotalPoints: number;
+  avgRegularStarts: number;
+  avgPlayoffStarts: number;
+  avgTotalStarts: number;
 };
 
 function isPosition(value: string): value is Position {
@@ -57,47 +54,42 @@ function isPosition(value: string): value is Position {
 }
 
 function round(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.round(
+    (value + Number.EPSILON) * 100
+  ) / 100;
 }
 
 function average(values: number[]): number {
   if (values.length === 0) return 0;
 
-  return (
-    values.reduce((sum, value) => sum + value, 0) /
-    values.length
-  );
-}
-
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-
-  return sorted.length % 2 === 1
-    ? sorted[middle]
-    : (sorted[middle - 1] + sorted[middle]) / 2;
+  return values.reduce(
+    (sum, value) => sum + value,
+    0
+  ) / values.length;
 }
 
 function format(value: number): string {
   return round(value).toLocaleString("en-AU", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function buildSeasonTotals(
-  performances: PlayerWeeklyPerformance[],
-  directory: Record<
+function buildSeasonScores(
+  weekly: PlayerWeeklyPerformance[],
+  players: Record<
     string,
     { name: string; position: string }
   >
-): SeasonTotal[] {
-  const totals = new Map<string, SeasonTotal>();
+): SeasonScore[] {
+  const map = new Map<string, SeasonScore>();
+
+  // Prevent duplicate records from counting
+  // the same player start twice.
   const seen = new Set<string>();
 
-  for (const performance of performances) {
-    const player = directory[performance.playerId];
+  for (const performance of weekly) {
+    const player = players[performance.playerId];
 
     if (
       !player ||
@@ -107,39 +99,40 @@ function buildSeasonTotals(
       continue;
     }
 
-    // One start per player, season and week.
-    const startKey = [
+    const uniqueKey = [
       performance.season,
       performance.week,
       performance.playerId,
     ].join("|");
 
-    if (seen.has(startKey)) continue;
-    seen.add(startKey);
+    if (seen.has(uniqueKey)) {
+      continue;
+    }
+
+    seen.add(uniqueKey);
 
     const key = [
       performance.season,
       performance.playerId,
     ].join("|");
 
-    let record = totals.get(key);
+    let record = map.get(key);
 
     if (!record) {
       record = {
+        season: performance.season,
         playerId: performance.playerId,
         name: player.name,
         position: player.position,
-        season: performance.season,
         regularPoints: 0,
         playoffPoints: 0,
         totalPoints: 0,
         regularStarts: 0,
         playoffStarts: 0,
         totalStarts: 0,
-        regularPointsPerStart: 0,
       };
 
-      totals.set(key, record);
+      map.set(key, record);
     }
 
     if (performance.phase === "Regular Season") {
@@ -156,71 +149,125 @@ function buildSeasonTotals(
     record.totalStarts++;
   }
 
-  return [...totals.values()].map((record) => ({
+  return [...map.values()].map((record) => ({
     ...record,
     regularPoints: round(record.regularPoints),
     playoffPoints: round(record.playoffPoints),
     totalPoints: round(record.totalPoints),
-    regularPointsPerStart:
-      record.regularStarts > 0
-        ? round(
-            record.regularPoints /
-              record.regularStarts
-          )
-        : 0,
   }));
 }
 
-function buildCareerTotals(
-  seasons: SeasonTotal[]
-): CareerTotal[] {
-  const careers = new Map<string, CareerTotal>();
+function rankSeasons(
+  seasonScores: SeasonScore[]
+): RankedSeason[] {
+  const groups = new Map<string, SeasonScore[]>();
 
-  for (const season of seasons) {
-    let career = careers.get(season.playerId);
+  for (const score of seasonScores) {
+    const key = [
+      score.season,
+      score.position,
+    ].join("|");
 
-    if (!career) {
-      career = {
-        playerId: season.playerId,
-        name: season.name,
-        position: season.position,
-        regularPoints: 0,
-        playoffPoints: 0,
-        totalPoints: 0,
-        regularStarts: 0,
-        playoffStarts: 0,
-        totalStarts: 0,
-        seasons: 0,
-      };
-
-      careers.set(season.playerId, career);
-    }
-
-    career.regularPoints += season.regularPoints;
-    career.playoffPoints += season.playoffPoints;
-    career.totalPoints += season.totalPoints;
-    career.regularStarts += season.regularStarts;
-    career.playoffStarts += season.playoffStarts;
-    career.totalStarts += season.totalStarts;
-    career.seasons++;
+    const group = groups.get(key) ?? [];
+    group.push(score);
+    groups.set(key, group);
   }
 
-  return [...careers.values()]
-    .map((career) => ({
-      ...career,
-      regularPoints: round(career.regularPoints),
-      playoffPoints: round(career.playoffPoints),
-      totalPoints: round(career.totalPoints),
-    }))
-    .sort(
-      (a, b) => b.totalPoints - a.totalPoints
+  const ranked: RankedSeason[] = [];
+
+  for (const group of groups.values()) {
+    // Rank players using regular-season points.
+    // Playoff points are included in their totals,
+    // but do not change their positional ranking.
+    const sorted = [...group].sort(
+      (a, b) =>
+        b.regularPoints - a.regularPoints ||
+        b.regularStarts - a.regularStarts ||
+        a.playerId.localeCompare(b.playerId)
     );
+
+    sorted.forEach((score, index) => {
+      ranked.push({
+        ...score,
+        rank: index + 1,
+      });
+    });
+  }
+
+  return ranked;
+}
+
+function buildRankingAverages(
+  ranked: RankedSeason[]
+): RankingAverage[] {
+  const result: RankingAverage[] = [];
+
+  for (const position of POSITIONS) {
+    for (const rank of RANKINGS[position]) {
+      const matching = ranked.filter(
+        (record) =>
+          record.position === position &&
+          record.rank === rank
+      );
+
+      result.push({
+        position,
+        rank,
+        seasons: matching.length,
+        avgRegularPoints: round(
+          average(
+            matching.map(
+              (record) => record.regularPoints
+            )
+          )
+        ),
+        avgPlayoffPoints: round(
+          average(
+            matching.map(
+              (record) => record.playoffPoints
+            )
+          )
+        ),
+        avgTotalPoints: round(
+          average(
+            matching.map(
+              (record) => record.totalPoints
+            )
+          )
+        ),
+        avgRegularStarts: round(
+          average(
+            matching.map(
+              (record) => record.regularStarts
+            )
+          )
+        ),
+        avgPlayoffStarts: round(
+          average(
+            matching.map(
+              (record) => record.playoffStarts
+            )
+          )
+        ),
+        avgTotalStarts: round(
+          average(
+            matching.map(
+              (record) => record.totalStarts
+            )
+          )
+        ),
+      });
+    }
+  }
+
+  return result;
 }
 
 const cellStyle: React.CSSProperties = {
-  padding: "10px",
+  padding: "10px 12px",
   borderBottom: "1px solid #334155",
   textAlign: "left",
+  whiteSpace: "nowrap",
 };
 
 const tableStyle: React.CSSProperties = {
@@ -240,184 +287,52 @@ export default async function MilestoneAnalysisPage() {
     records.completedSeasons.mainPlayoffs
   );
 
-  // Include regular-season scoring only when the
-  // regular season has been completed.
   const regularWeekly =
     records.competitions.regularSeason.weekly.filter(
-      (performance) =>
-        completedRegular.has(performance.season) &&
-        performance.week >= 1 &&
-        performance.week <= 14
+      (record) =>
+        completedRegular.has(record.season) &&
+        record.week >= 1 &&
+        record.week <= 14
     );
 
-  // Only winners-bracket playoff performances
-  // already classified as "Main Playoffs"
-  // by sleeper.ts are eligible.
   const playoffWeekly =
     records.competitions.mainPlayoffs.weekly.filter(
-      (performance) =>
-        completedPlayoffs.has(performance.season) &&
-        performance.week >= 15 &&
-        performance.week <= 17
+      (record) =>
+        completedRegular.has(record.season) &&
+        completedPlayoffs.has(record.season) &&
+        record.week >= 15 &&
+        record.week <= 17
     );
 
-  const performances = [
+  const seasonScores = buildSeasonScores([
     ...regularWeekly,
     ...playoffWeekly,
-  ];
+  ], records.players);
 
-  const seasonTotals = buildSeasonTotals(
-    performances,
-    records.players
-  );
+  const ranked = rankSeasons(seasonScores);
 
-  const careerTotals = buildCareerTotals(
-    seasonTotals
-  );
-
-  const strongSeasonIds = new Set<string>();
-
-  const summary = POSITIONS.map((position) => {
-    const allSeasons = seasonTotals.filter(
-      (season) => season.position === position
-    );
-
-    const qualifyingSeasons = allSeasons.filter(
-      (season) =>
-        season.regularStarts >=
-        MIN_STRONG_SEASON_STARTS
-    );
-
-    // Rank by regular-season production so playoff
-    // opportunities do not determine who qualifies
-    // as a strong seasonal performer.
-    const strongSeasons = qualifyingSeasons.filter(
-      (season) => {
-        const sameYear = allSeasons
-          .filter(
-            (candidate) =>
-              candidate.season === season.season
-          )
-          .sort(
-            (a, b) =>
-              b.regularPoints - a.regularPoints
-          );
-
-        const rank =
-          sameYear.findIndex(
-            (candidate) =>
-              candidate.playerId === season.playerId
-          ) + 1;
-
-        const limit =
-          position === "QB" || position === "TE"
-            ? 6
-            : 12;
-
-        const qualifies =
-          rank > 0 && rank <= limit;
-
-        if (qualifies) {
-          strongSeasonIds.add(
-            `${season.season}|${season.playerId}`
-          );
-        }
-
-        return qualifies;
-      }
-    );
-
-    const positionCareers = careerTotals.filter(
-      (career) => career.position === position
-    );
-
-    const medianStrongSeason = median(
-      strongSeasons.map(
-        (season) => season.totalPoints
-      )
-    );
-
-    return {
-      position,
-      strongSeasons: strongSeasons.length,
-      averageRegularPPG: round(
-        average(
-          strongSeasons.map(
-            (season) =>
-              season.regularPointsPerStart
-          )
-        )
-      ),
-      averageRegularPoints: round(
-        average(
-          strongSeasons.map(
-            (season) => season.regularPoints
-          )
-        )
-      ),
-      averagePlayoffPoints: round(
-        average(
-          strongSeasons.map(
-            (season) => season.playoffPoints
-          )
-        )
-      ),
-      averageTotalPoints: round(
-        average(
-          strongSeasons.map(
-            (season) => season.totalPoints
-          )
-        )
-      ),
-      medianTotalPoints: round(
-        medianStrongSeason
-      ),
-      tenSeasonTarget: round(
-        medianStrongSeason * 10
-      ),
-      currentTier5:
-        EXISTING_THRESHOLDS[position][4],
-      milestoneCounts:
-        EXISTING_THRESHOLDS[position].map(
-          (threshold) =>
-            positionCareers.filter(
-              (career) =>
-                career.totalPoints >= threshold
-            ).length
-        ),
-    };
-  });
-
-  const strongSeasons = seasonTotals.filter(
-    (season) =>
-      strongSeasonIds.has(
-        `${season.season}|${season.playerId}`
-      )
-  );
+  const averages = buildRankingAverages(ranked);
 
   const exportData = {
     description:
-      "SFL career milestone analysis including eligible playoff points",
+      "Average SFL season scores by positional rank",
+    rankingMethod:
+      "Players ranked by regular-season fantasy points",
+    scoringMethod:
+      "Regular season plus eligible Main Playoffs",
     completedRegularSeasons: [
       ...completedRegular,
     ].sort(),
     completedPlayoffSeasons: [
       ...completedPlayoffs,
     ].sort(),
-    rules: {
-      regularSeasonWeeks: "1-14",
-      playoffWeeks: "15-17",
-      eligiblePlayoffs:
-        "Main Playoffs only, as classified by sleeper.ts",
-      excluded:
-        "Toilet Bowl, placement games and bench performances",
-      strongSeasonDefinition:
-        "At least 8 regular-season starts; top 6 QB/TE or top 12 RB/WR by regular-season points",
-    },
-    summary,
-    topCareers: careerTotals.slice(0, 50),
-    allCareers: careerTotals,
-    strongSeasons,
+    rankings: averages,
+    individualSeasons: ranked.sort(
+      (a, b) =>
+        Number(a.season) - Number(b.season) ||
+        a.position.localeCompare(b.position) ||
+        a.rank - b.rank
+    ),
   };
 
   return (
@@ -435,7 +350,7 @@ export default async function MilestoneAnalysisPage() {
           fontWeight: 800,
         }}
       >
-        SFL Milestone Analysis
+        SFL Positional Scoring Analysis
       </h1>
 
       <p
@@ -445,266 +360,161 @@ export default async function MilestoneAnalysisPage() {
           marginBottom: "28px",
         }}
       >
-        Career scoring includes regular-season and
-        eligible winners-bracket playoff starts.
-        Toilet Bowl and placement games are excluded.
+        Historical average fantasy points by positional
+        season ranking. Rankings use regular-season
+        points; scoring totals include eligible
+        winners-bracket playoff performances.
       </p>
 
-      <h2
-        style={{
-          fontSize: "20px",
-          fontWeight: 700,
-        }}
-      >
-        Positional Scoring Summary
-      </h2>
+      {POSITIONS.map((position) => {
+        const positionAverages = averages.filter(
+          (item) => item.position === position
+        );
 
-      <div
-        style={{
-          overflowX: "auto",
-          marginTop: "16px",
-          marginBottom: "36px",
-        }}
-      >
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              {[
-                "Position",
-                "Strong Seasons",
-                "Avg Reg PPG",
-                "Avg Reg Pts",
-                "Avg Playoff Pts",
-                "Avg Total",
-                "Median Total",
-                "10-Season Target",
-              ].map((heading) => (
-                <th
-                  key={heading}
-                  style={cellStyle}
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
+        return (
+          <section
+            key={position}
+            style={{
+              marginBottom: "40px",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "21px",
+                fontWeight: 800,
+                marginBottom: "14px",
+              }}
+            >
+              {position} Season Rankings
+            </h2>
 
-          <tbody>
-            {summary.map((item) => (
-              <tr key={item.position}>
-                <td style={cellStyle}>
-                  {item.position}
-                </td>
-                <td style={cellStyle}>
-                  {item.strongSeasons}
-                </td>
-                <td style={cellStyle}>
-                  {format(item.averageRegularPPG)}
-                </td>
-                <td style={cellStyle}>
-                  {format(item.averageRegularPoints)}
-                </td>
-                <td style={cellStyle}>
-                  {format(item.averagePlayoffPoints)}
-                </td>
-                <td style={cellStyle}>
-                  {format(item.averageTotalPoints)}
-                </td>
-                <td style={cellStyle}>
-                  {format(item.medianTotalPoints)}
-                </td>
-                <td style={cellStyle}>
-                  <strong>
-                    {format(item.tenSeasonTarget)}
-                  </strong>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            <div
+              style={{
+                overflowX: "auto",
+                border: "1px solid #334155",
+                borderRadius: "10px",
+              }}
+            >
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    {[
+                      "Rank",
+                      "Seasons",
+                      "Avg Reg Pts",
+                      "Avg Playoff Pts",
+                      "Avg Total Pts",
+                      "Avg Reg Starts",
+                      "Avg Playoff Starts",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        style={{
+                          ...cellStyle,
+                          background: "#1e293b",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
 
-      <h2
-        style={{
-          fontSize: "20px",
-          fontWeight: 700,
-        }}
-      >
-        Existing Milestone Achievement
-      </h2>
+                <tbody>
+                  {positionAverages.map((item) => (
+                    <tr key={item.rank}>
+                      <td style={cellStyle}>
+                        <strong>
+                          {position}
+                          {item.rank}
+                        </strong>
+                      </td>
 
-      <div
-        style={{
-          overflowX: "auto",
-          marginTop: "16px",
-          marginBottom: "36px",
-        }}
-      >
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              {[
-                "Position",
-                "Tier 1",
-                "Tier 2",
-                "Tier 3",
-                "Tier 4",
-                "Tier 5",
-              ].map((heading) => (
-                <th
-                  key={heading}
-                  style={cellStyle}
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
+                      <td style={cellStyle}>
+                        {item.seasons}
+                      </td>
 
-          <tbody>
-            {summary.map((item) => (
-              <tr key={item.position}>
-                <td style={cellStyle}>
-                  {item.position}
-                </td>
+                      <td style={cellStyle}>
+                        {format(item.avgRegularPoints)}
+                      </td>
 
-                {item.milestoneCounts.map(
-                  (count, index) => (
-                    <td
-                      key={index}
-                      style={cellStyle}
-                    >
-                      {count}
-                    </td>
-                  )
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                      <td style={cellStyle}>
+                        {format(item.avgPlayoffPoints)}
+                      </td>
 
-      <h2
-        style={{
-          fontSize: "20px",
-          fontWeight: 700,
-        }}
-      >
-        Top 30 SFL Scoring Careers
-      </h2>
+                      <td style={cellStyle}>
+                        <strong>
+                          {format(item.avgTotalPoints)}
+                        </strong>
+                      </td>
 
-      <div
-        style={{
-          overflowX: "auto",
-          marginTop: "16px",
-          marginBottom: "36px",
-        }}
-      >
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              {[
-                "Player",
-                "Pos",
-                "Regular Pts",
-                "Playoff Pts",
-                "Career Total",
-                "Starts",
-                "Seasons",
-              ].map((heading) => (
-                <th
-                  key={heading}
-                  style={cellStyle}
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
+                      <td style={cellStyle}>
+                        {format(item.avgRegularStarts)}
+                      </td>
 
-          <tbody>
-            {careerTotals
-              .slice(0, 30)
-              .map((career) => (
-                <tr key={career.playerId}>
-                  <td style={cellStyle}>
-                    {career.name}
-                  </td>
-                  <td style={cellStyle}>
-                    {career.position}
-                  </td>
-                  <td style={cellStyle}>
-                    {format(career.regularPoints)}
-                  </td>
-                  <td style={cellStyle}>
-                    {format(career.playoffPoints)}
-                  </td>
-                  <td style={cellStyle}>
-                    <strong>
-                      {format(career.totalPoints)}
-                    </strong>
-                  </td>
-                  <td style={cellStyle}>
-                    {career.totalStarts}
-                  </td>
-                  <td style={cellStyle}>
-                    {career.seasons}
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
+                      <td style={cellStyle}>
+                        {format(item.avgPlayoffStarts)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })}
 
-      <h2
-        style={{
-          fontSize: "20px",
-          fontWeight: 700,
-        }}
-      >
-        Export Analysis Data
-      </h2>
-
-      <p
-        style={{
-          color: "#94a3b8",
-          marginTop: "8px",
-          marginBottom: "12px",
-        }}
-      >
-        Expand the JSON below and send its contents
-        to ChatGPT. It includes career totals,
-        positional averages and strong-season
-        performances.
-      </p>
-
-      <details>
-        <summary
+      <section>
+        <h2
           style={{
-            cursor: "pointer",
-            fontWeight: 700,
+            fontSize: "20px",
+            fontWeight: 800,
             marginBottom: "12px",
           }}
         >
-          Show JSON export
-        </summary>
+          Export Analysis Data
+        </h2>
 
-        <pre
+        <p
           style={{
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
-            fontSize: "11px",
-            padding: "16px",
-            border: "1px solid #334155",
-            borderRadius: "10px",
-            background: "#0f172a",
-            maxHeight: "500px",
-            overflowY: "auto",
+            color: "#94a3b8",
+            marginBottom: "12px",
           }}
         >
-          {JSON.stringify(exportData, null, 2)}
-        </pre>
-      </details>
+          Copy the JSON below and send it to ChatGPT.
+          It includes the averages and the individual
+          season results behind them.
+        </p>
+
+        <details>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontWeight: 700,
+              marginBottom: "12px",
+            }}
+          >
+            Show JSON export
+          </summary>
+
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+              fontSize: "11px",
+              padding: "16px",
+              border: "1px solid #334155",
+              borderRadius: "10px",
+              background: "#0f172a",
+              maxHeight: "500px",
+              overflowY: "auto",
+            }}
+          >
+            {JSON.stringify(exportData, null, 2)}
+          </pre>
+        </details>
+      </section>
     </main>
   );
 }
