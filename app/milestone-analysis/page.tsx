@@ -1,4 +1,6 @@
 
+import type { CSSProperties, ReactNode } from "react";
+
 import { getPlayerRecords } from "../../lib/playerRecords";
 
 import {
@@ -33,28 +35,61 @@ const POSITIONS: Position[] = [
   "TE",
 ];
 
+// Proposed 15-tier career scoring thresholds.
+// Career points include eligible regular-season
+// and main-playoff starter performances.
 const PROPOSED_THRESHOLDS: Record<
   Position,
-  number
+  number[]
 > = {
-  QB: 325,
-  RB: 275,
-  WR: 260,
-  TE: 230,
+  QB: [
+    110, 215, 325, 490, 650,
+    815, 975, 1140, 1300, 1625,
+    1950, 2275, 2600, 2925, 3250,
+  ],
+  RB: [
+    90, 185, 275, 415, 550,
+    690, 825, 965, 1100, 1375,
+    1650, 1925, 2200, 2475, 2750,
+  ],
+  WR: [
+    85, 175, 260, 390, 520,
+    650, 780, 910, 1040, 1300,
+    1560, 1820, 2080, 2340, 2600,
+  ],
+  TE: [
+    75, 155, 230, 345, 460,
+    575, 690, 805, 920, 1150,
+    1380, 1610, 1840, 2070, 2300,
+  ],
 };
 
+// Progressive early rewards, plateauing at
+// 275 LP per milestone from Tier 10 onwards.
+// Total possible milestone LP = 3,000.
 const PROPOSED_BONUSES = [
-  100,
-  150,
-  200,
-  250,
-  300,
-  350,
-  350,
-  350,
-  350,
-  350,
-];
+  50, 75, 100, 125, 150,
+  175, 200, 225, 250, 275,
+  275, 275, 275, 275, 275,
+] as const;
+
+const MAX_TIERS = PROPOSED_BONUSES.length;
+
+const MAX_MILESTONE_POINTS =
+  PROPOSED_BONUSES.reduce(
+    (sum, bonus) => sum + bonus,
+    0
+  );
+
+const BORDER = "1px solid #263244";
+const MUTED = "#9da7b3";
+
+type Records = Awaited<
+  ReturnType<typeof getPlayerRecords>
+>;
+
+type WeeklyPerformance =
+  Records["competitions"]["regularSeason"]["weekly"][number];
 
 type CareerProduction = {
   regularPoints: number;
@@ -67,28 +102,36 @@ type Comparison = {
   playerId: string;
   name: string;
   position: string;
+
   oldRank: number;
   newRank: number;
   rankChange: number;
+
   oldTotal: number;
   newTotal: number;
   gained: number;
+
   oldMilestones: number;
   newMilestones: number;
   tier: number;
+
   regularPoints: number;
   playoffPoints: number;
   careerPoints: number;
+
   regularStarts: number;
   playoffStarts: number;
+
   seasonalGradePoints: number;
   allSlootHonoursPoints: number;
   playoffLegacyPoints: number;
   weeklyAwardPoints: number;
 };
 
-const BORDER = "1px solid #263244";
-const MUTED = "#9da7b3";
+const cellStyle: CSSProperties = {
+  padding: "11px 10px",
+  borderBottom: BORDER,
+};
 
 function format(value: number): string {
   return value.toLocaleString("en-AU", {
@@ -99,41 +142,60 @@ function format(value: number): string {
 function isPosition(
   value: string | undefined | null
 ): value is Position {
-  return POSITIONS.includes(value as Position);
+  return POSITIONS.includes(
+    value as Position
+  );
 }
 
 function calculateProposedMilestones(
   position: string,
   careerPoints: number
-) {
+): {
+  tier: number;
+  points: number;
+} {
   if (!isPosition(position)) {
-    return { tier: 0, points: 0 };
+    return {
+      tier: 0,
+      points: 0,
+    };
   }
 
-  const benchmark =
+  const thresholds =
     PROPOSED_THRESHOLDS[position];
 
-  const tier = Math.min(
-    10,
-    Math.max(
-      0,
-      Math.floor(
-        (careerPoints + 0.000001) / benchmark
-      )
-    )
-  );
+  const tier = thresholds.filter(
+    (threshold) =>
+      careerPoints + 0.000001 >= threshold
+  ).length;
 
   const points = PROPOSED_BONUSES
     .slice(0, tier)
-    .reduce((sum, bonus) => sum + bonus, 0);
+    .reduce(
+      (sum, bonus) => sum + bonus,
+      0
+    );
 
-  return { tier, points };
+  return {
+    tier,
+    points,
+  };
 }
 
+/**
+ * Calculate historical career production
+ * from completed SFL seasons.
+ *
+ * Only started players count.
+ *
+ * Regular season: Weeks 1-14.
+ * Main playoffs: Weeks 15-17.
+ *
+ * Toilet Bowl and placement games are
+ * excluded by the existing records data.
+ */
 function buildCareerProduction(
-  records: Awaited<
-    ReturnType<typeof getPlayerRecords>
-  >,
+  records: Records,
   completedThroughSeason: number
 ): Map<string, CareerProduction> {
   const results = new Map<
@@ -155,16 +217,16 @@ function buildCareerProduction(
     )
   );
 
-  // Protect against duplicate player-week entries.
+  // Prevent duplicate player-week entries.
   const seen = new Set<string>();
 
-  function add(
-    entries: typeof records.competitions.regularSeason.weekly,
+  function addPerformances(
+    entries: WeeklyPerformance[],
     phase: "regular" | "playoff",
-    completedSeasons: Set<string>
+    eligibleSeasons: Set<string>
   ) {
     for (const entry of entries) {
-      if (!completedSeasons.has(entry.season)) {
+      if (!eligibleSeasons.has(entry.season)) {
         continue;
       }
 
@@ -182,6 +244,10 @@ function buildCareerProduction(
         continue;
       }
 
+      if (!Number.isFinite(entry.points)) {
+        continue;
+      }
+
       const key = [
         entry.playerId,
         entry.season,
@@ -189,7 +255,10 @@ function buildCareerProduction(
         phase,
       ].join(":");
 
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
+
       seen.add(key);
 
       const existing = results.get(
@@ -209,17 +278,20 @@ function buildCareerProduction(
         existing.playoffStarts += 1;
       }
 
-      results.set(entry.playerId, existing);
+      results.set(
+        entry.playerId,
+        existing
+      );
     }
   }
 
-  add(
+  addPerformances(
     records.competitions.regularSeason.weekly,
     "regular",
     completedRegularSeasons
   );
 
-  add(
+  addPerformances(
     records.competitions.mainPlayoffs.weekly,
     "playoff",
     completedPlayoffSeasons
@@ -228,6 +300,12 @@ function buildCareerProduction(
   return results;
 }
 
+/**
+ * Recalculate milestone points only.
+ *
+ * All other categories retain their
+ * official Legacy Score values.
+ */
 function comparePlayers(
   scores: LegacyScore[],
   production: Map<string, CareerProduction>
@@ -248,38 +326,41 @@ function comparePlayers(
     ])
   );
 
-  const preliminary = scores.map((player) => {
-    const career = production.get(
-      player.playerId
-    ) ?? {
-      regularPoints: 0,
-      playoffPoints: 0,
-      regularStarts: 0,
-      playoffStarts: 0,
-    };
+  const preliminary = scores.map(
+    (player) => {
+      const career = production.get(
+        player.playerId
+      ) ?? {
+        regularPoints: 0,
+        playoffPoints: 0,
+        regularStarts: 0,
+        playoffStarts: 0,
+      };
 
-    const careerPoints =
-      career.regularPoints +
-      career.playoffPoints;
+      const careerPoints =
+        career.regularPoints +
+        career.playoffPoints;
 
-    const proposed = calculateProposedMilestones(
-      player.position,
-      careerPoints
-    );
+      const proposed =
+        calculateProposedMilestones(
+          player.position,
+          careerPoints
+        );
 
-    const newTotal =
-      player.totalLegacyPoints -
-      player.careerMilestonePoints +
-      proposed.points;
+      const newTotal =
+        player.totalLegacyPoints -
+        player.careerMilestonePoints +
+        proposed.points;
 
-    return {
-      player,
-      career,
-      careerPoints,
-      proposed,
-      newTotal,
-    };
-  });
+      return {
+        player,
+        career,
+        careerPoints,
+        proposed,
+        newTotal,
+      };
+    }
+  );
 
   preliminary.sort(
     (a, b) =>
@@ -289,68 +370,74 @@ function comparePlayers(
       a.player.name.localeCompare(b.player.name)
   );
 
-  return preliminary.map((item, index) => {
-    const player = item.player;
+  return preliminary.map(
+    (item, index): Comparison => {
+      const player = item.player;
 
-    const oldRank =
-      oldRanks.get(player.playerId) ?? 0;
+      const oldRank =
+        oldRanks.get(player.playerId) ?? 0;
 
-    const newRank = index + 1;
+      const newRank = index + 1;
 
-    return {
-      playerId: player.playerId,
-      name: player.name,
-      position: player.position,
-      oldRank,
-      newRank,
-      rankChange: oldRank - newRank,
+      return {
+        playerId: player.playerId,
+        name: player.name,
+        position: player.position,
 
-      oldTotal: player.totalLegacyPoints,
-      newTotal: item.newTotal,
+        oldRank,
+        newRank,
+        rankChange: oldRank - newRank,
 
-      gained:
-        item.proposed.points -
-        player.careerMilestonePoints,
+        oldTotal: player.totalLegacyPoints,
+        newTotal: item.newTotal,
 
-      oldMilestones:
-        player.careerMilestonePoints,
+        gained:
+          item.proposed.points -
+          player.careerMilestonePoints,
 
-      newMilestones: item.proposed.points,
-      tier: item.proposed.tier,
+        oldMilestones:
+          player.careerMilestonePoints,
 
-      regularPoints:
-        item.career.regularPoints,
+        newMilestones:
+          item.proposed.points,
 
-      playoffPoints:
-        item.career.playoffPoints,
+        tier: item.proposed.tier,
 
-      careerPoints: item.careerPoints,
+        regularPoints:
+          item.career.regularPoints,
 
-      regularStarts:
-        item.career.regularStarts,
+        playoffPoints:
+          item.career.playoffPoints,
 
-      playoffStarts:
-        item.career.playoffStarts,
+        careerPoints:
+          item.careerPoints,
 
-      seasonalGradePoints:
-        player.seasonalGradePoints,
+        regularStarts:
+          item.career.regularStarts,
 
-      allSlootHonoursPoints:
-        player.allSlootHonoursPoints,
+        playoffStarts:
+          item.career.playoffStarts,
 
-      playoffLegacyPoints:
-        player.playoffLegacyPoints,
+        seasonalGradePoints:
+          player.seasonalGradePoints,
 
-      weeklyAwardPoints:
-        player.weeklyAwardPoints,
-    };
-  });
+        allSlootHonoursPoints:
+          player.allSlootHonoursPoints,
+
+        playoffLegacyPoints:
+          player.playoffLegacyPoints,
+
+        weeklyAwardPoints:
+          player.weeklyAwardPoints,
+      };
+    }
+  );
 }
 
 function SectionTitle({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <h2
@@ -366,12 +453,60 @@ function SectionTitle({
   );
 }
 
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: "16px",
+        background: "#202833",
+        border: BORDER,
+        borderRadius: "10px",
+      }}
+    >
+      <div
+        style={{
+          color: MUTED,
+          fontSize: "11px",
+          marginBottom: "7px",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          fontSize: "24px",
+          fontWeight: 800,
+        }}
+      >
+        {value}
+      </div>
+
+      <div
+        style={{
+          color: MUTED,
+          fontSize: "11px",
+          marginTop: "6px",
+        }}
+      >
+        {detail}
+      </div>
+    </div>
+  );
+}
+
 function RankingTable({
   players,
-  mode,
 }: {
   players: Comparison[];
-  mode: "ranking" | "movement";
 }) {
   return (
     <div
@@ -498,7 +633,7 @@ function RankingTable({
                 </td>
 
                 <td style={cellStyle}>
-                  {player.tier}/10
+                  {player.tier}/{MAX_TIERS}
                 </td>
               </tr>
             );
@@ -520,68 +655,142 @@ function RankingTable({
   );
 }
 
-const cellStyle: React.CSSProperties = {
-  padding: "11px 10px",
-  borderBottom: BORDER,
-};
-
-function SummaryCard({
-  label,
-  value,
-  detail,
+function CareerTable({
+  players,
 }: {
-  label: string;
-  value: string;
-  detail: string;
+  players: Comparison[];
 }) {
   return (
     <div
       style={{
-        padding: "16px",
-        background: "#202833",
+        overflowX: "auto",
         border: BORDER,
         borderRadius: "10px",
       }}
     >
-      <div
+      <table
         style={{
-          color: MUTED,
-          fontSize: "11px",
-          marginBottom: "7px",
+          width: "100%",
+          borderCollapse: "collapse",
+          fontSize: "12px",
+          whiteSpace: "nowrap",
         }}
       >
-        {label}
-      </div>
+        <thead>
+          <tr
+            style={{
+              background: "#202833",
+              color: MUTED,
+              textAlign: "left",
+            }}
+          >
+            {[
+              "Player",
+              "Pos",
+              "Regular Pts",
+              "Playoff Pts",
+              "Career Pts",
+              "Reg Starts",
+              "Playoff Starts",
+              "Tier",
+              "Old Milestone LP",
+              "New Milestone LP",
+            ].map((heading) => (
+              <th
+                key={heading}
+                style={{
+                  padding: "12px 10px",
+                  borderBottom: BORDER,
+                }}
+              >
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
 
-      <div
-        style={{
-          fontSize: "24px",
-          fontWeight: 800,
-        }}
-      >
-        {value}
-      </div>
+        <tbody>
+          {[...players]
+            .sort(
+              (a, b) =>
+                b.careerPoints -
+                  a.careerPoints ||
+                a.name.localeCompare(b.name)
+            )
+            .map((player) => (
+              <tr key={player.playerId}>
+                <td style={cellStyle}>
+                  {player.name}
+                </td>
 
-      <div
-        style={{
-          color: MUTED,
-          fontSize: "11px",
-          marginTop: "6px",
-        }}
-      >
-        {detail}
-      </div>
+                <td style={cellStyle}>
+                  {player.position}
+                </td>
+
+                <td style={cellStyle}>
+                  {format(
+                    player.regularPoints
+                  )}
+                </td>
+
+                <td style={cellStyle}>
+                  {format(
+                    player.playoffPoints
+                  )}
+                </td>
+
+                <td
+                  style={{
+                    ...cellStyle,
+                    fontWeight: 700,
+                  }}
+                >
+                  {format(
+                    player.careerPoints
+                  )}
+                </td>
+
+                <td style={cellStyle}>
+                  {player.regularStarts}
+                </td>
+
+                <td style={cellStyle}>
+                  {player.playoffStarts}
+                </td>
+
+                <td style={cellStyle}>
+                  {player.tier}/{MAX_TIERS}
+                </td>
+
+                <td style={cellStyle}>
+                  {format(
+                    player.oldMilestones
+                  )}
+                </td>
+
+                <td style={cellStyle}>
+                  {format(
+                    player.newMilestones
+                  )}
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 export default async function MilestoneAnalysisPage() {
-  const [records, players, historicalData] =
-    await Promise.all([
-      getPlayerRecords(),
-      getPlayers(),
-      getHistoricalData(),
-    ]);
+  const [
+    records,
+    players,
+    historicalData,
+  ] = await Promise.all([
+    getPlayerRecords(),
+    getPlayers(),
+    getHistoricalData(),
+  ]);
 
   const currentYear =
     new Date().getUTCFullYear();
@@ -589,22 +798,31 @@ export default async function MilestoneAnalysisPage() {
   const completedThroughSeason =
     currentYear - 1;
 
+  // Build the same player directory
+  // used by the official Legacy page.
   const directory = Object.fromEntries(
-    Object.entries(players).map(([id, player]) => [
-      id,
-      {
-        name: getPlayerName(player),
-        position: player.position,
-        rookieYear:
-          typeof player.years_exp === "number" &&
-          Number.isFinite(player.years_exp) &&
-          player.years_exp >= 0
-            ? currentYear - player.years_exp
-            : null,
-      },
-    ])
+    Object.entries(players).map(
+      ([id, player]) => [
+        id,
+        {
+          name: getPlayerName(player),
+          position: player.position,
+          rookieYear:
+            typeof player.years_exp === "number" &&
+            Number.isFinite(
+              player.years_exp
+            ) &&
+            player.years_exp >= 0
+              ? currentYear -
+                player.years_exp
+              : null,
+        },
+      ]
+    )
   );
 
+  // Use the same completed-season cutoff
+  // as the official Legacy leaderboard.
   const completedSeasons =
     historicalData.filter(
       (season) =>
@@ -612,9 +830,14 @@ export default async function MilestoneAnalysisPage() {
         completedThroughSeason
     );
 
+  // Existing All-Sloot honours.
   const allSlootSeasons =
-    completedSeasons.map((season) =>
-      calculateAllSloot(season, directory)
+    completedSeasons.map(
+      (season) =>
+        calculateAllSloot(
+          season,
+          directory
+        )
     );
 
   const honours =
@@ -622,6 +845,7 @@ export default async function MilestoneAnalysisPage() {
       allSlootSeasons
     );
 
+  // Existing seasonal grade calculations.
   const seasonGrades =
     calculateHistoricalSeasonGrades(
       completedSeasons,
@@ -630,75 +854,93 @@ export default async function MilestoneAnalysisPage() {
     );
 
   const gradeCareers =
-    calculateGradeCareers(seasonGrades);
+    calculateGradeCareers(
+      seasonGrades
+    );
 
+  // Existing verified championship results.
   const championshipResults =
     await getSlootbowlResults(
       completedSeasons,
       completedThroughSeason
     );
 
-  // Existing scoring system, unchanged.
-  const oldScores = calculateLegacyScores(
-    gradeCareers,
-    honours,
-    records,
-    directory,
-    completedThroughSeason,
-    championshipResults,
-    completedSeasons
-  );
+  // Official Legacy Scores, unchanged.
+  const oldScores =
+    calculateLegacyScores(
+      gradeCareers,
+      honours,
+      records,
+      directory,
+      completedThroughSeason,
+      championshipResults,
+      completedSeasons
+    );
 
-  // New career production calculation.
-  const production = buildCareerProduction(
-    records,
-    completedThroughSeason
-  );
+  // Calculate career starter production.
+  const production =
+    buildCareerProduction(
+      records,
+      completedThroughSeason
+    );
 
-  // Compare both systems without changing
-  // the existing Legacy Score calculations.
-  const comparison = comparePlayers(
-    oldScores,
-    production
-  );
+  // Recalculate milestones only.
+  const comparison =
+    comparePlayers(
+      oldScores,
+      production
+    );
 
-  const biggestRisers = [...comparison]
-    .filter((player) => player.rankChange > 0)
-    .sort(
-      (a, b) =>
-        b.rankChange - a.rankChange ||
-        b.gained - a.gained
-    )
-    .slice(0, 15);
+  const biggestRisers =
+    [...comparison]
+      .filter(
+        (player) =>
+          player.rankChange > 0
+      )
+      .sort(
+        (a, b) =>
+          b.rankChange -
+            a.rankChange ||
+          b.gained - a.gained
+      )
+      .slice(0, 15);
 
-  const biggestFallers = [...comparison]
-    .filter((player) => player.rankChange < 0)
-    .sort(
-      (a, b) =>
-        a.rankChange - b.rankChange ||
-        a.gained - b.gained
-    )
-    .slice(0, 15);
+  const biggestFallers =
+    [...comparison]
+      .filter(
+        (player) =>
+          player.rankChange < 0
+      )
+      .sort(
+        (a, b) =>
+          a.rankChange -
+            b.rankChange ||
+          a.gained - b.gained
+      )
+      .slice(0, 15);
 
-  const biggestGainers = [...comparison]
-    .sort(
-      (a, b) =>
-        b.gained - a.gained ||
-        b.newTotal - a.newTotal
-    )
-    .slice(0, 15);
+  const biggestGainers =
+    [...comparison]
+      .sort(
+        (a, b) =>
+          b.gained - a.gained ||
+          b.newTotal - a.newTotal
+      )
+      .slice(0, 15);
 
   const totalOldMilestones =
     comparison.reduce(
       (sum, player) =>
-        sum + player.oldMilestones,
+        sum +
+        player.oldMilestones,
       0
     );
 
   const totalNewMilestones =
     comparison.reduce(
       (sum, player) =>
-        sum + player.newMilestones,
+        sum +
+        player.newMilestones,
       0
     );
 
@@ -711,22 +953,38 @@ export default async function MilestoneAnalysisPage() {
   const totalCareerPoints =
     comparison.reduce(
       (sum, player) =>
-        sum + player.careerPoints,
+        sum +
+        player.careerPoints,
       0
     );
 
   const exportData = {
-    generatedAt: new Date().toISOString(),
+    generatedAt:
+      new Date().toISOString(),
+
     completedThroughSeason,
-    thresholds: PROPOSED_THRESHOLDS,
-    bonuses: PROPOSED_BONUSES,
+
+    system: {
+      name:
+        "Proposed 15-Tier SFL Legacy Milestones",
+      maximumTiers: MAX_TIERS,
+      maximumMilestonePoints:
+        MAX_MILESTONE_POINTS,
+      thresholds:
+        PROPOSED_THRESHOLDS,
+      bonuses:
+        PROPOSED_BONUSES,
+    },
+
     summary: {
-      playerCount: comparison.length,
+      playerCount:
+        comparison.length,
       changedRankings,
       totalOldMilestones,
       totalNewMilestones,
       totalCareerPoints,
     },
+
     players: comparison,
   };
 
@@ -745,7 +1003,8 @@ export default async function MilestoneAnalysisPage() {
       style={{
         maxWidth: "1100px",
         margin: "0 auto",
-        padding: "24px 16px 110px",
+        padding:
+          "24px 16px 110px",
       }}
     >
       <a
@@ -777,9 +1036,11 @@ export default async function MilestoneAnalysisPage() {
           lineHeight: 1.7,
         }}
       >
-        Comparing the existing five-tier career
-        milestone system with the proposed
-        ten-tier system. All other Legacy
+        Comparing the official five-tier
+        milestone system against the proposed
+        15-tier system worth up to{" "}
+        {format(MAX_MILESTONE_POINTS)}{" "}
+        Legacy Points. All other Legacy
         categories remain unchanged.
         Completed seasons through{" "}
         {completedThroughSeason}.
@@ -796,109 +1057,39 @@ export default async function MilestoneAnalysisPage() {
       >
         <SummaryCard
           label="PLAYERS ANALYSED"
-          value={format(comparison.length)}
-          detail="Existing Legacy leaderboard"
+          value={format(
+            comparison.length
+          )}
+          detail="Official Legacy leaderboard"
         />
 
         <SummaryCard
           label="RANKINGS CHANGED"
-          value={format(changedRankings)}
+          value={format(
+            changedRankings
+          )}
           detail="Players moving up or down"
         />
 
         <SummaryCard
           label="OLD MILESTONE LP"
-          value={format(totalOldMilestones)}
+          value={format(
+            totalOldMilestones
+          )}
           detail="Combined across all players"
         />
 
         <SummaryCard
           label="NEW MILESTONE LP"
-          value={format(totalNewMilestones)}
+          value={format(
+            totalNewMilestones
+          )}
           detail="Combined across all players"
         />
       </div>
 
       <SectionTitle>
-        Proposed milestone benchmarks
-      </SectionTitle>
-
-      <div
-        style={{
-          border: BORDER,
-          borderRadius: "10px",
-          padding: "16px",
-          background: "#202833",
-          fontSize: "13px",
-          lineHeight: 1.9,
-        }}
-      >
-        {POSITIONS.map((position) => (
-          <div key={position}>
-            <strong>{position}</strong>:{" "}
-            {format(
-              PROPOSED_THRESHOLDS[position]
-            )}{" "}
-            points per tier
-          </div>
-        ))}
-
-        <p
-          style={{
-            color: MUTED,
-            fontSize: "12px",
-            marginTop: "10px",
-          }}
-        >
-          Rewards:{" "}
-          {PROPOSED_BONUSES.join(", ")} LP.
-          Maximum cumulative reward: 2,750 LP.
-        </p>
-      </div>
-
-      <SectionTitle>
-        New Legacy Rankings
-      </SectionTitle>
-
-      <p style={{ color: MUTED, fontSize: "12px" }}>
-        Full leaderboard, ranked by proposed
-        Legacy Points.
-      </p>
-
-      <RankingTable
-        players={comparison}
-        mode="ranking"
-      />
-
-      <SectionTitle>
-        Biggest Ranking Risers
-      </SectionTitle>
-
-      <RankingTable
-        players={biggestRisers}
-        mode="movement"
-      />
-
-      <SectionTitle>
-        Biggest Ranking Fallers
-      </SectionTitle>
-
-      <RankingTable
-        players={biggestFallers}
-        mode="movement"
-      />
-
-      <SectionTitle>
-        Biggest Legacy Points Gainers
-      </SectionTitle>
-
-      <RankingTable
-        players={biggestGainers}
-        mode="movement"
-      />
-
-      <SectionTitle>
-        Career Scoring Breakdown
+        Proposed Milestone System
       </SectionTitle>
 
       <div
@@ -925,16 +1116,13 @@ export default async function MilestoneAnalysisPage() {
               }}
             >
               {[
-                "Player",
-                "Pos",
-                "Regular Pts",
-                "Playoff Pts",
-                "Career Pts",
-                "Reg Starts",
-                "Playoff Starts",
                 "Tier",
-                "Old Milestone LP",
-                "New Milestone LP",
+                "QB",
+                "RB",
+                "WR",
+                "TE",
+                "LP Earned",
+                "Total LP",
               ].map((heading) => (
                 <th
                   key={heading}
@@ -950,73 +1138,123 @@ export default async function MilestoneAnalysisPage() {
           </thead>
 
           <tbody>
-            {[...comparison]
-              .sort(
-                (a, b) =>
-                  b.careerPoints -
-                  a.careerPoints
-              )
-              .map((player) => (
-                <tr key={player.playerId}>
-                  <td style={cellStyle}>
-                    {player.name}
-                  </td>
+            {PROPOSED_BONUSES.map(
+              (bonus, index) => {
+                const cumulative =
+                  PROPOSED_BONUSES
+                    .slice(0, index + 1)
+                    .reduce(
+                      (sum, value) =>
+                        sum + value,
+                      0
+                    );
 
-                  <td style={cellStyle}>
-                    {player.position}
-                  </td>
+                return (
+                  <tr key={index}>
+                    <td style={cellStyle}>
+                      {index + 1}
+                    </td>
 
-                  <td style={cellStyle}>
-                    {format(
-                      player.regularPoints
+                    {POSITIONS.map(
+                      (position) => (
+                        <td
+                          key={position}
+                          style={cellStyle}
+                        >
+                          {format(
+                            PROPOSED_THRESHOLDS[
+                              position
+                            ][index]
+                          )}
+                        </td>
+                      )
                     )}
-                  </td>
 
-                  <td style={cellStyle}>
-                    {format(
-                      player.playoffPoints
-                    )}
-                  </td>
+                    <td style={cellStyle}>
+                      +{format(bonus)}
+                    </td>
 
-                  <td
-                    style={{
-                      ...cellStyle,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {format(
-                      player.careerPoints
-                    )}
-                  </td>
-
-                  <td style={cellStyle}>
-                    {player.regularStarts}
-                  </td>
-
-                  <td style={cellStyle}>
-                    {player.playoffStarts}
-                  </td>
-
-                  <td style={cellStyle}>
-                    {player.tier}/10
-                  </td>
-
-                  <td style={cellStyle}>
-                    {format(
-                      player.oldMilestones
-                    )}
-                  </td>
-
-                  <td style={cellStyle}>
-                    {format(
-                      player.newMilestones
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    <td
+                      style={{
+                        ...cellStyle,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {format(cumulative)}
+                    </td>
+                  </tr>
+                );
+              }
+            )}
           </tbody>
         </table>
       </div>
+
+      <SectionTitle>
+        New Legacy Rankings
+      </SectionTitle>
+
+      <p
+        style={{
+          color: MUTED,
+          fontSize: "12px",
+          lineHeight: 1.7,
+        }}
+      >
+        Full leaderboard ranked by proposed
+        Legacy Points. Positive movement means
+        the player has climbed the rankings.
+      </p>
+
+      <RankingTable
+        players={comparison}
+      />
+
+      <SectionTitle>
+        Biggest Ranking Risers
+      </SectionTitle>
+
+      <RankingTable
+        players={biggestRisers}
+      />
+
+      <SectionTitle>
+        Biggest Ranking Fallers
+      </SectionTitle>
+
+      <RankingTable
+        players={biggestFallers}
+      />
+
+      <SectionTitle>
+        Biggest Legacy Points Gainers
+      </SectionTitle>
+
+      <RankingTable
+        players={biggestGainers}
+      />
+
+      <SectionTitle>
+        Career Scoring Breakdown
+      </SectionTitle>
+
+      <p
+        style={{
+          color: MUTED,
+          fontSize: "12px",
+          lineHeight: 1.7,
+        }}
+      >
+        Career fantasy points earned in
+        completed SFL seasons while started.
+        Regular-season and eligible
+        main-playoff performances contribute
+        to the proposed milestone totals.
+      </p>
+
+      <CareerTable
+        players={comparison}
+      />
 
       <SectionTitle>
         Export Comparison Data
@@ -1029,14 +1267,15 @@ export default async function MilestoneAnalysisPage() {
           lineHeight: 1.7,
         }}
       >
-        Download the complete comparison as JSON
-        so we can analyse individual careers,
-        ranking changes and category balances.
+        Download the complete player-by-player
+        comparison, including old and new
+        rankings, milestone rewards, scoring
+        totals and Legacy category breakdowns.
       </p>
 
       <a
         href={exportHref}
-        download="sfl-legacy-milestone-comparison.json"
+        download="sfl-legacy-15-tier-comparison.json"
         style={{
           display: "inline-block",
           marginTop: "8px",
@@ -1060,13 +1299,13 @@ export default async function MilestoneAnalysisPage() {
           marginTop: "28px",
         }}
       >
-        Analysis only. No changes have been made
-        to the official Legacy scoring system.
-        Career production includes completed
-        regular-season starts and completed
-        eligible main-playoff starts. Toilet Bowl
-        and placement games are excluded according
-        to the existing matchup classification.
+        Analysis only. The official Legacy
+        scoring system has not been changed.
+        Eligible performances are determined
+        by the existing historical records
+        and playoff classification logic.
+        Toilet Bowl and consolation games
+        should not contribute.
       </p>
     </main>
   );
