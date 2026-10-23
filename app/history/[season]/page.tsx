@@ -1,7 +1,16 @@
 
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { getHistoricalData } from "../../../lib/sleeper";
+
+import {
+  getHistoricalData,
+  getNFLState,
+} from "../../../lib/sleeper";
+
+import {
+  isSeasonAwardsRevealed,
+} from "../../../lib/awardVisibility";
+
 import { getFranchiseName } from "../../../lib/franchises";
 import { getPlayers, getPlayerName } from "../../../lib/players";
 
@@ -217,9 +226,6 @@ function isRegularSeasonComplete(
 
 // ============================================
 // GM AWARD STATISTICS
-// ============================================
-//
-// Matches the existing History page logic.
 // ============================================
 
 function buildSeasonStats(
@@ -538,10 +544,11 @@ export default async function SeasonPage({
 }) {
   const { season } = await params;
 
-  const [historicalData, players] =
+  const [historicalData, players, nflState] =
     await Promise.all([
       getHistoricalData(),
       getPlayers(),
+      getNFLState(),
     ]);
 
   const seasonData = historicalData.find(
@@ -551,6 +558,16 @@ export default async function SeasonPage({
   if (!seasonData) {
     notFound();
   }
+
+  // ========================================
+  // WEEK 17 AWARD REVEAL RULE
+  // ========================================
+
+  const awardsRevealed =
+    isSeasonAwardsRevealed(
+      season,
+      nflState
+    );
 
   const championship = SLOOTBOWLS.find(
     (item) => item.season === season
@@ -725,7 +742,7 @@ export default async function SeasonPage({
     }
   }
 
-  // SFL MVP.
+  // SFL MVP
   const mvpCandidates = Array.from(
     playerTotals.values()
   )
@@ -736,11 +753,12 @@ export default async function SeasonPage({
     )
     .sort((a, b) => b.points - a.points);
 
-  const mvp = regularSeasonComplete
+  const mvp = awardsRevealed &&
+    regularSeasonComplete
     ? mvpCandidates[0]
     : undefined;
 
-  // SFL OPOY.
+  // SFL OPOY
   const mvpPlayer = mvp
     ? players[mvp.playerId]
     : null;
@@ -750,7 +768,8 @@ export default async function SeasonPage({
     mvpPlayer?.fantasy_positions?.[0] ??
     null;
 
-  const opoy = regularSeasonComplete
+  const opoy = awardsRevealed &&
+    regularSeasonComplete
     ? mvpCandidates.find((candidate) => {
         const player = players[candidate.playerId];
 
@@ -766,7 +785,7 @@ export default async function SeasonPage({
       })
     : undefined;
 
-  // SFL ROY.
+  // SFL ROY
   const seasonNumber = Number(season);
 
   const currentPlayerDataSeason = Math.max(
@@ -796,11 +815,12 @@ export default async function SeasonPage({
     })
     .sort((a, b) => b.points - a.points);
 
-  const roy = regularSeasonComplete
+  const roy = awardsRevealed &&
+    regularSeasonComplete
     ? rookieCandidates[0]
     : undefined;
 
-  // Slootbowl MVP.
+  // SLOOTBOWL MVP
   const slootbowl =
     completedPlayoffMatchups.find(
       (matchup) => matchup.week === 17
@@ -814,7 +834,7 @@ export default async function SeasonPage({
       }
     | undefined;
 
-  if (slootbowl) {
+  if (awardsRevealed && slootbowl) {
     const winningRosterId =
       slootbowl.scoreA > slootbowl.scoreB
         ? slootbowl.rosterA
@@ -874,23 +894,33 @@ export default async function SeasonPage({
   // GM AWARDS
   // ========================================
 
+  // Do not calculate or expose official
+  // GM winners until Week 17 completes.
+
   const regularSeasonGMAwards =
-    calculateRegularSeasonGMAwards(
-      seasonData,
-      historicalData
-    );
+    awardsRevealed
+      ? calculateRegularSeasonGMAwards(
+          seasonData,
+          historicalData
+        )
+      : [];
 
   const shitcuntAward =
-    await calculateShitcuntAward(
-      seasonData
-    );
+    awardsRevealed
+      ? await calculateShitcuntAward(
+          seasonData
+        )
+      : null;
 
-  const gmAwards: GMAwardResult[] = [
-    ...regularSeasonGMAwards,
-    ...(shitcuntAward
-      ? [shitcuntAward]
-      : []),
-  ];
+  const gmAwards: GMAwardResult[] =
+    awardsRevealed
+      ? [
+          ...regularSeasonGMAwards,
+          ...(shitcuntAward
+            ? [shitcuntAward]
+            : []),
+        ]
+      : [];
 
   const playoffWeeks = [15, 16, 17];
 
@@ -1165,7 +1195,17 @@ export default async function SeasonPage({
                   {award.icon} {award.award}
                 </div>
 
-                {result && player ? (
+                {!awardsRevealed ? (
+                  <p
+                    style={{
+                      marginTop: "8px",
+                      color: "#9da7b3",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Awaiting Week 17 completion
+                  </p>
+                ) : result && player ? (
                   <div
                     style={{
                       display: "flex",
@@ -1284,7 +1324,17 @@ export default async function SeasonPage({
                   {award.icon} {award.title}
                 </div>
 
-                {result ? (
+                {!awardsRevealed ? (
+                  <p
+                    style={{
+                      marginTop: "8px",
+                      color: "#9da7b3",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Awaiting Week 17 completion
+                  </p>
+                ) : result ? (
                   <div
                     style={{
                       display: "flex",
@@ -1428,8 +1478,6 @@ export default async function SeasonPage({
                   completed &&
                   matchup.scoreB < matchup.scoreA;
 
-                // Both teams use identical rules:
-                // winners bright, losers faded.
                 const aColor = aLost
                   ? "#687384"
                   : "#f5f7fa";
