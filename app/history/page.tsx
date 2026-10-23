@@ -531,18 +531,23 @@ async function calculateShitcuntAwards(
 // calculation as the Season Archives.
 //
 // No duplicate player award logic here.
+//
+// Only revealed seasons are processed,
+// but the complete historical dataset
+// remains available for calculations.
 // ============================================
 
 function calculateHistoricalPlayerAwards(
   historicalData: HistoricalSeason[],
-  players: Awaited<ReturnType<typeof getPlayers>>
+  players: Awaited<ReturnType<typeof getPlayers>>,
+  allHistoricalData: HistoricalSeason[] = historicalData
 ): PlayerAwardRecord[] {
   const records: PlayerAwardRecord[] = [];
 
   for (const seasonData of historicalData) {
     const awards = calculateSeasonPlayerAwards(
       seasonData,
-      historicalData,
+      allHistoricalData,
       players
     );
 
@@ -650,13 +655,6 @@ export default async function HistoryPage() {
   // ========================================
   // ALL FOUR PLAYER AWARDS
   // ========================================
-
-  // Only calculate and expose player
-  // award winners for revealed seasons.
-  //
-  // Keep the full historical dataset as
-  // calculation context so previous-season
-  // comparisons remain available.
 
   const playerAwards =
     calculateHistoricalPlayerAwards(
