@@ -1,5 +1,13 @@
 
-import { getHistoricalData } from "../../lib/sleeper";
+import {
+  getHistoricalData,
+  getNFLState,
+} from "../../lib/sleeper";
+
+import {
+  isSeasonAwardsRevealed,
+} from "../../lib/awardVisibility";
+
 import { getPlayers, getPlayerName } from "../../lib/players";
 import { getFranchiseName } from "../../lib/franchises";
 import { calculateSeasonPlayerAwards } from "../../lib/playerAwards";
@@ -590,11 +598,36 @@ function calculateHistoricalPlayerAwards(
 // ============================================
 
 export default async function HistoryPage() {
-  const [historicalData, players] =
+  const [historicalData, players, nflState] =
     await Promise.all([
       getHistoricalData(),
       getPlayers(),
+      getNFLState(),
     ]);
+
+  // ========================================
+  // WEEK 17 AWARD REVEAL RULE
+  // ========================================
+
+  const revealedSeasons = historicalData
+    .map((item) => item.league.season)
+    .filter((season) =>
+      isSeasonAwardsRevealed(
+        season,
+        nflState
+      )
+    );
+
+  const revealedSeasonSet = new Set(
+    revealedSeasons
+  );
+
+  const revealedHistoricalData =
+    historicalData.filter((item) =>
+      revealedSeasonSet.has(
+        item.league.season
+      )
+    );
 
   const seasons = historicalData
     .map((item) => item.league.season)
@@ -618,10 +651,18 @@ export default async function HistoryPage() {
   // ALL FOUR PLAYER AWARDS
   // ========================================
 
+  // Only calculate and expose player
+  // award winners for revealed seasons.
+  //
+  // Keep the full historical dataset as
+  // calculation context so previous-season
+  // comparisons remain available.
+
   const playerAwards =
     calculateHistoricalPlayerAwards(
-      historicalData,
-      players
+      revealedHistoricalData,
+      players,
+      historicalData
     );
 
   // Backwards compatibility with the
@@ -650,14 +691,18 @@ export default async function HistoryPage() {
       calculateGMAwards(historicalData)
     ),
     calculateShitcuntAwards(
-      historicalData
+      revealedHistoricalData
     ),
   ]);
 
   const gmAwards = [
     ...regularSeasonGMAwards,
     ...shitcuntAwards,
-  ];
+  ].filter((award) =>
+    revealedSeasonSet.has(
+      award.season
+    )
+  );
 
   // ========================================
   // RENDER HISTORY
@@ -674,6 +719,7 @@ export default async function HistoryPage() {
       franchiseNames={franchiseNames}
       gmAwards={gmAwards}
       playerAwards={playerAwards}
+      revealedSeasons={revealedSeasons}
     />
   );
 }
