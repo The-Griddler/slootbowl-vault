@@ -6,7 +6,14 @@ import {
   getPlayerName,
 } from "../../lib/players";
 
-import { getHistoricalData } from "../../lib/sleeper";
+import {
+  getHistoricalData,
+  getNFLState,
+} from "../../lib/sleeper";
+
+import {
+  isSeasonAwardsRevealed,
+} from "../../lib/awardVisibility";
 
 import { calculateAllSloot } from "../../lib/allSloot";
 
@@ -25,16 +32,36 @@ import { getSlootbowlResults } from "../../lib/slootbowlResults";
 import LegacyLeaderboard from "../hall-of-fame/LegacyLeaderboard";
 
 export default async function LeagueLegacyPage() {
-  const [records, players, historicalData] =
+  const [records, players, historicalData, nflState] =
     await Promise.all([
       getPlayerRecords(),
       getPlayers(),
       getHistoricalData(),
+      getNFLState(),
     ]);
 
   const currentYear = new Date().getUTCFullYear();
 
-  const completedThroughSeason = currentYear - 1;
+  // Only seasons that have passed the Week 17
+  // reveal threshold qualify for annual honours.
+  const completedSeasons = historicalData.filter(
+    (season) =>
+      isSeasonAwardsRevealed(
+        season.league.season,
+        nflState
+      )
+  );
+
+  // Existing calculation helpers require a
+  // numeric upper boundary for eligible seasons.
+  const completedThroughSeason =
+    completedSeasons.length > 0
+      ? Math.max(
+          ...completedSeasons.map((season) =>
+            Number(season.league.season)
+          )
+        )
+      : 0;
 
   // Build the Sleeper player directory.
   const directory = Object.fromEntries(
@@ -53,14 +80,8 @@ export default async function LeagueLegacyPage() {
     ])
   );
 
-  // Only completed SFL seasons are eligible.
-  const completedSeasons = historicalData.filter(
-    (season) =>
-      Number(season.league.season) <=
-      completedThroughSeason
-  );
-
-  // Calculate All-Sloot honours.
+  // Calculate All-Sloot honours using only
+  // seasons whose annual awards are revealed.
   const allSlootSeasons = completedSeasons.map(
     (season) => calculateAllSloot(season, directory)
   );
@@ -193,9 +214,10 @@ export default async function LeagueLegacyPage() {
         }}
       >
         Includes completed SFL seasons through{" "}
-        {completedThroughSeason}. Only official
-        regular-season and main-playoff performances
-        count. Toilet Bowl and consolation games
+        {completedThroughSeason || "none yet"}.
+        Only official regular-season and
+        main-playoff performances count.
+        Toilet Bowl and consolation games
         are excluded.
       </p>
     </main>
