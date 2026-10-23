@@ -48,6 +48,7 @@ type HistoryTabsProps = {
   franchiseNames: Record<number, string>;
   gmAwards?: GMAwardRecord[];
   playerAwards?: PlayerAwardRecord[];
+  revealedSeasons: string[];
 };
 
 const FRANCHISE_LOGOS: Record<number, string> = {
@@ -181,6 +182,7 @@ export default function HistoryTabs({
   franchiseNames,
   gmAwards = [],
   playerAwards = [],
+  revealedSeasons,
 }: HistoryTabsProps) {
   const [activeTab, setActiveTab] = useState<
     "champions" | "gm" | "players"
@@ -188,6 +190,10 @@ export default function HistoryTabs({
 
   const [expandedAward, setExpandedAward] =
     useState<string | null>(null);
+
+  const revealedSeasonSet = new Set(
+    revealedSeasons
+  );
 
   const getFranchise = (rosterId: number) =>
     franchiseNames[rosterId] ??
@@ -277,6 +283,9 @@ export default function HistoryTabs({
             }}
           >
             {seasons.map((season, index) => {
+              const isRevealed =
+                revealedSeasonSet.has(season);
+
               const gmWinner =
                 type === "gm"
                   ? gmAwards.find(
@@ -349,7 +358,16 @@ export default function HistoryTabs({
                     {season}
                   </strong>
 
-                  {gmWinner ||
+                  {!isRevealed ? (
+                    <span
+                      style={{
+                        color: "#9da7b3",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Awaiting Week 17 completion
+                    </span>
+                  ) : gmWinner ||
                   honoraryImproved ||
                   displayedPlayer ? (
                     <div
