@@ -323,21 +323,6 @@ function Frontrunner({
         }}
       >
         <FranchiseLine candidate={candidate} />
-
-        <span
-          style={{
-            color: candidate.inPlayoffPosition
-              ? "#86efac"
-              : MUTED,
-            fontSize: 10,
-            fontWeight: 800,
-            textAlign: "right",
-          }}
-        >
-          {candidate.inPlayoffPosition
-            ? "PLAYOFF POSITION"
-            : "PLAYOFF CHASE"}
-        </span>
       </div>
     </div>
   );
