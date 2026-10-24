@@ -867,7 +867,31 @@ function RecordWatchSection({
   );
 }
 
-export default async function HomePage() {
+type PreviewMode = "playoffs" | "awards" | null;
+
+type HomePageProps = {
+  searchParams: Promise<{
+    preview?: string | string[];
+  }>;
+};
+
+export default async function HomePage({
+  searchParams,
+}: HomePageProps) {
+  // Next.js 15 supports asynchronous
+  // searchParams in server pages.
+  const params = await searchParams;
+
+  const previewParam = Array.isArray(params.preview)
+    ? params.preview[0]
+    : params.preview;
+
+  const previewMode: PreviewMode =
+    previewParam === "playoffs" ||
+    previewParam === "awards"
+      ? previewParam
+      : null;
+
   const [
     historicalData,
     players,
@@ -912,8 +936,7 @@ export default async function HomePage() {
       MVP_CUTOFF_TIMESTAMP
     );
 
-  // The ladder stays visible until
-  // NFL Week 14 has finished.
+  // Live visibility rules remain unchanged.
   const regularSeasonFinished =
     isNFLWeekComplete(
       SEASON,
@@ -921,8 +944,6 @@ export default async function HomePage() {
       nflState
     );
 
-  // Annual award winners are not
-  // revealed until Week 17 ends.
   const week17Finished =
     isNFLWeekComplete(
       SEASON,
@@ -936,7 +957,7 @@ export default async function HomePage() {
         item.league.season === SEASON
     );
 
-  // Calculate official winners only
+  // Real awards are only calculated
   // after the Week 17 reveal.
   const officialAwards =
     week17Finished && seasonData
@@ -947,10 +968,6 @@ export default async function HomePage() {
         )
       : undefined;
 
-  // If historical results have not
-  // fully populated, keep the teaser
-  // visible rather than showing
-  // incomplete awards.
   const awardsRevealed =
     week17Finished &&
     officialAwards?.regularSeasonComplete === true &&
@@ -958,6 +975,22 @@ export default async function HomePage() {
     officialAwards.opoy !== undefined &&
     officialAwards.roy !== undefined &&
     officialAwards.sbMvp !== undefined;
+
+  // Preview modes override presentation only.
+  // They do not change official results,
+  // award eligibility or reveal dates.
+  const showMvpLadder =
+    previewMode === null &&
+    !regularSeasonFinished;
+
+  const showAwards =
+    previewMode === "awards"
+      ? true
+      : previewMode === "playoffs"
+        ? false
+        : awardsRevealed;
+
+  const isPreview = previewMode !== null;
 
   const homepagePlayerIds =
     new Set<string>();
@@ -990,6 +1023,8 @@ export default async function HomePage() {
     }
   }
 
+  // Actual award winners are added only
+  // after the real reveal date.
   if (awardsRevealed && officialAwards) {
     for (const award of [
       officialAwards.mvp,
@@ -1106,7 +1141,7 @@ export default async function HomePage() {
 
       {/* Seasonal Awards */}
 
-      {!regularSeasonFinished ? (
+      {showMvpLadder ? (
         <MVPLadder
           leaderboard={mvpLeaderboard}
           playerInfo={playerInfo}
@@ -1114,13 +1149,14 @@ export default async function HomePage() {
       ) : (
         <AwardsShowcase
           season={SEASON}
-          revealed={awardsRevealed}
+          revealed={showAwards}
           awards={
-            awardsRevealed
+            !isPreview && awardsRevealed
               ? officialAwards
               : undefined
           }
           playerInfo={playerInfo}
+          preview={isPreview}
         />
       )}
 
