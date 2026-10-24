@@ -5,24 +5,24 @@ import type {
   HistoricalTransaction,
 } from "./sleeper";
 
+import type {
+  MVPByeSchedule,
+} from "./mvpSeasonConfig";
+
 export const MVP_SEASON = "2026";
 export const MVP_TRADE_CUTOFF_WEEK = 9;
 export const MVP_REGULAR_SEASON_WEEKS = 14;
 
 /**
- * Provisional cutoff, not a verified
- * final-whistle timestamp.
+ * Provisional 2026 cutoff.
  *
- * Week 9 Monday Night Football:
- * Buffalo at Minnesota, Nov 9,
- * 2026, 8:15 PM US Eastern.
+ * This is not a verified Sleeper
+ * end-of-Week-9 timestamp.
  *
- * 06:00 UTC on Nov 10 allows
- * approximately 4h45 for the game.
- *
- * Confirm against Sleeper's actual
- * matchup-week rollover before
- * treating ownership as final.
+ * Future seasons must have their
+ * own cutoff timestamps verified
+ * before transaction ownership
+ * reconciliation is enabled.
  */
 export const MVP_CUTOFF_TIMESTAMP =
   Date.parse("2026-11-10T06:00:00Z");
@@ -30,6 +30,15 @@ export const MVP_CUTOFF_TIMESTAMP =
 const OBFC = [4, 6, 8, 7, 9];
 const GPFC = [1, 2, 10, 3, 5];
 
+/**
+ * Existing 2026 bye-week data.
+ *
+ * Retained temporarily as a fallback
+ * while the automatic Sleeper schedule
+ * integration is validated.
+ *
+ * Future seasons never reuse this map.
+ */
 export const NFL_BYES_2026: Record<
   string,
   number
@@ -323,9 +332,9 @@ function calculateStandings(
 /**
  * Week 9 full-roster evidence.
  *
- * The lookup records ambiguous
- * ownership as null rather than
- * arbitrarily selecting a team.
+ * Ambiguous ownership is recorded
+ * as null rather than assigning
+ * an arbitrary franchise.
  */
 function buildWeekNineOwners(
   games: HistoricalMatchup[]
@@ -400,19 +409,12 @@ function buildWeekNineOwners(
  * Convert completed Sleeper moves
  * into chronological player events.
  *
- * For trades:
- * drops = previous franchise
- * adds  = new franchise
- *
- * A transaction with both fields
- * is treated as one atomic move.
- *
- * A drop without an addition
+ * A drop without a later addition
  * leaves the player unowned.
  *
- * Transactions lacking a reliable
- * completion timestamp are not
- * used to assert cutoff ownership.
+ * Transactions without a reliable
+ * completion timestamp cannot prove
+ * cutoff ownership.
  */
 function buildTransactionEvents(
   transactions: HistoricalTransaction[],
@@ -520,24 +522,16 @@ function buildTransactionEvents(
 }
 
 /**
- * Resolve a player's franchise.
+ * Resolve a player's SFL franchise.
  *
- * Transactions are chronological:
- * the last completed event before
- * the cutoff is the most recent
- * recorded ownership change.
+ * Transactions are chronological.
  *
- * However, Sleeper's weekly roster
- * snapshot has no exact timestamp.
+ * Conflicting roster snapshots
+ * and transaction history remain
+ * unresolved rather than guessing.
  *
- * If transactions conflict with
- * that snapshot, ownership remains
- * unresolved instead of inventing
- * which record came last.
- *
- * Even matching evidence stays
- * provisional until the exact
- * end-of-week boundary is verified.
+ * Ownership remains provisional
+ * until the cutoff is verified.
  */
 function findMVPFranchise(
   weeks: MVPPlayerWeek[],
@@ -591,13 +585,6 @@ function findMVPFranchise(
     playerEvents.at(-1);
 
   if (latestEvent) {
-    /**
-     * The player was released,
-     * with no later completed
-     * acquisition in our history.
-     *
-     * Do not credit the old team.
-     */
     if (
       latestEvent.rosterId === null
     ) {
@@ -608,12 +595,6 @@ function findMVPFranchise(
       };
     }
 
-    /**
-     * A conflict between the
-     * snapshot and transaction
-     * history cannot be resolved
-     * without snapshot timing.
-     */
     if (
       hasSnapshot &&
       snapshotOwner !==
@@ -661,16 +642,6 @@ function findMVPFranchise(
     };
   }
 
-  /**
-   * A pre-cutoff starter is
-   * useful as provisional
-   * evidence only when no
-   * transaction data is supplied.
-   *
-   * Once transaction history is
-   * available, an unknown owner
-   * should remain unknown.
-   */
   if (useTransactions) {
     return {
       rosterId: null,
@@ -722,23 +693,42 @@ function playoffAdjustment(
   }
 }
 
+/**
+ * Calculate completed NFL bye weeks.
+ *
+ * Prefer validated automatic data.
+ *
+ * For 2026 only, retain the
+ * existing manually configured
+ * bye weeks as a fallback.
+ *
+ * Future seasons never use
+ * the 2026 schedule.
+ */
 function completedByes(
   playerId: string,
   season: string,
   throughWeek: number,
-  playerTeams: MVPPlayerTeams
+  playerTeams: MVPPlayerTeams,
+  byeSchedule?: MVPByeSchedule
 ): number {
-  if (season !== "2026") {
-    return 0;
-  }
-
   const nflTeam =
     playerTeams[playerId]?.toUpperCase();
 
   if (!nflTeam) return 0;
 
-  const byeWeek =
-    NFL_BYES_2026[nflTeam];
+  let byeWeek: number | undefined;
+
+  if (
+    byeSchedule?.available &&
+    byeSchedule.season === season
+  ) {
+    byeWeek =
+      byeSchedule.byeWeeks[nflTeam];
+  } else if (season === "2026") {
+    byeWeek =
+      NFL_BYES_2026[nflTeam];
+  }
 
   if (!byeWeek) return 0;
 
@@ -790,7 +780,8 @@ function calculateCandidates(
     string,
     TransactionEvent[]
   >,
-  useTransactions: boolean
+  useTransactions: boolean,
+  byeSchedule?: MVPByeSchedule
 ): MVPCandidate[] {
   const players =
     collectPlayerStarts(games);
@@ -826,9 +817,8 @@ function calculateCandidates(
         : null;
 
     /**
-     * All starting points follow
-     * the player, even when they
-     * change SFL franchises.
+     * Points follow the player
+     * across SFL franchises.
      */
     const totalPoints =
       player.weeks.reduce(
@@ -849,7 +839,8 @@ function calculateCandidates(
         player.playerId,
         season,
         throughWeek,
-        playerTeams
+        playerTeams,
+        byeSchedule
       );
 
     const eligibleWeeks = Math.max(
@@ -930,11 +921,6 @@ function calculateCandidates(
           return false;
         }
 
-        /**
-         * Only playoff franchises
-         * remain eligible after
-         * the regular season.
-         */
         if (
           throughWeek >=
             MVP_REGULAR_SEASON_WEEKS &&
@@ -967,17 +953,13 @@ function calculateCandidates(
 }
 
 /**
- * Backwards-compatible entrypoint.
+ * Backwards-compatible MVP entrypoint.
  *
- * Argument 5:
- * Completed transaction history.
+ * Argument 5: Transaction history.
+ * Argument 6: Week 9 cutoff timestamp.
+ * Argument 7: NFL bye-week schedule.
  *
- * Argument 6:
- * Explicit cutoff timestamp.
- *
- * If transactions aren't supplied,
- * the existing homepage continues
- * using weekly roster evidence.
+ * Existing callers remain valid.
  */
 export function calculateMVPLeaderboard(
   historicalData: HistoricalSeason[],
@@ -985,7 +967,8 @@ export function calculateMVPLeaderboard(
   throughWeek = MVP_REGULAR_SEASON_WEEKS,
   playerTeams: MVPPlayerTeams = {},
   transactions: HistoricalTransaction[] = [],
-  cutoffTimestamp: number | null = null
+  cutoffTimestamp: number | null = null,
+  byeSchedule?: MVPByeSchedule
 ): MVPLeaderboard {
   const completedGames =
     collectGames(
@@ -1003,13 +986,6 @@ export function calculateMVPLeaderboard(
         )
       : 0;
 
-  /**
-   * Do not activate transaction
-   * reconciliation until the
-   * caller explicitly supplies
-   * both transaction history
-   * and a cutoff timestamp.
-   */
   const useTransactions =
     transactions.length > 0 &&
     cutoffTimestamp !== null &&
@@ -1035,7 +1011,8 @@ export function calculateMVPLeaderboard(
       season,
       playerTeams,
       transactionEvents,
-      useTransactions
+      useTransactions,
+      byeSchedule
     );
 
   if (latestWeek > 1) {
@@ -1053,7 +1030,8 @@ export function calculateMVPLeaderboard(
         season,
         playerTeams,
         transactionEvents,
-        useTransactions
+        useTransactions,
+        byeSchedule
       );
 
     const previousRanks = new Map(
