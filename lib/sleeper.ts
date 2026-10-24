@@ -1,5 +1,9 @@
 
-const LEAGUE_ID = "1326512818865868800";
+import {
+  CURRENT_LEAGUE_ID,
+} from "./seasons";
+
+const LEAGUE_ID = CURRENT_LEAGUE_ID;
 
 export type SleeperLeague = {
   league_id: string;
