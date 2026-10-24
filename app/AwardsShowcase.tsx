@@ -12,6 +12,7 @@ type Props = {
   revealed: boolean;
   awards?: SeasonPlayerAwards;
   playerInfo: Record<string, PlayerInfo>;
+  preview?: boolean;
 };
 
 const GOLD = "#eab308";
@@ -53,11 +54,38 @@ const AWARD_TYPES: {
   },
 ];
 
+// Fictional names used only for preview.
+// These are not real award results.
+const DEMO_WINNERS: Record<
+  AwardKey,
+  {
+    name: string;
+    position: string;
+  }
+> = {
+  mvp: {
+    name: "Alex Morgan",
+    position: "QB",
+  },
+  opoy: {
+    name: "Jordan Ellis",
+    position: "WR",
+  },
+  roy: {
+    name: "Taylor Brooks",
+    position: "RB",
+  },
+  sbMvp: {
+    name: "Casey Parker",
+    position: "TE",
+  },
+};
+
 function PlayerPortrait({
   playerId,
   name,
 }: {
-  playerId: string;
+  playerId?: string;
   name: string;
 }) {
   return (
@@ -69,19 +97,34 @@ function PlayerPortrait({
         borderRadius: "50%",
         background: "#273445",
         overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <img
-        src={`https://sleepercdn.com/content/nfl/players/${playerId}.jpg`}
-        alt={name}
-        width={65}
-        height={65}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-        }}
-      />
+      {playerId ? (
+        <img
+          src={`https://sleepercdn.com/content/nfl/players/${playerId}.jpg`}
+          alt={name}
+          width={65}
+          height={65}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            color: "#cbd5e1",
+            fontSize: 27,
+            fontWeight: 900,
+          }}
+        >
+          ?
+        </span>
+      )}
     </div>
   );
 }
@@ -91,6 +134,7 @@ export default function AwardsShowcase({
   revealed,
   awards,
   playerInfo,
+  preview = false,
 }: Props) {
   return (
     <section style={{ marginTop: 36 }}>
@@ -132,6 +176,28 @@ export default function AwardsShowcase({
             : "The regular season is over. The awards are waiting to be revealed."}
         </p>
       </div>
+
+      {preview && (
+        <div
+          style={{
+            background: "#263243",
+            border: "1px solid #475569",
+            borderRadius: 11,
+            padding: "11px 13px",
+            color: "#cbd5e1",
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1.6,
+            marginBottom: 15,
+          }}
+        >
+          PREVIEW MODE — This is a demonstration
+          of the future awards display.
+          {revealed
+            ? " All names shown are fictional placeholders."
+            : " No winners or finalists are being revealed."}
+        </div>
+      )}
 
       {!revealed ? (
         <div
@@ -187,7 +253,7 @@ export default function AwardsShowcase({
             }}
           >
             The race is over, but the honours
-            are still to be awarded. The SFL's
+            are still to be awarded. The SFL&apos;s
             finest performers will be
             recognised after Week 17.
           </p>
@@ -243,17 +309,29 @@ export default function AwardsShowcase({
             }}
           >
             {AWARD_TYPES.map((award) => {
-              const winner = awards?.[award.key];
+              const winner =
+                !preview
+                  ? awards?.[award.key]
+                  : undefined;
 
-              const name = winner
-                ? playerInfo[winner.playerId]?.name ??
-                  `Player ${winner.playerId}`
-                : null;
+              const demo =
+                preview
+                  ? DEMO_WINNERS[award.key]
+                  : null;
 
-              const position = winner
-                ? playerInfo[winner.playerId]?.position ??
-                  "—"
-                : null;
+              const name = demo
+                ? demo.name
+                : winner
+                  ? playerInfo[winner.playerId]?.name ??
+                    `Player ${winner.playerId}`
+                  : null;
+
+              const position = demo
+                ? demo.position
+                : winner
+                  ? playerInfo[winner.playerId]?.position ??
+                    "—"
+                  : null;
 
               return (
                 <article
@@ -301,7 +379,7 @@ export default function AwardsShowcase({
                     {award.description}
                   </p>
 
-                  {winner && name ? (
+                  {name ? (
                     <div
                       style={{
                         display: "flex",
@@ -312,7 +390,11 @@ export default function AwardsShowcase({
                       }}
                     >
                       <PlayerPortrait
-                        playerId={winner.playerId}
+                        playerId={
+                          preview
+                            ? undefined
+                            : winner?.playerId
+                        }
                         name={name}
                       />
 
@@ -325,7 +407,9 @@ export default function AwardsShowcase({
                             marginBottom: 5,
                           }}
                         >
-                          AWARD WINNER
+                          {preview
+                            ? "DEMO WINNER"
+                            : "AWARD WINNER"}
                         </div>
 
                         <div
@@ -368,24 +452,44 @@ export default function AwardsShowcase({
             })}
           </div>
 
-          <Link
-            href={`/history/${season}`}
-            style={{
-              display: "block",
-              marginTop: 14,
-              padding: 15,
-              textAlign: "center",
-              background: "#302718",
-              border: "1px solid #866b29",
-              borderRadius: 12,
-              color: GOLD,
-              textDecoration: "none",
-              fontSize: 13,
-              fontWeight: 900,
-            }}
-          >
-            Explore the {season} Season Awards →
-          </Link>
+          {preview ? (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 15,
+                textAlign: "center",
+                background: "#253240",
+                border: BORDER,
+                borderRadius: 12,
+                color: MUTED,
+                fontSize: 12,
+                lineHeight: 1.7,
+              }}
+            >
+              Demo only. The real award winners
+              and archive links will become
+              available after Week 17.
+            </div>
+          ) : (
+            <Link
+              href={`/history/${season}`}
+              style={{
+                display: "block",
+                marginTop: 14,
+                padding: 15,
+                textAlign: "center",
+                background: "#302718",
+                border: "1px solid #866b29",
+                borderRadius: 12,
+                color: GOLD,
+                textDecoration: "none",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              Explore the {season} Season Awards →
+            </Link>
+          )}
         </>
       )}
     </section>
