@@ -3,6 +3,8 @@ import Link from "next/link";
 import {
   getHistoricalData,
   getMVPTransactions,
+  getNFLState,
+  isNFLWeekComplete,
 } from "../lib/sleeper";
 import {
   getPlayers,
@@ -22,10 +24,17 @@ import {
   MVP_CUTOFF_TIMESTAMP,
   type MVPPlayerTeams,
 } from "../lib/mvp";
+import {
+  calculateSeasonPlayerAwards,
+} from "../lib/playerAwards";
 import { FRANCHISES } from "../lib/franchises";
 import WeeklyRecapSection from "./weeklyRecap";
 import MVPLadder from "./MVPLadder";
+import AwardsShowcase from "./AwardsShowcase";
 
+export const dynamic = "force-dynamic";
+
+const SEASON = "2026";
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
 const CARD = "#151b23";
@@ -863,22 +872,24 @@ export default async function HomePage() {
     historicalData,
     players,
     transactions,
+    nflState,
   ] = await Promise.all([
     getHistoricalData(),
     getPlayers(),
     getMVPTransactions(),
+    getNFLState(),
   ]);
 
   const home = calculateHomeStats(
     historicalData,
-    "2026",
+    SEASON,
     players
   );
 
   const weeklyRecaps =
     calculateWeeklyRecaps(
       historicalData,
-      "2026"
+      SEASON
     );
 
   const playerTeams: MVPPlayerTeams = {};
@@ -894,12 +905,59 @@ export default async function HomePage() {
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
-      "2026",
+      SEASON,
       14,
       playerTeams,
       transactions,
       MVP_CUTOFF_TIMESTAMP
     );
+
+  // The ladder stays visible until
+  // NFL Week 14 has finished.
+  const regularSeasonFinished =
+    isNFLWeekComplete(
+      SEASON,
+      14,
+      nflState
+    );
+
+  // Annual award winners are not
+  // revealed until Week 17 ends.
+  const week17Finished =
+    isNFLWeekComplete(
+      SEASON,
+      17,
+      nflState
+    );
+
+  const seasonData =
+    historicalData.find(
+      (item) =>
+        item.league.season === SEASON
+    );
+
+  // Calculate official winners only
+  // after the Week 17 reveal.
+  const officialAwards =
+    week17Finished && seasonData
+      ? calculateSeasonPlayerAwards(
+          seasonData,
+          historicalData,
+          players
+        )
+      : undefined;
+
+  // If historical results have not
+  // fully populated, keep the teaser
+  // visible rather than showing
+  // incomplete awards.
+  const awardsRevealed =
+    week17Finished &&
+    officialAwards?.regularSeasonComplete === true &&
+    officialAwards.mvp !== undefined &&
+    officialAwards.opoy !== undefined &&
+    officialAwards.roy !== undefined &&
+    officialAwards.sbMvp !== undefined;
 
   const homepagePlayerIds =
     new Set<string>();
@@ -932,14 +990,31 @@ export default async function HomePage() {
     }
   }
 
+  if (awardsRevealed && officialAwards) {
+    for (const award of [
+      officialAwards.mvp,
+      officialAwards.opoy,
+      officialAwards.roy,
+      officialAwards.sbMvp,
+    ]) {
+      if (award) {
+        homepagePlayerIds.add(
+          award.playerId
+        );
+      }
+    }
+  }
+
   const playerInfo: RecordPlayerInfo = {};
 
   for (const playerId of homepagePlayerIds) {
-    const player = players[playerId] ?? null;
+    const player =
+      players[playerId] ?? null;
 
     playerInfo[playerId] = {
       name: getPlayerName(player),
-      position: player?.position ?? "—",
+      position:
+        player?.position ?? "—",
     };
   }
 
@@ -1029,12 +1104,25 @@ export default async function HomePage() {
         playerInfo={playerInfo}
       />
 
-      {/* MVP Ladder */}
+      {/* Seasonal Awards */}
 
-      <MVPLadder
-        leaderboard={mvpLeaderboard}
-        playerInfo={playerInfo}
-      />
+      {!regularSeasonFinished ? (
+        <MVPLadder
+          leaderboard={mvpLeaderboard}
+          playerInfo={playerInfo}
+        />
+      ) : (
+        <AwardsShowcase
+          season={SEASON}
+          revealed={awardsRevealed}
+          awards={
+            awardsRevealed
+              ? officialAwards
+              : undefined
+          }
+          playerInfo={playerInfo}
+        />
+      )}
 
       {/* SFL Record Watch */}
 
