@@ -1,6 +1,7 @@
 
 import Link from "next/link";
 import {
+  getLeague,
   getHistoricalData,
   getMVPTransactions,
   getNFLState,
@@ -22,8 +23,13 @@ import {
 import {
   calculateMVPLeaderboard,
   MVP_CUTOFF_TIMESTAMP,
+  NFL_BYES_2026,
   type MVPPlayerTeams,
 } from "../lib/mvp";
+import {
+  getMVPByeSchedule,
+  type MVPByeSchedule,
+} from "../lib/mvpSeasonConfig";
 import {
   calculateSeasonPlayerAwards,
 } from "../lib/playerAwards";
@@ -34,7 +40,6 @@ import AwardsShowcase from "./AwardsShowcase";
 
 export const dynamic = "force-dynamic";
 
-const SEASON = "2026";
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
 const CARD = "#151b23";
@@ -66,6 +71,44 @@ function teamName(rosterId: number): string {
 
 function formatPoints(value: number): string {
   return value.toFixed(2);
+}
+
+/**
+ * Only 2026 currently has a configured
+ * timestamp for Week 9 ownership.
+ *
+ * Never reuse it in another season.
+ */
+function getMVPCutoff(
+  season: string
+): number | null {
+  return season === "2026"
+    ? MVP_CUTOFF_TIMESTAMP
+    : null;
+}
+
+/**
+ * Preserve the original 2026 bye-week
+ * information while the automatic
+ * schedule endpoint is being validated.
+ *
+ * For later seasons, require a
+ * validated schedule from Sleeper.
+ */
+function getEffectiveByeSchedule(
+  season: string,
+  automatic: MVPByeSchedule
+): MVPByeSchedule {
+  if (season === "2026") {
+    return {
+      season,
+      byeWeeks: NFL_BYES_2026,
+      available: true,
+      source: "sleeper",
+    };
+  }
+
+  return automatic;
 }
 
 function TeamLogo({
@@ -878,8 +921,6 @@ type HomePageProps = {
 export default async function HomePage({
   searchParams,
 }: HomePageProps) {
-  // Next.js 15 supports asynchronous
-  // searchParams in server pages.
   const params = await searchParams;
 
   const previewParam = Array.isArray(params.preview)
@@ -892,17 +933,47 @@ export default async function HomePage({
       ? previewParam
       : null;
 
+  /**
+   * Fetch the configured current
+   * Sleeper league.
+   *
+   * The league itself determines
+   * which season the homepage shows.
+   */
   const [
+    league,
     historicalData,
     players,
     transactions,
     nflState,
   ] = await Promise.all([
+    getLeague(),
     getHistoricalData(),
     getPlayers(),
     getMVPTransactions(),
     getNFLState(),
   ]);
+
+  const SEASON = league.season;
+
+  /**
+   * Fetch automatic bye-week data.
+   *
+   * The helper returns an unavailable
+   * result if the schedule cannot
+   * be validated.
+   */
+  const automaticByeSchedule =
+    await getMVPByeSchedule(SEASON);
+
+  const byeSchedule =
+    getEffectiveByeSchedule(
+      SEASON,
+      automaticByeSchedule
+    );
+
+  const byeDataMissing =
+    !byeSchedule.available;
 
   const home = calculateHomeStats(
     historicalData,
@@ -926,6 +997,17 @@ export default async function HomePage({
       player.team ?? null;
   }
 
+  /**
+   * Only apply transaction cutoff
+   * reconciliation when a timestamp
+   * is configured for this season.
+   *
+   * Never use the 2026 timestamp
+   * for 2027 or later.
+   */
+  const cutoffTimestamp =
+    getMVPCutoff(SEASON);
+
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
@@ -933,10 +1015,10 @@ export default async function HomePage({
       14,
       playerTeams,
       transactions,
-      MVP_CUTOFF_TIMESTAMP
+      cutoffTimestamp,
+      byeSchedule
     );
 
-  // Live visibility rules remain unchanged.
   const regularSeasonFinished =
     isNFLWeekComplete(
       SEASON,
@@ -957,8 +1039,6 @@ export default async function HomePage({
         item.league.season === SEASON
     );
 
-  // Real awards are only calculated
-  // after the Week 17 reveal.
   const officialAwards =
     week17Finished && seasonData
       ? calculateSeasonPlayerAwards(
@@ -976,9 +1056,10 @@ export default async function HomePage({
     officialAwards.roy !== undefined &&
     officialAwards.sbMvp !== undefined;
 
-  // Preview modes override presentation only.
-  // They do not change official results,
-  // award eligibility or reveal dates.
+  /**
+   * Preview modes affect presentation
+   * only, never official award results.
+   */
   const showMvpLadder =
     previewMode === null &&
     !regularSeasonFinished;
@@ -1023,8 +1104,6 @@ export default async function HomePage({
     }
   }
 
-  // Actual award winners are added only
-  // after the real reveal date.
   if (awardsRevealed && officialAwards) {
     for (const award of [
       officialAwards.mvp,
@@ -1076,7 +1155,7 @@ export default async function HomePage({
             margin: "0 0 12px",
           }}
         >
-          SFL • 2026 SEASON
+          SFL • {SEASON} SEASON
         </p>
 
         <h1
@@ -1142,10 +1221,34 @@ export default async function HomePage({
       {/* Seasonal Awards */}
 
       {showMvpLadder ? (
-        <MVPLadder
-          leaderboard={mvpLeaderboard}
-          playerInfo={playerInfo}
-        />
+        <>
+          {byeDataMissing && (
+            <div
+              role="status"
+              style={{
+                background: "#2b2419",
+                border: "1px solid #775c2a",
+                borderRadius: 12,
+                padding: "12px 14px",
+                color: "#f5d58b",
+                fontSize: 12,
+                lineHeight: 1.7,
+                marginTop: 24,
+              }}
+            >
+              NFL bye-week information for
+              {" "}{SEASON} is unavailable.
+              MVP rankings are provisional
+              because bye-week adjustments
+              cannot yet be verified.
+            </div>
+          )}
+
+          <MVPLadder
+            leaderboard={mvpLeaderboard}
+            playerInfo={playerInfo}
+          />
+        </>
       ) : (
         <AwardsShowcase
           season={SEASON}
@@ -1217,7 +1320,7 @@ export default async function HomePage({
       <section style={{ marginTop: 36 }}>
         <SectionHeading
           eyebrow="THE VAULT"
-          title="2026 Archive Highlights"
+          title={`${SEASON} Archive Highlights`}
           description="The standout games and moments already entering SFL history."
         />
 
@@ -1231,7 +1334,7 @@ export default async function HomePage({
             {
               title: "Greatest Games",
               description:
-                "See how 2026 matchups rank against SFL history.",
+                `See how ${SEASON} matchups rank against SFL history.`,
               href: "/greatest-games",
               icon: "🏆",
             },
