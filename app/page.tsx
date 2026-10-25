@@ -1,39 +1,46 @@
 
 import Link from "next/link";
+
 import {
   getLeague,
   getHistoricalData,
-  getMVPTransactions,
   getNFLState,
   isNFLWeekComplete,
 } from "../lib/sleeper";
+
 import {
   getPlayers,
   getPlayerName,
 } from "../lib/players";
+
 import {
   calculateHomeStats,
   RECORD_WATCH_LIMIT,
   type HomeStanding,
   type RecordHighlight,
 } from "../lib/homeStats";
+
 import {
   calculateWeeklyRecaps,
 } from "../lib/weeklyRecap";
+
 import {
   calculateMVPLeaderboard,
-  MVP_CUTOFF_TIMESTAMP,
   NFL_BYES_2026,
   type MVPPlayerTeams,
 } from "../lib/mvp";
+
 import {
   getMVPByeSchedule,
   type MVPByeSchedule,
 } from "../lib/mvpSeasonConfig";
+
 import {
   calculateSeasonPlayerAwards,
 } from "../lib/playerAwards";
+
 import { FRANCHISES } from "../lib/franchises";
+
 import WeeklyRecapSection from "./weeklyRecap";
 import MVPLadder from "./MVPLadder";
 import AwardsShowcase from "./AwardsShowcase";
@@ -74,26 +81,11 @@ function formatPoints(value: number): string {
 }
 
 /**
- * Only 2026 currently has a configured
- * timestamp for Week 9 ownership.
+ * Preserve the existing 2026
+ * bye-week configuration.
  *
- * Never reuse it in another season.
- */
-function getMVPCutoff(
-  season: string
-): number | null {
-  return season === "2026"
-    ? MVP_CUTOFF_TIMESTAMP
-    : null;
-}
-
-/**
- * Preserve the original 2026 bye-week
- * information while the automatic
- * schedule endpoint is being validated.
- *
- * For later seasons, require a
- * validated schedule from Sleeper.
+ * Future seasons use their own
+ * validated NFL schedules.
  */
 function getEffectiveByeSchedule(
   season: string,
@@ -934,34 +926,29 @@ export default async function HomePage({
       : null;
 
   /**
-   * Fetch the configured current
-   * Sleeper league.
+   * The configured Sleeper league
+   * determines the active season.
    *
-   * The league itself determines
-   * which season the homepage shows.
+   * No homepage year changes are
+   * needed when the league renews.
    */
   const [
     league,
     historicalData,
     players,
-    transactions,
     nflState,
   ] = await Promise.all([
     getLeague(),
     getHistoricalData(),
     getPlayers(),
-    getMVPTransactions(),
     getNFLState(),
   ]);
 
   const SEASON = league.season;
 
   /**
-   * Fetch automatic bye-week data.
-   *
-   * The helper returns an unavailable
-   * result if the schedule cannot
-   * be validated.
+   * Load and validate the active
+   * season's NFL bye-week schedule.
    */
   const automaticByeSchedule =
     await getMVPByeSchedule(SEASON);
@@ -998,24 +985,19 @@ export default async function HomePage({
   }
 
   /**
-   * Only apply transaction cutoff
-   * reconciliation when a timestamp
-   * is configured for this season.
+   * A player's entire season-long
+   * MVP score follows them across
+   * SFL franchises.
    *
-   * Never use the 2026 timestamp
-   * for 2027 or later.
+   * No Week 9 cutoff or transaction
+   * history is required.
    */
-  const cutoffTimestamp =
-    getMVPCutoff(SEASON);
-
   const mvpLeaderboard =
     calculateMVPLeaderboard(
       historicalData,
       SEASON,
       14,
       playerTeams,
-      transactions,
-      cutoffTimestamp,
       byeSchedule
     );
 
@@ -1057,8 +1039,11 @@ export default async function HomePage({
     officialAwards.sbMvp !== undefined;
 
   /**
-   * Preview modes affect presentation
-   * only, never official award results.
+   * Preview modes change only
+   * presentation.
+   *
+   * They never expose unrevealed
+   * official award winners.
    */
   const showMvpLadder =
     previewMode === null &&
@@ -1236,8 +1221,8 @@ export default async function HomePage({
                 marginTop: 24,
               }}
             >
-              NFL bye-week information for
-              {" "}{SEASON} is unavailable.
+              NFL bye-week information for{" "}
+              {SEASON} is unavailable.
               MVP rankings are provisional
               because bye-week adjustments
               cannot yet be verified.
