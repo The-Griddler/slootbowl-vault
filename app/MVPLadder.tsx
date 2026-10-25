@@ -1,8 +1,6 @@
 
 "use client";
 
-import Link from "next/link";
-
 import type {
   MVPLeaderboard,
   MVPCandidate,
@@ -211,7 +209,7 @@ function FranchiseLine({
           lineHeight: 1.4,
         }}
       >
-        {SHORT_NAMES[rosterId]}
+        {SHORT_NAMES[rosterId] ?? "Unknown franchise"}
       </span>
     </div>
   );
@@ -433,7 +431,8 @@ function Challenger({
           }}
         >
           {candidate.mvpRosterId !== null
-            ? SHORT_NAMES[candidate.mvpRosterId]
+            ? SHORT_NAMES[candidate.mvpRosterId] ??
+              "Unknown franchise"
             : "Unconfirmed"}
         </span>
       </div>
@@ -507,8 +506,6 @@ function ChasingPlayer({
           {player?.position ?? "—"}
         </div>
 
-        {/* Franchise name and logo for ranks 4–10 */}
-
         <div
           style={{
             display: "flex",
@@ -532,7 +529,8 @@ function ChasingPlayer({
             }}
           >
             {rosterId !== null
-              ? SHORT_NAMES[rosterId] ?? "Unknown franchise"
+              ? SHORT_NAMES[rosterId] ??
+                "Unknown franchise"
               : "Franchise unconfirmed"}
           </span>
         </div>
@@ -576,7 +574,7 @@ export default function MVPLadder({
             margin: "0 0 7px",
           }}
         >
-          2026 SFL AWARDS
+          {leaderboard.season} SFL AWARDS
         </p>
 
         <h2
@@ -616,8 +614,8 @@ export default function MVPLadder({
           }}
         >
           MVP rankings will appear
-          once the 2026 season has
-          completed its first week.
+          once the {leaderboard.season} season
+          has completed its first week.
         </div>
       ) : (
         <>
@@ -677,22 +675,6 @@ export default function MVPLadder({
             </div>
           )}
         </>
-      )}
-
-      {leaderboard.cutoffLocked && (
-        <p
-          style={{
-            color: MUTED,
-            fontSize: 10,
-            lineHeight: 1.7,
-            marginTop: 13,
-          }}
-        >
-          Week 9 MVP franchise cutoff
-          has passed. Player eligibility
-          follows the Week 9 franchise,
-          subject to roster verification.
-        </p>
       )}
     </section>
   );
