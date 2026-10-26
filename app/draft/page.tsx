@@ -17,9 +17,8 @@ import {
 import {
   buildDraftTracker,
   DRAFT_ROUNDS,
-  type DraftStage,
-  type DraftTeam,
   type DraftPick,
+  type DraftTeam,
 } from "../../lib/draftTracker";
 
 import {
@@ -32,7 +31,8 @@ export const dynamic = "force-dynamic";
 const GOLD = "#eab308";
 const MUTED = "#9da7b3";
 const CARD = "#151b23";
-const BORDER = "1px solid #27303b";
+const BORDER = "#27303b";
+const GREEN = "#4ade80";
 
 type PageProps = {
   searchParams: Promise<{
@@ -40,78 +40,90 @@ type PageProps = {
   }>;
 };
 
-const FRANCHISE_MAP = new Map(
+const franchiseMap = new Map(
   FRANCHISES.map((franchise) => [
     franchise.rosterId,
     franchise,
   ])
 );
 
-function formatPF(
+function formatMaxPF(
   value: number | null
 ): string {
-  return value === null
-    ? "—"
-    : value.toLocaleString("en-AU", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-}
-
-function stageLabel(
-  stage: DraftStage
-): string {
-  switch (stage) {
-    case "missed_playoffs":
-      return "Miss playoffs";
-    case "week_15":
-      return "Wildcard exit";
-    case "week_16":
-      return "Conference exit";
-    case "runner_up":
-      return "Slootbowl runner-up";
-    case "champion":
-      return "Slootbowl champion";
-    default:
-      return "Projected finish";
+  if (value === null) {
+    return "—";
   }
+
+  return value.toLocaleString(
+    "en-AU",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
 }
 
-function stageColour(
-  stage: DraftStage
+function formatRecord(
+  team: DraftTeam
 ): string {
-  switch (stage) {
-    case "missed_playoffs":
-      return "#f87171";
-    case "week_15":
-      return "#fb923c";
-    case "week_16":
-      return "#60a5fa";
-    case "runner_up":
-      return "#cbd5e1";
-    case "champion":
-      return GOLD;
+  const base =
+    `${team.wins}-${team.losses}`;
+
+  return team.ties
+    ? `${base}-${team.ties}`
+    : base;
+}
+
+function shortTeamName(
+  rosterId: number
+): string {
+  switch (rosterId) {
+    case 1:
+      return "Mt Isa";
+    case 2:
+      return "Cambridge";
+    case 3:
+      return "Grimsby";
+    case 4:
+      return "Isle of Wight";
+    case 5:
+      return "Grays Town";
+    case 6:
+      return "Lincoln";
+    case 7:
+      return "Kalamata";
+    case 8:
+      return "Weybiza";
+    case 9:
+      return "East Rutherford";
+    case 10:
+      return "Chad";
     default:
-      return MUTED;
+      return getFranchiseName(
+        rosterId
+      );
   }
 }
 
 function TeamLogo({
   rosterId,
-  size = 38,
+  size = 32,
 }: {
   rosterId: number;
   size?: number;
 }) {
   const franchise =
-    FRANCHISE_MAP.get(rosterId);
+    franchiseMap.get(rosterId);
 
-  if (!franchise) return null;
+  if (!franchise) {
+    return null;
+  }
 
   return (
     <img
       src={franchise.logo}
-      alt=""
+      alt={franchise.name}
+      title={franchise.name}
       width={size}
       height={size}
       style={{
@@ -124,423 +136,34 @@ function TeamLogo({
   );
 }
 
-function TeamIdentity({
-  rosterId,
-  subtitle,
-  size = 38,
-}: {
-  rosterId: number;
-  subtitle?: string;
-  size?: number;
-}) {
+function TradeArrow() {
   return (
-    <div
+    <span
+      aria-label="Traded to"
+      title="Traded to"
       style={{
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: 10,
-        minWidth: 0,
+        justifyContent: "center",
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        background: "#225c35",
+        color: GREEN,
+        fontSize: 15,
+        fontWeight: 900,
+        flexShrink: 0,
       }}
     >
-      <TeamLogo
-        rosterId={rosterId}
-        size={size}
-      />
-
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            color: "#f4f5f7",
-            fontSize: 12,
-            fontWeight: 800,
-            lineHeight: 1.4,
-            overflowWrap: "anywhere",
-          }}
-        >
-          {getFranchiseName(rosterId)}
-        </div>
-
-        {subtitle && (
-          <div
-            style={{
-              color: MUTED,
-              fontSize: 10,
-              marginTop: 4,
-              lineHeight: 1.5,
-            }}
-          >
-            {subtitle}
-          </div>
-        )}
-      </div>
-    </div>
+      →
+    </span>
   );
 }
 
-function SectionHeading({
-  eyebrow,
-  title,
-  description,
+function RoundTabs({
+  selectedRound,
 }: {
-  eyebrow: string;
-  title: string;
-  description?: string;
-}) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <p
-        style={{
-          color: GOLD,
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: 1.3,
-          margin: "0 0 7px",
-        }}
-      >
-        {eyebrow}
-      </p>
-
-      <h2
-        style={{
-          fontSize: 23,
-          fontWeight: 900,
-          margin: 0,
-          lineHeight: 1.25,
-        }}
-      >
-        {title}
-      </h2>
-
-      {description && (
-        <p
-          style={{
-            color: MUTED,
-            fontSize: 12,
-            lineHeight: 1.7,
-            margin: "9px 0 0",
-          }}
-        >
-          {description}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function DraftOrderRow({
-  team,
-}: {
-  team: DraftTeam;
-}) {
-  const accent =
-    stageColour(team.stage);
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns:
-          "34px minmax(0, 1fr) auto",
-        alignItems: "center",
-        gap: 10,
-        padding: "14px 12px",
-        borderBottom: BORDER,
-      }}
-    >
-      <div
-        style={{
-          color:
-            team.draftPosition <= 4
-              ? GOLD
-              : "#f4f5f7",
-          fontSize: 23,
-          fontWeight: 900,
-          textAlign: "center",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {team.draftPosition}
-      </div>
-
-      <div style={{ minWidth: 0 }}>
-        <TeamIdentity
-          rosterId={team.rosterId}
-          subtitle={
-            `${team.wins}-${team.losses}` +
-            (team.ties
-              ? `-${team.ties}`
-              : "")
-          }
-        />
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 6,
-            marginTop: 9,
-            marginLeft: 48,
-          }}
-        >
-          <span
-            style={{
-              color: accent,
-              fontSize: 10,
-              fontWeight: 800,
-            }}
-          >
-            {stageLabel(team.stage)}
-          </span>
-
-          {team.confirmed && (
-            <span
-              style={{
-                color: "#86efac",
-                fontSize: 9,
-                fontWeight: 800,
-              }}
-            >
-              · CONFIRMED
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div
-        style={{
-          textAlign: "right",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <div
-          style={{
-            color: "#ffffff",
-            fontSize: 14,
-            fontWeight: 900,
-            fontVariantNumeric:
-              "tabular-nums",
-          }}
-        >
-          {formatPF(team.maxPF)}
-        </div>
-
-        <div
-          style={{
-            color: MUTED,
-            fontSize: 10,
-            marginTop: 5,
-          }}
-        >
-          MAX PF
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DraftOrder({
-  teams,
-}: {
-  teams: DraftTeam[];
-}) {
-  return (
-    <section style={{ marginTop: 32 }}>
-      <SectionHeading
-        eyebrow="THE TANK RACE"
-        title="Projected Draft Order"
-        description="Draft positions based on current conference standings, Max PF and completed playoff results."
-      />
-
-      <div
-        style={{
-          background: CARD,
-          border: BORDER,
-          borderRadius: 15,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent:
-              "space-between",
-            alignItems: "center",
-            gap: 10,
-            background: "#1c2530",
-            padding: "12px 14px",
-          }}
-        >
-          <span
-            style={{
-              color: MUTED,
-              fontSize: 10,
-              fontWeight: 900,
-              letterSpacing: 1,
-            }}
-          >
-            DRAFT POSITION
-          </span>
-
-          <span
-            style={{
-              color: MUTED,
-              fontSize: 10,
-              fontWeight: 900,
-              letterSpacing: 1,
-            }}
-          >
-            POTENTIAL POINTS
-          </span>
-        </div>
-
-        {teams.map((team) => (
-          <DraftOrderRow
-            key={team.rosterId}
-            team={team}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function PickCard({
-  pick,
-}: {
-  pick: DraftPick;
-}) {
-  const owner =
-    FRANCHISE_MAP.get(
-      pick.ownerRosterId
-    );
-
-  return (
-    <article
-      style={{
-        background: CARD,
-        border: pick.traded
-          ? "1px solid #7b6327"
-          : BORDER,
-        borderRadius: 13,
-        padding: 14,
-        minWidth: 0,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 13,
-        }}
-      >
-        <div>
-          <span
-            style={{
-              color: GOLD,
-              fontSize: 20,
-              fontWeight: 900,
-            }}
-          >
-            #{pick.overallPick}
-          </span>
-
-          <span
-            style={{
-              color: MUTED,
-              fontSize: 10,
-              marginLeft: 9,
-            }}
-          >
-            ROUND {pick.round}
-            {" · "}
-            PICK {pick.pickInRound}
-          </span>
-        </div>
-
-        {pick.traded && (
-          <span
-            style={{
-              color: "#facc15",
-              background: "#30291a",
-              borderRadius: 99,
-              padding: "5px 8px",
-              fontSize: 9,
-              fontWeight: 900,
-              whiteSpace: "nowrap",
-            }}
-          >
-            TRADED
-          </span>
-        )}
-      </div>
-
-      <TeamIdentity
-        rosterId={pick.ownerRosterId}
-        subtitle="Current pick owner"
-        size={42}
-      />
-
-      {pick.traded && (
-        <div
-          style={{
-            borderTop: BORDER,
-            marginTop: 13,
-            paddingTop: 11,
-          }}
-        >
-          <div
-            style={{
-              color: MUTED,
-              fontSize: 10,
-              marginBottom: 7,
-            }}
-          >
-            Originally owned by
-          </div>
-
-          <TeamIdentity
-            rosterId={
-              pick.originalRosterId
-            }
-            size={25}
-          />
-        </div>
-      )}
-
-      {!pick.traded && (
-        <div
-          style={{
-            color: MUTED,
-            fontSize: 10,
-            marginTop: 12,
-          }}
-        >
-          Original selection
-        </div>
-      )}
-
-      <div
-        style={{
-          height: 3,
-          borderRadius: 99,
-          background:
-            owner?.primaryColour ??
-            "#64748b",
-          marginTop: 13,
-        }}
-      />
-    </article>
-  );
-}
-
-function RoundSelector({
-  selected,
-}: {
-  selected: number;
+  selectedRound: number;
 }) {
   return (
     <nav
@@ -549,47 +172,311 @@ function RoundSelector({
         display: "grid",
         gridTemplateColumns:
           "repeat(5, minmax(0, 1fr))",
-        gap: 6,
-        marginBottom: 16,
+        gap: 5,
+        marginBottom: 14,
       }}
     >
       {Array.from(
-        { length: DRAFT_ROUNDS },
+        {
+          length: DRAFT_ROUNDS,
+        },
         (_, index) => index + 1
-      ).map((round) => (
-        <Link
-          key={round}
-          href={`/draft?round=${round}#round-picks`}
-          aria-current={
-            selected === round
-              ? "page"
-              : undefined
-          }
-          style={{
-            textAlign: "center",
-            padding: "12px 5px",
-            borderRadius: 9,
-            background:
-              selected === round
+      ).map((round) => {
+        const active =
+          round === selectedRound;
+
+        return (
+          <Link
+            key={round}
+            href={`/draft?round=${round}`}
+            aria-current={
+              active
+                ? "page"
+                : undefined
+            }
+            style={{
+              textDecoration: "none",
+              textAlign: "center",
+              padding: "11px 4px",
+              borderRadius: 7,
+              border: active
+                ? `1px solid ${GOLD}`
+                : `1px solid ${BORDER}`,
+              background: active
                 ? GOLD
-                : "#1d2938",
-            color:
-              selected === round
-                ? "#10151c"
+                : "#1c2530",
+              color: active
+                ? "#111827"
                 : "#cbd5e1",
-            border:
-              selected === round
-                ? "1px solid #eab308"
-                : BORDER,
-            textDecoration: "none",
-            fontSize: 12,
-            fontWeight: 900,
+              fontWeight: 900,
+              fontSize: 12,
+            }}
+          >
+            ROUND {round}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DraftRow({
+  pick,
+  team,
+}: {
+  pick: DraftPick;
+  team: DraftTeam;
+}) {
+  const originalFranchise =
+    franchiseMap.get(
+      pick.originalRosterId
+    );
+
+  const accent =
+    originalFranchise
+      ?.primaryColour ??
+    "#64748b";
+
+  return (
+    <tr
+      style={{
+        background: CARD,
+        borderBottom:
+          `1px solid ${BORDER}`,
+      }}
+    >
+      <td
+        style={{
+          padding: "12px 8px",
+          width: 46,
+          textAlign: "center",
+          color: GOLD,
+          fontWeight: 900,
+          fontSize: 17,
+          fontVariantNumeric:
+            "tabular-nums",
+          borderLeft:
+            `3px solid ${accent}`,
+        }}
+      >
+        {pick.overallPick}
+      </td>
+
+      <td
+        style={{
+          padding: "8px 6px",
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
           }}
         >
-          R{round}
-        </Link>
-      ))}
-    </nav>
+          <TeamLogo
+            rosterId={
+              pick.originalRosterId
+            }
+            size={33}
+          />
+
+          <span
+            style={{
+              color: pick.traded
+                ? "#cbd5e1"
+                : "#f4f5f7",
+              fontWeight: 700,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {shortTeamName(
+              pick.originalRosterId
+            )}
+          </span>
+
+          {pick.traded && (
+            <>
+              <TradeArrow />
+
+              <TeamLogo
+                rosterId={
+                  pick.ownerRosterId
+                }
+                size={30}
+              />
+            </>
+          )}
+        </div>
+      </td>
+
+      <td
+        style={{
+          padding: "10px 9px",
+          textAlign: "center",
+          color: "#cbd5e1",
+          fontSize: 12,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          fontVariantNumeric:
+            "tabular-nums",
+        }}
+      >
+        {formatRecord(team)}
+      </td>
+
+      <td
+        style={{
+          padding: "10px 11px",
+          textAlign: "right",
+          color: "#f4f5f7",
+          fontSize: 12,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          fontVariantNumeric:
+            "tabular-nums",
+        }}
+      >
+        {formatMaxPF(
+          team.maxPF
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function DraftBoard({
+  picks,
+  teams,
+}: {
+  picks: DraftPick[];
+  teams: DraftTeam[];
+}) {
+  const teamMap = new Map(
+    teams.map((team) => [
+      team.rosterId,
+      team,
+    ])
+  );
+
+  return (
+    <div
+      style={{
+        border:
+          `1px solid ${BORDER}`,
+        borderRadius: 10,
+        overflow: "hidden",
+        background: CARD,
+      }}
+    >
+      <div
+        style={{
+          overflowX: "auto",
+          WebkitOverflowScrolling:
+            "touch",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse:
+              "collapse",
+            minWidth: 420,
+          }}
+        >
+          <thead>
+            <tr
+              style={{
+                background: "#1c2530",
+              }}
+            >
+              <th
+                style={{
+                  padding:
+                    "12px 8px",
+                  textAlign:
+                    "center",
+                  color: MUTED,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  width: 46,
+                }}
+              >
+                PICK
+              </th>
+
+              <th
+                style={{
+                  padding:
+                    "12px 6px",
+                  textAlign:
+                    "left",
+                  color: MUTED,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                }}
+              >
+                TEAM
+              </th>
+
+              <th
+                style={{
+                  padding:
+                    "12px 9px",
+                  textAlign:
+                    "center",
+                  color: MUTED,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                }}
+              >
+                REC
+              </th>
+
+              <th
+                style={{
+                  padding:
+                    "12px 11px",
+                  textAlign:
+                    "right",
+                  color: MUTED,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                }}
+              >
+                MAX PF
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {picks.map((pick) => {
+              const team =
+                teamMap.get(
+                  pick.originalRosterId
+                );
+
+              if (!team) {
+                return null;
+              }
+
+              return (
+                <DraftRow
+                  key={
+                    pick.overallPick
+                  }
+                  pick={pick}
+                  team={team}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -620,19 +507,21 @@ export default async function DraftPage({
   const params =
     await searchParams;
 
-  const rawRound =
+  const roundValue =
     Array.isArray(params.round)
       ? params.round[0]
       : params.round;
 
-  const parsedRound =
-    Number(rawRound ?? 1);
+  const requestedRound =
+    Number(roundValue ?? 1);
 
   const selectedRound =
-    Number.isInteger(parsedRound) &&
-    parsedRound >= 1 &&
-    parsedRound <= DRAFT_ROUNDS
-      ? parsedRound
+    Number.isInteger(
+      requestedRound
+    ) &&
+    requestedRound >= 1 &&
+    requestedRound <= DRAFT_ROUNDS
+      ? requestedRound
       : 1;
 
   const league =
@@ -647,8 +536,12 @@ export default async function DraftPage({
   ] = await Promise.all([
     getHistoricalData(),
     getNFLState(),
-    getRosters(league.league_id),
-    getTradedPicks(league.league_id),
+    getRosters(
+      league.league_id
+    ),
+    getTradedPicks(
+      league.league_id
+    ),
     getWinnersBracket(
       league.league_id
     ),
@@ -662,8 +555,10 @@ export default async function DraftPage({
 
   const tracker =
     buildDraftTracker({
-      season: league.season,
-      standings: home.standings,
+      season:
+        league.season,
+      standings:
+        home.standings,
       rosters,
       tradedPicks,
       winnersBracket,
@@ -673,337 +568,159 @@ export default async function DraftPage({
   const roundPicks =
     tracker.picks.filter(
       (pick) =>
-        pick.round === selectedRound
+        pick.round ===
+        selectedRound
     );
-
-  const tradedCount =
-    tracker.picks.filter(
-      (pick) => pick.traded
-    ).length;
 
   return (
     <main
       style={{
         color: "#f4f5f7",
-        paddingBottom: 40,
+        paddingBottom: 36,
       }}
     >
-      <header>
+      <header
+        style={{
+          marginBottom: 20,
+        }}
+      >
         <p
           style={{
             color: GOLD,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 900,
-            letterSpacing: 2,
-            margin: "0 0 12px",
+            letterSpacing: 1.5,
+            margin: "0 0 8px",
           }}
         >
-          SFL · DRAFT CENTRAL
-        </p>
-
-        <h1
-          style={{
-            fontSize:
-              "clamp(34px, 9vw, 50px)",
-            fontWeight: 900,
-            letterSpacing: -1.2,
-            lineHeight: 1.1,
-            margin: 0,
-          }}
-        >
-          {tracker.draftSeason}
-          {" "}Draft
-        </h1>
-
-        <p
-          style={{
-            color: MUTED,
-            fontSize: 14,
-            lineHeight: 1.7,
-            margin: "14px 0 0",
-          }}
-        >
-          The road to the next SFL
-          championship starts here.
-          Follow the live draft order,
-          the tank race and every
-          traded selection.
+          SFL DRAFT CENTRAL
         </p>
 
         <div
           style={{
             display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginTop: 16,
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: 12,
           }}
         >
+          <h1
+            style={{
+              margin: 0,
+              fontSize:
+                "clamp(28px, 7vw, 38px)",
+              fontWeight: 900,
+              letterSpacing: -0.8,
+            }}
+          >
+            {tracker.draftSeason}
+            {" "}Draft
+          </h1>
+
           <span
             style={{
               color:
                 tracker.status ===
                 "official"
-                  ? "#86efac"
+                  ? GREEN
                   : GOLD,
-              background: "#1d2938",
-              border: BORDER,
+              background: "#1c2530",
+              border:
+                `1px solid ${BORDER}`,
               borderRadius: 99,
-              padding: "8px 12px",
+              padding: "7px 10px",
               fontSize: 10,
               fontWeight: 900,
-              letterSpacing: 0.5,
+              whiteSpace: "nowrap",
             }}
           >
             {tracker.status ===
             "official"
-              ? "● OFFICIAL ORDER"
-              : "● LIVE PROJECTION"}
-          </span>
-
-          <span
-            style={{
-              color: "#cbd5e1",
-              background: "#1d2938",
-              border: BORDER,
-              borderRadius: 99,
-              padding: "8px 12px",
-              fontSize: 10,
-              fontWeight: 800,
-            }}
-          >
-            {tracker.picks.length}
-            {" "}TOTAL PICKS
-          </span>
-
-          <span
-            style={{
-              color: "#cbd5e1",
-              background: "#1d2938",
-              border: BORDER,
-              borderRadius: 99,
-              padding: "8px 12px",
-              fontSize: 10,
-              fontWeight: 800,
-            }}
-          >
-            {tradedCount}
-            {" "}TRADED PICKS
+              ? "OFFICIAL"
+              : "PROJECTED"}
           </span>
         </div>
       </header>
 
-      <DraftOrder
+      <RoundTabs
+        selectedRound={
+          selectedRound
+        }
+      />
+
+      <DraftBoard
+        picks={roundPicks}
         teams={tracker.teams}
       />
 
-      <section
-        id="round-picks"
+      <p
         style={{
-          marginTop: 36,
-          scrollMarginTop: 20,
+          color: MUTED,
+          fontSize: 11,
+          lineHeight: 1.7,
+          margin: "13px 2px 0",
         }}
       >
-        <SectionHeading
-          eyebrow="ON THE CLOCK"
-          title="Draft Pick Ownership"
-          description="Select a round to see who currently owns each selection. Traded picks retain their original franchise's draft position."
-        />
+        Draft order follows conference
+        finishing positions and Max PF.
+        A green arrow indicates a
+        traded pick, with the receiving
+        franchise logo shown after it.
+      </p>
 
-        <RoundSelector
-          selected={selectedRound}
-        />
-
-        <div
+      {tracker.warnings.length >
+        0 && (
+        <details
           style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-            gap: 10,
-          }}
-        >
-          {roundPicks.map((pick) => (
-            <PickCard
-              key={pick.overallPick}
-              pick={pick}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section
-        style={{
-          marginTop: 36,
-        }}
-      >
-        <SectionHeading
-          eyebrow="THE RULEBOOK"
-          title="How the Order Works"
-        />
-
-        <div
-          style={{
+            marginTop: 20,
+            border:
+              `1px solid ${BORDER}`,
+            borderRadius: 9,
             background: CARD,
-            border: BORDER,
-            borderRadius: 15,
-            padding: 16,
-            display: "grid",
-            gap: 13,
+            padding: "12px 14px",
           }}
         >
-          {[
-            {
-              range: "01–04",
-              title: "Missed playoffs",
-              detail:
-                "The four non-playoff teams, ordered by lowest regular-season Max PF.",
-            },
-            {
-              range: "05–06",
-              title: "Wildcard exits",
-              detail:
-                "The two Week 15 losers, ordered by lowest regular-season Max PF.",
-            },
-            {
-              range: "07–08",
-              title: "Conference exits",
-              detail:
-                "The two Week 16 losers, ordered by lowest regular-season Max PF.",
-            },
-            {
-              range: "09",
-              title: "Slootbowl runner-up",
-              detail:
-                "The losing Slootbowl finalist.",
-            },
-            {
-              range: "10",
-              title: "Slootbowl champion",
-              detail:
-                "The SFL champion selects last in each round.",
-            },
-          ].map((rule) => (
-            <div
-              key={rule.range}
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "52px minmax(0, 1fr)",
-                gap: 12,
-                alignItems: "start",
-              }}
-            >
-              <span
-                style={{
-                  color: GOLD,
-                  fontSize: 16,
-                  fontWeight: 900,
-                  fontVariantNumeric:
-                    "tabular-nums",
-                }}
-              >
-                {rule.range}
-              </span>
+          <summary
+            style={{
+              cursor: "pointer",
+              color: MUTED,
+              fontSize: 12,
+              fontWeight: 800,
+            }}
+          >
+            Draft tracker notes
+          </summary>
 
-              <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 900,
-                  }}
-                >
-                  {rule.title}
-                </div>
-
+          <div
+            style={{
+              marginTop: 12,
+            }}
+          >
+            {tracker.warnings.map(
+              (
+                warning,
+                index
+              ) => (
                 <p
+                  key={index}
                   style={{
                     color: MUTED,
                     fontSize: 11,
                     lineHeight: 1.7,
-                    margin: "4px 0 0",
+                    margin:
+                      index === 0
+                        ? 0
+                        : "8px 0 0",
                   }}
                 >
-                  {rule.detail}
+                  {warning}
                 </p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p
-          style={{
-            color: MUTED,
-            fontSize: 11,
-            lineHeight: 1.7,
-            marginTop: 13,
-          }}
-        >
-          Before playoff results are
-          confirmed, conference ranks
-          determine projected finishing
-          positions. Higher Max PF
-          projects the Slootbowl
-          champion. Regular-season
-          Max PF should be frozen
-          after Week 14; this data
-          source is still being
-          verified for postseason use.
-        </p>
-      </section>
-
-      {tracker.warnings.length > 0 && (
-        <section
-          style={{
-            marginTop: 28,
-            background: "#1c2530",
-            border: BORDER,
-            borderRadius: 13,
-            padding: 15,
-          }}
-        >
-          <div
-            style={{
-              color: GOLD,
-              fontSize: 11,
-              fontWeight: 900,
-              marginBottom: 9,
-            }}
-          >
-            DRAFT TRACKER STATUS
+              )
+            )}
           </div>
-
-          {tracker.warnings.map(
-            (warning, index) => (
-              <p
-                key={index}
-                style={{
-                  color: MUTED,
-                  fontSize: 11,
-                  lineHeight: 1.7,
-                  margin:
-                    index === 0
-                      ? 0
-                      : "8px 0 0",
-                }}
-              >
-                {warning}
-              </p>
-            )
-          )}
-        </section>
+        </details>
       )}
-
-      <footer
-        style={{
-          color: "#687384",
-          fontSize: 11,
-          textAlign: "center",
-          lineHeight: 1.7,
-          marginTop: 38,
-        }}
-      >
-        Slootbowl Vault · SFL Draft
-        Central
-      </footer>
     </main>
   );
 }
