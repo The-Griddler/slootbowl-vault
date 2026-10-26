@@ -72,6 +72,8 @@ function stageLabel(
       return "Slootbowl runner-up";
     case "champion":
       return "Slootbowl champion";
+    default:
+      return "Projected finish";
   }
 }
 
@@ -89,6 +91,8 @@ function stageColour(
       return "#cbd5e1";
     case "champion":
       return GOLD;
+    default:
+      return MUTED;
   }
 }
 
@@ -262,8 +266,7 @@ function DraftOrderRow({
         <TeamIdentity
           rosterId={team.rosterId}
           subtitle={
-            `${team.conference} #${team.conferenceRank}` +
-            ` · ${team.wins}-${team.losses}` +
+            `${team.wins}-${team.losses}` +
             (team.ties
               ? `-${team.ties}`
               : "")
