@@ -32,7 +32,40 @@ export type SleeperRoster = {
     ties: number;
     fpts: number;
     fpts_against: number;
+
+    /**
+     * Sleeper's Max PF (potential points).
+     *
+     * The whole-number and decimal
+     * components are stored separately.
+     */
+    ppts?: number;
+    ppts_decimal?: number;
   };
+};
+
+/**
+ * A traded draft pick.
+ *
+ * roster_id:
+ *   Original franchise that owns
+ *   the draft position.
+ *
+ * owner_id:
+ *   Franchise currently holding
+ *   the pick.
+ *
+ * previous_owner_id:
+ *   Franchise that held the pick
+ *   immediately before its latest
+ *   transfer.
+ */
+export type SleeperTradedPick = {
+  season: string;
+  round: number;
+  roster_id: number;
+  owner_id: number;
+  previous_owner_id: number;
 };
 
 export type SleeperMatchup = {
@@ -393,6 +426,39 @@ export async function getRosters(
   if (!response.ok) {
     throw new Error(
       `Failed to load Sleeper rosters for league ${leagueId}`
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Retrieve traded draft picks.
+ *
+ * Sleeper returns the current
+ * ownership of traded picks.
+ *
+ * A pick absent from this response
+ * remains with its original franchise.
+ *
+ * This endpoint can include picks
+ * from multiple future draft seasons.
+ */
+export async function getTradedPicks(
+  leagueId: string = LEAGUE_ID
+): Promise<SleeperTradedPick[]> {
+  const response = await fetch(
+    `https://api.sleeper.app/v1/league/${leagueId}/traded_picks`,
+    {
+      next: {
+        revalidate: 300,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load traded picks for league ${leagueId}`
     );
   }
 
@@ -762,7 +828,7 @@ export async function getHistoricalSeason(
         teamB.starters_points ?? [];
 
       /**
-       * New: retain the full
+       * Retain the full
        * historical matchup roster,
        * including bench players.
        */
