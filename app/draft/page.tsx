@@ -54,13 +54,10 @@ function formatMaxPF(
     return "—";
   }
 
-  return value.toLocaleString(
-    "en-AU",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  );
+  return value.toLocaleString("en-AU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
 function formatRecord(
@@ -107,7 +104,7 @@ function shortTeamName(
 
 function TeamLogo({
   rosterId,
-  size = 32,
+  size = 26,
 }: {
   rosterId: number;
   size?: number;
@@ -145,12 +142,12 @@ function TradeArrow() {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 20,
-        height: 20,
+        width: 16,
+        height: 16,
         borderRadius: "50%",
         background: "#225c35",
         color: GREEN,
-        fontSize: 15,
+        fontSize: 12,
         fontWeight: 900,
         flexShrink: 0,
       }}
@@ -172,14 +169,12 @@ function RoundTabs({
         display: "grid",
         gridTemplateColumns:
           "repeat(5, minmax(0, 1fr))",
-        gap: 5,
+        gap: 4,
         marginBottom: 14,
       }}
     >
       {Array.from(
-        {
-          length: DRAFT_ROUNDS,
-        },
+        { length: DRAFT_ROUNDS },
         (_, index) => index + 1
       ).map((round) => {
         const active =
@@ -197,7 +192,7 @@ function RoundTabs({
             style={{
               textDecoration: "none",
               textAlign: "center",
-              padding: "11px 4px",
+              padding: "10px 2px",
               borderRadius: 7,
               border: active
                 ? `1px solid ${GOLD}`
@@ -209,10 +204,11 @@ function RoundTabs({
                 ? "#111827"
                 : "#cbd5e1",
               fontWeight: 900,
-              fontSize: 12,
+              fontSize: 11,
+              whiteSpace: "nowrap",
             }}
           >
-            ROUND {round}
+            R{round}
           </Link>
         );
       })}
@@ -247,12 +243,12 @@ function DraftRow({
     >
       <td
         style={{
-          padding: "12px 8px",
-          width: 46,
+          padding: "10px 3px",
+          width: 30,
           textAlign: "center",
           color: GOLD,
           fontWeight: 900,
-          fontSize: 17,
+          fontSize: 14,
           fontVariantNumeric:
             "tabular-nums",
           borderLeft:
@@ -264,7 +260,7 @@ function DraftRow({
 
       <td
         style={{
-          padding: "8px 6px",
+          padding: "8px 3px",
           minWidth: 0,
         }}
       >
@@ -272,7 +268,7 @@ function DraftRow({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 4,
             minWidth: 0,
           }}
         >
@@ -280,7 +276,7 @@ function DraftRow({
             rosterId={
               pick.originalRosterId
             }
-            size={33}
+            size={26}
           />
 
           <span
@@ -289,8 +285,11 @@ function DraftRow({
                 ? "#cbd5e1"
                 : "#f4f5f7",
               fontWeight: 700,
-              fontSize: 13,
+              fontSize: 11,
               whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
             }}
           >
             {shortTeamName(
@@ -306,7 +305,7 @@ function DraftRow({
                 rosterId={
                   pick.ownerRosterId
                 }
-                size={30}
+                size={23}
               />
             </>
           )}
@@ -315,10 +314,10 @@ function DraftRow({
 
       <td
         style={{
-          padding: "10px 9px",
+          padding: "10px 3px",
           textAlign: "center",
           color: "#cbd5e1",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 600,
           whiteSpace: "nowrap",
           fontVariantNumeric:
@@ -330,10 +329,10 @@ function DraftRow({
 
       <td
         style={{
-          padding: "10px 11px",
+          padding: "10px 5px",
           textAlign: "right",
           color: "#f4f5f7",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 800,
           whiteSpace: "nowrap",
           fontVariantNumeric:
@@ -370,112 +369,102 @@ function DraftBoard({
         borderRadius: 10,
         overflow: "hidden",
         background: CARD,
+        width: "100%",
       }}
     >
-      <div
+      <table
         style={{
-          overflowX: "auto",
-          WebkitOverflowScrolling:
-            "touch",
+          width: "100%",
+          borderCollapse: "collapse",
+          tableLayout: "fixed",
         }}
       >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse:
-              "collapse",
-            minWidth: 420,
-          }}
-        >
-          <thead>
-            <tr
+        <colgroup>
+          <col style={{ width: "9%" }} />
+          <col style={{ width: "53%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "23%" }} />
+        </colgroup>
+
+        <thead>
+          <tr
+            style={{
+              background: "#1c2530",
+            }}
+          >
+            <th
               style={{
-                background: "#1c2530",
+                padding: "11px 2px",
+                textAlign: "center",
+                color: MUTED,
+                fontSize: 9,
+                letterSpacing: 0.3,
               }}
             >
-              <th
-                style={{
-                  padding:
-                    "12px 8px",
-                  textAlign:
-                    "center",
-                  color: MUTED,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                  width: 46,
-                }}
-              >
-                PICK
-              </th>
+              PK
+            </th>
 
-              <th
-                style={{
-                  padding:
-                    "12px 6px",
-                  textAlign:
-                    "left",
-                  color: MUTED,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                }}
-              >
-                TEAM
-              </th>
+            <th
+              style={{
+                padding: "11px 3px",
+                textAlign: "left",
+                color: MUTED,
+                fontSize: 9,
+                letterSpacing: 0.3,
+              }}
+            >
+              TEAM
+            </th>
 
-              <th
-                style={{
-                  padding:
-                    "12px 9px",
-                  textAlign:
-                    "center",
-                  color: MUTED,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                }}
-              >
-                REC
-              </th>
+            <th
+              style={{
+                padding: "11px 2px",
+                textAlign: "center",
+                color: MUTED,
+                fontSize: 9,
+                letterSpacing: 0.3,
+              }}
+            >
+              REC
+            </th>
 
-              <th
-                style={{
-                  padding:
-                    "12px 11px",
-                  textAlign:
-                    "right",
-                  color: MUTED,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                }}
-              >
-                MAX PF
-              </th>
-            </tr>
-          </thead>
+            <th
+              style={{
+                padding: "11px 5px",
+                textAlign: "right",
+                color: MUTED,
+                fontSize: 9,
+                letterSpacing: 0.3,
+              }}
+            >
+              MAX PF
+            </th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {picks.map((pick) => {
-              const team =
-                teamMap.get(
-                  pick.originalRosterId
-                );
-
-              if (!team) {
-                return null;
-              }
-
-              return (
-                <DraftRow
-                  key={
-                    pick.overallPick
-                  }
-                  pick={pick}
-                  team={team}
-                />
+        <tbody>
+          {picks.map((pick) => {
+            const team =
+              teamMap.get(
+                pick.originalRosterId
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+
+            if (!team) {
+              return null;
+            }
+
+            return (
+              <DraftRow
+                key={
+                  pick.overallPick
+                }
+                pick={pick}
+                team={team}
+              />
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -577,11 +566,13 @@ export default async function DraftPage({
       style={{
         color: "#f4f5f7",
         paddingBottom: 36,
+        width: "100%",
+        minWidth: 0,
       }}
     >
       <header
         style={{
-          marginBottom: 20,
+          marginBottom: 17,
         }}
       >
         <p
@@ -602,7 +593,7 @@ export default async function DraftPage({
             justifyContent:
               "space-between",
             alignItems: "center",
-            gap: 12,
+            gap: 10,
           }}
         >
           <h1
