@@ -30,6 +30,13 @@ const mainItems = [
 
 const moreItems = [
   {
+    href: "/draft",
+    label: "Draft Central",
+    icon: "📝",
+    description:
+      "Live draft order, Max PF standings and traded picks across all five rounds",
+  },
+  {
     href: "/matchups",
     label: "Matchup Archive",
     icon: "🏈",
