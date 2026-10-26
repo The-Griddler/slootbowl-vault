@@ -5,6 +5,10 @@ import {
 } from "./franchises";
 
 import type {
+  HomeStanding,
+} from "./homeStats";
+
+import type {
   SleeperBracketMatch,
   SleeperNFLState,
   SleeperRoster,
@@ -34,6 +38,8 @@ export type DraftTeam = {
   logo: string;
   primaryColour: string;
   secondaryColour: string;
+  conference: "OBFC" | "GPFC";
+  conferenceRank: number;
   wins: number;
   losses: number;
   ties: number;
@@ -64,6 +70,7 @@ export type DraftTracker = {
 
 type BuildDraftTrackerArgs = {
   season: string;
+  standings: HomeStanding[];
   rosters: SleeperRoster[];
   tradedPicks: SleeperTradedPick[];
   winnersBracket: SleeperBracketMatch[];
@@ -71,10 +78,25 @@ type BuildDraftTrackerArgs = {
   playoffRosterIds?: number[];
 };
 
+const STAGE_ORDER: Record<
+  DraftStage,
+  number
+> = {
+  missed_playoffs: 0,
+  week_15: 1,
+  week_16: 2,
+  runner_up: 3,
+  champion: 4,
+  projected_playoff: 5,
+};
+
 function getMaxPF(
-  roster: SleeperRoster
+  roster: SleeperRoster | undefined
 ): number | null {
-  const whole = roster.settings.ppts;
+  if (!roster) return null;
+
+  const whole =
+    roster.settings.ppts;
 
   if (
     typeof whole !== "number" ||
@@ -91,20 +113,6 @@ function getMaxPF(
       (whole + decimal / 100) * 100
     ) / 100
   );
-}
-
-function getRecord(
-  roster: SleeperRoster
-): {
-  wins: number;
-  losses: number;
-  ties: number;
-} {
-  return {
-    wins: roster.settings.wins ?? 0,
-    losses: roster.settings.losses ?? 0,
-    ties: roster.settings.ties ?? 0,
-  };
 }
 
 function compareMaxPF(
@@ -132,6 +140,33 @@ function compareMaxPF(
   );
 }
 
+function projectedStage(
+  conferenceRank: number
+): DraftStage {
+  if (conferenceRank >= 4) {
+    return "missed_playoffs";
+  }
+
+  if (conferenceRank === 3) {
+    return "week_15";
+  }
+
+  if (conferenceRank === 2) {
+    return "week_16";
+  }
+
+  return "runner_up";
+}
+
+function isMainBracketMatch(
+  match: SleeperBracketMatch
+): boolean {
+  return (
+    match.p === undefined ||
+    match.p === 1
+  );
+}
+
 function getPlayoffParticipants(
   bracket: SleeperBracketMatch[]
 ): Set<number> {
@@ -139,10 +174,7 @@ function getPlayoffParticipants(
     new Set<number>();
 
   for (const match of bracket) {
-    if (
-      match.p !== undefined &&
-      match.p !== 1
-    ) {
+    if (!isMainBracketMatch(match)) {
       continue;
     }
 
@@ -167,15 +199,11 @@ function getEliminations(
     new Map<number, DraftStage>();
 
   for (const match of bracket) {
-    if (
-      match.p !== undefined &&
-      match.p !== 1
-    ) {
+    if (!isMainBracketMatch(match)) {
       continue;
     }
 
-    const week =
-      14 + match.r;
+    const week = 14 + match.r;
 
     if (
       !isNFLWeekComplete(
@@ -199,12 +227,16 @@ function getEliminations(
         match.l,
         "week_15"
       );
-    } else if (match.r === 2) {
+    }
+
+    if (match.r === 2) {
       stages.set(
         match.l,
         "week_16"
       );
-    } else if (match.r === 3) {
+    }
+
+    if (match.r === 3) {
       stages.set(
         match.l,
         "runner_up"
@@ -218,30 +250,6 @@ function getEliminations(
   }
 
   return stages;
-}
-
-function stageOrder(
-  stage: DraftStage
-): number {
-  switch (stage) {
-    case "missed_playoffs":
-      return 0;
-
-    case "week_15":
-      return 1;
-
-    case "week_16":
-      return 2;
-
-    case "runner_up":
-      return 3;
-
-    case "champion":
-      return 4;
-
-    case "projected_playoff":
-      return 5;
-  }
 }
 
 function makeDraftPicks(
@@ -306,6 +314,7 @@ function makeDraftPicks(
 
 export function buildDraftTracker({
   season,
+  standings,
   rosters,
   tradedPicks,
   winnersBracket,
@@ -332,6 +341,13 @@ export function buildDraftTracker({
       nflState
     );
 
+  const rosterMap = new Map(
+    rosters.map((roster) => [
+      roster.roster_id,
+      roster,
+    ])
+  );
+
   const bracketParticipants =
     getPlayoffParticipants(
       winnersBracket
@@ -339,9 +355,7 @@ export function buildDraftTracker({
 
   const participants =
     playoffRosterIds
-      ? new Set(
-          playoffRosterIds
-        )
+      ? new Set(playoffRosterIds)
       : bracketParticipants;
 
   const eliminations =
@@ -352,50 +366,54 @@ export function buildDraftTracker({
     );
 
   const teams: DraftTeam[] =
-    rosters.map((roster) => {
+    standings.map((standing) => {
       const franchise =
         FRANCHISES.find(
           (item) =>
             item.rosterId ===
-            roster.roster_id
+            standing.rosterId
         );
 
-      const record =
-        getRecord(roster);
+      const roster =
+        rosterMap.get(
+          standing.rosterId
+        );
 
-      let stage: DraftStage =
-        "projected_playoff";
+      let stage =
+        projectedStage(
+          standing.rank
+        );
 
       let confirmed = false;
 
       if (
         regularSeasonComplete &&
+        participants.size === 6 &&
         !participants.has(
-          roster.roster_id
+          standing.rosterId
         )
       ) {
-        stage =
-          "missed_playoffs";
+        stage = "missed_playoffs";
         confirmed = true;
-      } else {
-        const eliminated =
-          eliminations.get(
-            roster.roster_id
-          );
+      }
 
-        if (eliminated) {
-          stage = eliminated;
-          confirmed = true;
-        }
+      const actualStage =
+        eliminations.get(
+          standing.rosterId
+        );
+
+      if (actualStage) {
+        stage = actualStage;
+        confirmed = true;
       }
 
       return {
         rosterId:
-          roster.roster_id,
+          standing.rosterId,
         name:
           franchise?.name ??
           getFranchiseName(
-            roster.roster_id
+            standing.rosterId
           ),
         logo:
           franchise?.logo ?? "",
@@ -405,53 +423,72 @@ export function buildDraftTracker({
         secondaryColour:
           franchise?.secondaryColour ??
           "#ffffff",
-        ...record,
-        maxPF: getMaxPF(roster),
+        conference:
+          standing.conference,
+        conferenceRank:
+          standing.rank,
+        wins:
+          standing.wins,
+        losses:
+          standing.losses,
+        ties:
+          standing.ties,
+        maxPF:
+          getMaxPF(roster),
         stage,
         draftPosition: 0,
         confirmed,
       };
     });
 
-  if (
+  /**
+   * Until the Slootbowl is decided,
+   * project the two conference
+   * leaders into the championship.
+   *
+   * Higher Max PF projects the
+   * champion, who drafts last.
+   */
+  const actualChampion =
     teams.some(
       (team) =>
-        team.maxPF === null
-    )
-  ) {
-    warnings.push(
-      "Max PF is unavailable for one or more franchises."
+        team.stage === "champion" &&
+        team.confirmed
     );
+
+  if (!actualChampion) {
+    const projectedLeaders =
+      teams.filter(
+        (team) =>
+          team.conferenceRank === 1 &&
+          !team.confirmed
+      );
+
+    if (
+      projectedLeaders.length === 2
+    ) {
+      projectedLeaders.sort(
+        compareMaxPF
+      );
+
+      projectedLeaders[0].stage =
+        "runner_up";
+
+      projectedLeaders[1].stage =
+        "champion";
+    }
   }
 
-  if (
-    !regularSeasonComplete
-  ) {
-    warnings.push(
-      "Regular-season Max PF is still changing. Draft positions are provisional."
-    );
-  }
-
-  if (
-    participants.size !== 6
-  ) {
-    warnings.push(
-      "Six playoff participants could not be confirmed from the bracket."
-    );
-  }
-
-  if (
-    !seasonComplete
-  ) {
-    warnings.push(
-      "The draft order remains projected until the Slootbowl is complete."
-    );
-  }
-
+  /**
+   * Once playoff results begin,
+   * actual elimination stages
+   * override regular-season
+   * projections.
+   */
   teams.sort((a, b) => {
     const stageDifference =
-      stageOrder(a.stage) -
-      stageOrder(b.stage);
+      STAGE_ORDER[a.stage] -
+      STAGE_ORDER[b.stage];
 
     if (
       stageDifference !== 0
@@ -475,16 +512,47 @@ export function buildDraftTracker({
         team.maxPF !== null
     );
 
-  const official =
-    seasonComplete &&
-    regularSeasonComplete &&
-    maxPFComplete &&
-    teams.length ===
-      DRAFT_TEAMS &&
-    teams.every(
-      (team) =>
-        team.confirmed
+  if (!maxPFComplete) {
+    warnings.push(
+      "Max PF is unavailable for one or more franchises."
     );
+  }
+
+  if (!regularSeasonComplete) {
+    warnings.push(
+      "Regular-season Max PF is still changing. Draft positions are provisional."
+    );
+  } else {
+    warnings.push(
+      "Sleeper Max PF totals must be checked against the end-of-Week-14 values before the order can be treated as final."
+    );
+  }
+
+  if (
+    regularSeasonComplete &&
+    participants.size !== 6
+  ) {
+    warnings.push(
+      "Six playoff participants could not be confirmed from the winners bracket."
+    );
+  }
+
+  if (!seasonComplete) {
+    warnings.push(
+      "The draft order remains projected until the Slootbowl is complete."
+    );
+  }
+
+  /**
+   * We deliberately do not mark
+   * the order official yet.
+   *
+   * Sleeper roster Max PF is
+   * cumulative, so a reliable
+   * Week 14 freeze must be
+   * implemented first.
+   */
+  const official = false;
 
   return {
     season,
